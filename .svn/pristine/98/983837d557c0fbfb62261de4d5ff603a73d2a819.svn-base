@@ -1,0 +1,59 @@
+﻿public ActionResult UpdatePhanLoai_KhieuNai(long requestId, string phanLoai, string phanLoaiCha)
+        {
+            if (UserManager.CurrentUser != null)
+            {
+                using (var t = new TransactionScope(TransactionScopeOption.Required, new TransactionOptions
+                {
+                    IsolationLevel = System.Transactions.IsolationLevel.ReadUncommitted
+                }))
+                {
+                    RequestDetail rd = db.RequestDetails.FirstOrDefault(x => x.RequestId == requestId
+                    && x.Status == Key.Status.Available);
+
+                    // Add - TuanNA89 - 05/05/2020 - Ghi log cập nhật HXL KH
+                    Request request = db.Requests.FirstOrDefault(x => x.Id == requestId);
+                    string messageLog = "";
+                    if (rd.Property1 != phanLoai || rd.Property3 != phanLoaiCha)
+                    {
+                        messageLog = Environment.NewLine + "- Loại KN từ " + rd.Property3 + "/" + rd.Property1 + " sang " + phanLoaiCha + "/" + phanLoai;
+                    }
+                    
+                    if (messageLog.Length > 0)
+                    {
+                        Conversation cv_Log = new Conversation
+                        {
+                            RequestId = request.Id,
+                            StepNo = 0,
+                            Sender = "-1",
+                            Message = "User " + UserManager.CurrentUser.InsideCode + " cập nhật HXL khách hàng:" + messageLog,
+                            CreateBy = "-1",
+                            Type = 0,
+                            Status = 0,
+                            TimeCreate = DateTime.Now
+                        };
+                        db.Conversations.Add(cv_Log);
+                    }
+                    // Add - TuanNA89 - 05/05/2020 - Ghi log cập nhật HXL KH
+
+                    rd.Property3 = phanLoaiCha;
+                    rd.Property1 = phanLoai;
+                    rd.EmpCode = UserManager.CurrentUser.InsideCode;
+                    rd.Time2 = DateTime.Now;//ChuongNT3 - 19/12/2018 - thời gian update loại kn
+                    var r2 = db.Requests.FirstOrDefault(x => x.Id == requestId);
+                    RequestDetail rd2 = db.RequestDetails.FirstOrDefault(x => x.RequestId == r2.RequestIdRefer
+                        && x.Status == Key.Status.Available);
+                    if (rd2 != null)
+                    {
+                        rd2.Property3 = phanLoaiCha;
+                        rd2.Property1 = phanLoai;
+                        rd2.EmpCode = UserManager.CurrentUser.InsideCode;
+                        rd2.Time2 = DateTime.Now;//ChuongNT3 - 19/12/2018 - thời gian update loại kn
+                    }
+                }
+                db.SaveChanges();
+
+                return Json('1', JsonRequestBehavior.AllowGet);
+            }
+            else
+                return Json('0', JsonRequestBehavior.AllowGet);
+        }

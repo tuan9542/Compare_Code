@@ -1,0 +1,208 @@
+﻿SET QUOTED_IDENTIFIER ON
+SET ANSI_NULLS ON
+GO
+-- =============================================
+-- Author:		<NgoanHT>
+-- Create date: <2017.12.20>
+-- Description:	<Remind calllog Hàng Demo và Nhập Demo vào kho máy cũ>
+/*
+	Note: 
+		 - <2019.05.21> - TuanNA89 - Fix bỏ bớt các code thừa, thêm code loại calllog 210
+		 - <2020.05.11> - TuanNA89 - Viết lại store, bỏ bớt code loại cũ 65, 114 (đã bỏ) ( Store cũ sp_EmailRemindCalllogHangDemo_BAK20200511)
+*/
+/*
+Rule bắn mail remind shop xử lý calllog xuất – bỏ mẫu:
+ + D là ngày user nhận calllog, từ D+1 (rule cũ đang là từ D+2) calllog chưa được xử lý hệ thống auto bắn mail remind cho thủ kho shop, 
+	nếu shop không có thủ kho sẽ bắn mail cho SM/PSM trưởng ca bán hàng shop (mã chức danh 00004, 00005, 00671).
+*/
+/* Test: 
+EXEC sp_EmailRemindCalllogHangDemo
+*/
+ALTER PROCEDURE dbo.sp_EmailRemindCalllogHangDemo @RequestId INT = 0
+AS
+    BEGIN
+        --SET NOCOUNT ON;  
+        BEGIN TRY
+
+            --  ===Lấy DL Requests
+            DECLARE @TimeCheck DATE = DATEADD(DAY, -1, GETDATE());
+
+            SELECT
+                R.Id AS RequestId
+              , R.Title
+              , R.Assigner
+              , R.Sender
+              , R.StepNo
+              , R.StepStatus
+              , R.FromShop
+              , R.TypeId
+              , R.TimeAppear
+              , R.TimeLastUpdate
+            INTO
+                #Temp_Requests
+            FROM
+                dbo.Requests ( NOLOCK ) AS R
+            WHERE
+                R.TypeId = 210
+                AND ( ISNULL(@RequestId, 0) = 0 OR R.Id = @RequestId )
+                AND R.Status < 4
+                AND CONVERT(DATE, ISNULL(R.TimeAppear, R.TimeCreate)) <= @TimeCheck;
+
+            DECLARE @TableShop TABLE ( STT INT IDENTITY(1, 1), Shop NVARCHAR(40));
+
+            INSERT INTO @TableShop ( Shop ) SELECT DISTINCT FromShop FROM #Temp_Requests;
+
+            --▼ Add - TuanNA89 - 2019-05-21 - Lấy thông tin nv ra bảng tạm để sử dụng
+            SELECT
+                Email
+              , WarehouseCode
+              , EmployeeCode
+            INTO
+                #tmp_Employees
+            FROM
+                dbo.F03_Employees ( NOLOCK )
+            WHERE
+                Status = 'A';
+
+            SELECT
+                E.EmployeeCode
+              , E.WarehouseCode
+              , E.JobTitleCode
+            INTO
+                #tmp_EmployeeJobTitles
+            FROM
+                dbo.F03_EmployeeJobTitles AS E ( NOLOCK )
+            WHERE
+                E.Status = 'A'
+                AND E.JobTitleCode IN (   '00007' --Thủ kho chính
+                                        , '00004' --SM
+                                        , '00005' -- PSM
+                                        , '00671' -- Trưởng ca bán hàng
+                                      );
+
+            CREATE TABLE #tmp_Emp_Shop ( EmpCode VARCHAR(50));
+            CREATE TABLE #Temp_Requests_Shop ( RequestId BIGINT, StepNo INT, TypeId INT, FromShop VARCHAR(50));
+
+            DECLARE
+                @dem  INT         = 1
+              , @Shop VARCHAR(50) = '';
+
+            WHILE ( @dem <= ( SELECT COUNT(1)FROM @TableShop ))
+                BEGIN
+                    SELECT @Shop = '';
+                    DELETE FROM #tmp_Emp_Shop;
+                    DELETE FROM #Temp_Requests_Shop;
+
+                    SELECT TOP 1 @Shop = S.Shop FROM @TableShop AS S WHERE S.STT = @dem;
+
+                    INSERT INTO #Temp_Requests_Shop ( RequestId, StepNo, TypeId, FromShop )
+                    SELECT
+                        R.RequestId
+                      , R.StepNo
+                      , R.TypeId
+                      , R.FromShop
+                    FROM
+                        #Temp_Requests AS R
+                    WHERE
+                        R.FromShop = @Shop;
+
+                    DECLARE @RequestStep1_210 NVARCHAR(MAX) = NULL;
+                    DECLARE @EmailStep1_210 NVARCHAR(MAX) = NULL;
+
+                    INSERT INTO #tmp_Emp_Shop ( EmpCode )
+                    SELECT
+                        E.EmployeeCode
+                    FROM
+                        #tmp_EmployeeJobTitles AS E ( NOLOCK )
+                    WHERE
+                        E.WarehouseCode = @Shop
+                        AND E.JobTitleCode = '00007';
+
+                    IF NOT EXISTS ( SELECT 1 FROM #tmp_Emp_Shop AS ES ( NOLOCK ))
+                        BEGIN
+                            INSERT INTO #tmp_Emp_Shop ( EmpCode )
+                            SELECT
+                                E.EmployeeCode
+                            FROM
+                                #tmp_EmployeeJobTitles AS E ( NOLOCK )
+                            WHERE
+                                E.WarehouseCode = @Shop
+                                AND E.JobTitleCode IN (   '00004' --SM
+                                                        , '00005' -- PSM
+                                                        , '00671' -- Trưởng ca bán hàng
+                                                      );
+                        END;
+SELECT * FROM #tmp_Emp_Shop AS TES (NOLOCK)
+                    SELECT
+                        @RequestStep1_210 = CONCAT(@RequestStep1_210 + ',', TR.RequestId)
+                      , @EmailStep1_210   = (
+                                                SELECT ( STUFF((
+                                                                   SELECT
+                                                                       ',' + Email
+                                                                   FROM
+                                                                       #tmp_Employees
+                                                                   WHERE
+                                                                       EmployeeCode IN ( SELECT E.EmpCode FROM #tmp_Emp_Shop AS E )
+                                                                   FOR XML PATH('')
+                                                               )
+                                                             , 1
+                                                             , 1
+                                                             , ''
+                                                              )
+                                                       )
+                                            )
+                    FROM
+                        #Temp_Requests_Shop AS TR
+                    WHERE
+                        TR.StepNo = 1
+                        AND TR.TypeId = 210;
+SELECT @EmailStep1_210, @Shop
+
+                    DECLARE @Subject NVARCHAR(MAX) = NULL;
+                    DECLARE @Body NVARCHAR(MAX) = NULL;
+
+                    IF ( ISNULL(( SELECT @RequestStep1_210 ), '') <> '' )
+                        BEGIN
+                            SET @Subject = CONCAT(N'[Yêu cầu xử lý] - [Danh sách xuất bỏ mẫu demo cần xử lý] - [', FORMAT(GETDATE(), 'dd/MM/yyyy'), ']');
+                            SET @Body = dbo.fn_Email_GetContent_65_114(@RequestStep1_210);
+                            EXEC dbo.sp_EmailQueues_Insert
+                                @RequestID = 0                                                      -- bigint
+                              , @TypeID = 210                                                       -- int
+                              , @Subject = @Subject                                                 -- nvarchar(300)
+                              , @Body = @Body                                                       -- nvarchar(max)
+                              , @Email = @EmailStep1_210                                            -- varchar(max)
+                              , @Cc = ''                                                            -- varchar(max)
+                              , @Bcc = 'tuanna89@fpt.com.vn,handtn4@fpt.com.vn,Phucnt20@fpt.com.vn' -- varchar(max)
+                              , @IsNew = NULL                                                       -- bit
+                              , @StoreName = N'sp_EmailRemindCalllogHangDemo'                       -- nvarchar(250)
+                              , @Note = N'';                                                        -- nvarchar(250)
+                        END;
+
+                    SET @dem = @dem + 1;
+                END;
+
+            DROP TABLE
+                #Temp_Requests
+              , #tmp_Employees
+              , #tmp_EmployeeJobTitles
+			  , #tmp_Emp_Shop
+			  , #Temp_Requests_Shop
+
+        END TRY
+        BEGIN CATCH
+            DECLARE @ErrorMessage NVARCHAR(2000);
+            SELECT
+                @ErrorMessage = N'Lỗi: ' + N'sp_EmailRemindCalllogHangDemo' + N': ' + ERROR_MESSAGE();
+
+            --	===Ghi Log===
+            INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+            VALUES (
+                       N'sp_EmailRemindCalllogHangDemo' -- Title - nvarchar(300)
+                     , @ErrorMessage                    -- Error - nvarchar(max)
+                     , 1                                -- Status - tinyint
+                     , GETDATE()                        -- TimeCreate - datetime
+                   );
+        END CATCH;
+    END;
+GO
+

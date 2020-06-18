@@ -1,0 +1,1075 @@
+﻿function checkFileUpload(f) {
+    //▼	Edit - VietMXH - 02/08/2018 - Check đuôi file==================================================
+    var l_File_Size = f.files[0].size;
+    if (l_File_Size > 10485760) {
+        $(f).val('');
+        alert('Cảnh báo: Chỉ cho upload file có dung lượng <10MB! (' + l_File_Size + ' bytes)');
+        return;
+    }
+    var l_File_Name = f.files[0].name;
+    var l_File_Name_Str = l_File_Name.replace('.', '');
+    if (/^[\w ]*$/.test(l_File_Name_Str) == false) {
+        $(f).val('');
+        alert('Cảnh báo: Tên file phải không dấu, không khoảng trắng và không có kí tự đặc biệt!');
+        return;
+    }
+    else {
+        var inValid = /\s/;
+        if (inValid.test(l_File_Name_Str)) {
+            $(f).val('');
+            alert('Cảnh báo: Tên file không để khoảng trắng!');
+            return;
+        }
+    }
+
+    var l_FileExt = l_File_Name.split('.')[1];
+    if (!!l_FileExt && l_FileExt != '') {
+        var l_Allow_FileExt_Str = g_Allow_FileExt_Str;
+        if (!!l_Allow_FileExt_Str && l_Allow_FileExt_Str != '') {
+            var l_Allow_FileExt_Str__SplitToArr = l_Allow_FileExt_Str.split(',');
+            if ($.inArray(l_FileExt.toLowerCase(), l_Allow_FileExt_Str__SplitToArr) < 0) {
+                $(f).val('');
+                alert('Cảnh báo: Đuôi file không hỗ trợ! (*.' + l_FileExt.toLowerCase() + ')');
+                return;
+            }
+        }
+        else {
+            $(f).val('');
+            alert('Cảnh báo: Hệ thống không cho up file!');
+            return;
+        }
+    }
+    else {
+        $(f).val('');
+        alert('Cảnh báo: Đuôi file không hợp lệ! (*.?)');
+        return;
+    }
+    //▲	Edit - VietMXH - 02/08/2018 - Check đuôi file==================================================
+};
+function checkFileUploads(f) {
+    $.each(f.files, function (index, item) {
+        //▼	Edit - VietMXH - 02/08/2018 - Check đuôi file==================================================
+        var l_File_Size = f.files[index].size;
+        if (l_File_Size > 10485760) {
+            $(f).val('');
+            alert('Cảnh báo: Chỉ cho upload file có dung lượng <10MB! (' + l_File_Size + ' bytes)');
+            return;
+        }
+        var l_File_Name = f.files[index].name;
+        var l_File_Name_Str = l_File_Name.replace('.', '');
+        if (/^[\w ]*$/.test(l_File_Name_Str) == false) {
+            $(f).val('');
+            alert('Cảnh báo: Tên file phải không dấu, không khoảng trắng và không có kí tự đặc biệt!');
+            return;
+        }
+        else {
+            var inValid = /\s/;
+            if (inValid.test(l_File_Name_Str)) {
+                $(f).val('');
+                alert('Cảnh báo: Tên file không để khoảng trắng!');
+                return;
+            }
+        }
+
+        var l_FileExt = l_File_Name.split('.')[1];
+        if (!!l_FileExt && l_FileExt != '') {
+            var l_Allow_FileExt_Str = g_Allow_FileExt_Str;
+            if (!!l_Allow_FileExt_Str && l_Allow_FileExt_Str != '') {
+                var l_Allow_FileExt_Str__SplitToArr = l_Allow_FileExt_Str.split(',');
+                if ($.inArray(l_FileExt.toLowerCase(), l_Allow_FileExt_Str__SplitToArr) < 0) {
+                    $(f).val('');
+                    alert('Cảnh báo: Đuôi file không hỗ trợ! (*.' + l_FileExt.toLowerCase() + ')');
+                    return;
+                }
+            }
+            else {
+                $(f).val('');
+                alert('Cảnh báo: Hệ thống không cho up file!');
+                return;
+            }
+        }
+        else {
+            $(f).val('');
+            alert('Cảnh báo: Đuôi file không hợp lệ! (*.?)');
+            return;
+        }
+        //▲	Edit - VietMXH - 02/08/2018 - Check đuôi file==================================================
+    });
+};
+Date.prototype.toDateInputValue = (function () {
+    var local = new Date(this);
+    local.setMinutes(this.getMinutes() - this.getTimezoneOffset());
+    return local.toJSON().slice(0, 10);
+});
+String.prototype.replaceAll = (function (character) {
+    var local = this;
+    // character : , ; 
+    /// replace local 
+
+    return local;
+});
+$(document).ready(function () {
+    var $txtStaff = $('#txtStaff'),
+        $txtCc = $('#Cc'),
+        $txttxtTitle = $('#txtTitle'),
+        $datadataAppointmentStart = $('#dateFrom'),
+        $dataAppointmentEnd = $('#dateTo'),
+        $chkDayOrKind = $('#schedule'),
+        $slDayOrKind = $('#scheduleTypeData'),
+        $timeDayOrKind = $('#timeDayOrKind'),
+        $chkNotification = $('#chkNotification'),
+        $chkRepresent = $('#chkRepresent'),
+        $fileUpload = $('#fileUpload'),
+        $txtMessage = $('#txtMessage'),
+        $btnSuccess = $('#btn-success'),
+        $txtPlaceWork = $('#txtPlaceWork');
+    console.log('OtherData', $('#OtherData').val());
+    var $btnCc = $('.cc-toggle'),
+        $areaCc = $('.cc');
+
+    var $btnUploadFile = $('.file-toggle'),
+        $areaUploadFile = $('.file-upload');
+
+    var $btnSchedule = $('.schedule-toggle'),
+        $areSchedule = $('.schedule');
+    var $btnBody = $('.body-toggle'),
+        $areaMessage = $('.compose-message');
+    var dayOfMonth = [];
+    $('#complain-tree-g').hide();
+    //ChuongNT3 - 11/09/2018 - thêm sđt
+    function checkPhoneNumber(phone) {
+        var flag = false;
+        phone = phone.replace('-', '');
+        phone = phone.replace('.', '');
+        phone = phone.replace(' ', '');
+        if (phone.match('^[0-9]*$') != null) {
+            if ($.inArray(phone, ['(+84)', '+84', '0084', '/ /g']) != -1) {
+                phone = phone.replace('(+84)', '0');
+                phone = phone.replace('+84', '0');
+                phone = phone.replace('0084', '0');
+                phone = phone.replace(/ /g, '');
+            }
+            if (phone != '' && phone.length >= 10) {
+                var firstNumber = phone.substr(0, 2);
+                if ($.inArray(firstNumber, ['03', '05', '07', '08', '09']) != -1 && phone.length == 10) {
+                    flag = true;
+                } else if ($.inArray(firstNumber, ['01', '02']) != -1 && phone.length == 11) {     //ChuongNT3 - 01/10/2018 - fix GQKN
+                    flag = true;
+                }
+            }
+        }
+        return flag;
+    }
+    //ChuongNT3 - 11/09/2018 - thêm sđt 
+    try {
+        if (calllogType != undefined && calllogType != null && calllogType != '') {
+            $('input:radio[name="ConfirmCalllogType"]').filter('[value="' + calllogType + '"]').prop('checked', true);
+        }
+    }
+    catch (err) {
+        console.log('calllogType is not available');
+    }
+    try {
+        if (soPhieuBH !== undefined && soPhieuBH !== '' && soPhieuBH !== null) {
+            $('#txtSoPhieuBH').val(soPhieuBH);
+        }
+    }
+    catch (err) {
+        console.log('soPhieuBH is not available');
+    }
+    try {
+        if (soSO !== undefined && soSO !== '' && soSO !== null) {
+            $('#txtSoSO').val(soSO);
+        }
+    }
+    catch (err) {
+        console.log('soSO is not available');
+    }
+    //ChuongNT3 - 11/09/2018 - thêm sđt
+    try {
+        if (sdt !== undefined && sdt !== '' && sdt !== null) {
+            if (checkPhoneNumber(sdt) == true) {
+                $('#txtSDT').val(sdt);
+            }
+            else {
+                XData.Render_Message('error', 'Số điện thoại sai định dạng');
+            }
+        }
+    }
+    catch (err) {
+        console.log('sdt is not available');
+    }
+    //ChuongNT3 - 11/09/2018 - thêm sđt
+    //▼ Add - TuanNA89 - 14/05/2020 - thêm Tên KH
+    try {
+        if (tenKH) {
+            $('#txtTenKH').val(tenKH);
+        }
+    }
+    catch (err) {
+        console.log('tenKH is not available');
+    }
+    //▲ Add - TuanNA89 - 14/05/2020 - thêm Tên KH
+    var dataComplain = [];
+    var dataComplainExcept = [];
+    //var dataComplain = [{ id: "TVBH", text: "Tư vấn bán hàng", parent: "#" },
+    //    { id: "HTKT", text: "Hỗ trợ kỹ thuật", parent: "#" }, { id: "BH", text: "Bảo hành", parent: "#" },
+    //    { id: "TTBH", text: "Thông tin bảo hành", parent: "BH" }, { id: "THBH", text: "Trễ hạn bảo hành", parent: "BH" },
+    //    { id: "TCBH", text: "Từ chối bảo hành", parent: "BH" }, { id: "BHNL", text: "Bảo hành nhiều lần", parent: "BH" },
+    //    { id: "BP", text: "Báo phí", parent: "BH" }, { id: "SP", text: "Sản phẩm", parent: "#" }, { id: "G", text: "Giá", parent: "SP" },
+    //    { id: "CL", text: "Chất lượng", parent: "SP" }, { id: "TT", text: "Thông tin", parent: "SP" }, { id: "ĐT", text: "Đổi trả", parent: "#" },
+    //    { id: "TĐL", text: "Thẩm định lỗi", parent: "ĐT" }, { id: "PĐT", text: "Phí đổi trả", parent: "ĐT" },
+    //    { id: "CSĐT", text: "Chính sách đổi trả", parent: "ĐT" }, { id: "TĐ", text: "Thái độ", parent: "#" },
+    //    { id: "K", text: "Khác", parent: "#" }, { id: "NV", text: "Nghiệp vụ", parent: "#" }, { id: "KM", text: "Khuyến mãi", parent: "#" }
+    //];
+    var XData = {
+        Render_Message: function (type, message) {
+            toastr.options = { "newestOnTop": true, "showMethod": "show", "hideMethod": "hide", "positionClass": "toast-top-right" };
+            toastr[type](message);
+        },
+    };
+    $('#complainName').click(function () {
+        $('#complain-tree-g').toggle();
+    })
+    var to = false;
+    $('#searchComplain').keyup(function () {
+        if (to) { clearTimeout(to); }
+        to = setTimeout(function () {
+            var v = $('#searchComplain').val();
+            $('#complain-tree').jstree(true).search(v);
+        }, 250);
+    });
+    var dataShopAPR_Code = [];
+    $.get('/Requests/GetShopAPRByCallCenter', null, function (response) {
+        if (!!response) {
+            $.each(response, function (index, item) {
+                dataShopAPR_Code.push(item.WhsCode);
+            });
+        };
+    });
+    var render = function () {
+        var renderSummernote = function () {
+            $txtMessage.summernote({
+                height: 100,
+                codemirror: { theme: 'monokai' },
+                toolbar:
+                    [['style', ['style']], ['font', ['bold', 'italic', 'underline', 'clear']], ['fontname', ['fontname']],
+                     ['color', ['color']], ['para', ['ul', 'ol', 'paragraph']], ['height', ['height']],
+                     ['table', ['table']], ['view', ['fullscreen', 'codeview']], ['help', ['help']]]
+            });
+        }
+        renderSummernote();
+
+        var renderHiddenIconUploadFile = function () {
+            $areaUploadFile.hide();
+            $btnUploadFile.on('click', function () {
+                $areaUploadFile.toggle('slow');
+            })
+        };
+
+        renderHiddenIconUploadFile();
+
+        var renderHiddenIconSchedule = function () {
+            $areSchedule.hide();
+            $btnSchedule.on('click', function () {
+                $areSchedule.toggle('slow');
+            })
+        };
+        renderHiddenIconSchedule();
+
+        var renderTagInputStaffAndCc = function () {
+            $.get('/Requests/GetEmpsAndGroupMail', null, function (response) {
+                if (response !== null && response !== '' && response !== undefined) {
+                    //console.log(($('#ShopIDCallCenter').val()));
+                    //console.log(response);
+                    $txtStaff.tagsinput({
+                        itemValue: 'Code',
+                        itemText: 'Name',
+                        typeahead: {
+                            source: response,
+                        },
+                        tagClass: function (item) {
+                            switch (item.Type) {
+                                case 'Employee': return 'label label-info';
+                                case 'GroupMail': return 'label label-danger label-important';
+                            }
+                        }
+                    });
+
+                    $txtStaff.on('beforeItemAdd', function (event) {
+
+                        //▼	Edit - ChuongNT3 - 11/07/2018 - CLog GQKN Loại Subsidy => To & CC ==================================================
+                        if (event.item.Code === "***FRTSUPPORT" || event.item.Code === "7158" || event.item.Code === "18390" || event.item.Code === "20311") {
+                            return;
+                        }
+                        //▲	Edit - ChuongNT3 - 11/07/2018 - CLog GQKN Loại Subsidy => To & CC ==================================================
+
+                        event.cancel = true;
+                    });
+                    //$txtStaff.on('beforeItemRemove', function (event) {                       
+                    //    if (event.item.Code === "12074"
+                    //        || event.item.Code === "12078" || event.item.Code === "15583") {
+                    //            event.cancel = true;
+                    //        }
+                    //});
+                    //console.log($('#JobTitle').val());
+                    //console.log($('#ShopIDCallCenter').val());
+
+                    $txtCc.tagsinput({
+                        itemValue: 'Code',
+                        itemText: 'Name',
+                        typeahead: {
+                            source: response,
+                        },
+                        tagClass: function (item) {
+                            switch (item.Type) {
+                                case 'Employee': return 'label label-info';
+                                case 'GroupMail': return 'label label-danger label-important';
+                            }
+                        }
+                    });
+
+                    $txtCc.tagsinput('add', { Code: "***FRT.CSKH", Name: "FRT.CSKH", Type: "GroupMail" });
+                    $txtCc.tagsinput('add', { Code: "3160", Name: "3160 - Nguyễn Thị Thanh Tú - TuNTT", Type: "Employee" });
+                    //$txtCc.tagsinput('add', { Code: "12074", Name: "12074 - Lê Thu Nga - NgaLT25", Type: "Employee" });          //ChuongNT3 - 04/12/2018 - thêm ds nvvp
+                    //$txtCc.tagsinput('add', { Code: "3247", Name: "3247 - Ngô Diệp Bích Thanh - thanhndb", Type: "Employee" });
+
+                    //CC cho loại khiếu nai THái độ hoặc nghiệp vụ gửi cho chức danh hỗ trợ kĩ thuật
+                    if (($('#EcomType').val() == 'Thái độ' || $('#EcomType').val() == 'Nghiệp vụ') &&
+                        ($.inArray('00098', $('#JobTitle').val().split(',')) != -1 || $.inArray('00101', $('#JobTitle').val().split(',')) != -1
+                        || $.inArray('00476', $('#JobTitle').val().split(',')) != -1 || $.inArray('00261', $('#JobTitle').val().split(',')) != -1
+                        || $.inArray('00012', $('#JobTitle').val().split(',')) != -1)) {
+
+                        //▼ Add - TrungnC3 - 26/12/2017 - Add CC user theo vùng miền==============
+                        if ($('#EcomType').val() == 'Nghiệp vụ' && $.inArray('00012', $('#JobTitle').val().split(',')) == -1) {
+                            console.log('session');
+                            console.log($('#RegionOutbound').val());
+                            //============================================================================================================================
+                            if (!!$('#RegionOutbound').val() && ($.inArray($('#RegionOutbound').val(), ['00002', '00003', '00006']) != -1)) {
+                                if (!!$('#ShopIDCallCenter').val()) {
+                                    var dataShop_split = $('#ShopIDCallCenter').val().split(',');
+                                    var arr = dataShopAPR_Code;
+                                    var datareturn = [];
+                                    if (!!dataShop_split && dataShop_split.length > 0) {
+                                        $.each(dataShop_split, function (i, e) {
+                                            if (arr.indexOf(e) != -1) {
+                                                datareturn.push(e);
+                                            }
+                                        });
+                                    };
+                                    if (datareturn.length > 0) {
+                                        $txtCc.tagsinput('add', { Code: "1097", Name: "1097 - Lê Trần Hà - HaLT13", Type: "Employee" });
+                                    };
+                                };
+                                $txtCc.tagsinput('add', { Code: "1028", Name: "1028 - Nguyễn Minh Chiến - ChienNM2", Type: "Employee" });
+                            }
+
+                                //============================================================================================================================
+                            else if (!!$('#RegionOutbound').val() && ($.inArray($('#RegionOutbound').val(), ['00005']) != -1)) {
+                                console.log($('#RegionOutbound').val());
+                                if (!!$('#ShopIDCallCenter').val()) {
+                                    var dataShop_split = $('#ShopIDCallCenter').val().split(',');
+                                    var arr = dataShopAPR_Code;
+                                    var datareturn = [];
+                                    if (!!dataShop_split && dataShop_split.length > 0) {
+                                        $.each(dataShop_split, function (i, e) {
+                                            if (arr.indexOf(e) != -1) {
+                                                datareturn.push(e);
+                                            }
+                                        });
+                                    };
+                                    if (datareturn.length > 0) {
+                                        $txtCc.tagsinput('add', { Code: "1097", Name: "1097 - Lê Trần Hà - HaLT13", Type: "Employee" });
+                                    };
+                                };
+                                $txtCc.tagsinput('add', { Code: "0217", Name: "0217 - Lâm Tăng Chung - ChungLT", Type: "Employee" });
+                            }
+
+                                //============================================================================================================================
+                            else if (!!$('#RegionOutbound').val() && ($.inArray($('#RegionOutbound').val(), ['00204', '00205', '00067', '00484', '00498', '00007']) != -1)) {
+                                //console.log($('#RegionOutbound').val());
+                                if (!!$('#ShopIDCallCenter').val()) {
+                                    var dataShop_split = $('#ShopIDCallCenter').val().split(',');
+                                    var arr = dataShopAPR_Code;
+                                    var datareturn = [];
+                                    if (!!dataShop_split && dataShop_split.length > 0) {
+                                        $.each(dataShop_split, function (i, e) {
+                                            if (arr.indexOf(e) != -1) {
+                                                datareturn.push(e);
+                                            }
+                                        });
+                                    };
+                                    if (datareturn.length > 0) {
+                                        $txtCc.tagsinput('add', { Code: "1097", Name: "1097 - Lê Trần Hà - HaLT13", Type: "Employee" });
+                                    };
+                                };
+                                $txtCc.tagsinput('add', { Code: "1631", Name: "1631 - Nguyễn Lương Trung - TrungNL", Type: "Employee" });
+                            }
+
+                                //============================================================================================================================
+                            else if ((!!$('#ShopIDCallCenter').val())) {
+                                var dataShop_split = $('#ShopIDCallCenter').val().split(',');
+                                var arr = dataShopAPR_Code;
+                                var datareturn = [];
+                                if (!!dataShop_split && dataShop_split.length > 0) {
+                                    $.each(dataShop_split, function (i, e) {
+                                        if (arr.indexOf(e) != -1) {
+                                            datareturn.push(e);
+                                        }
+                                    });
+                                };
+                                if (datareturn.length > 0) {
+                                    $txtCc.tagsinput('add', { Code: "1097", Name: "1097 - Lê Trần Hà - HaLT13", Type: "Employee" });
+                                };
+                            };
+                            //▲ Add - TrungnC3 - 26/12/2017 - Add CC user theo vùng miền==============
+                        };
+                        //▼ Add - TrungnC3 - 26/12/2017 - add thêm group Sale.leader.Ecom vào call log nếu là TVBH & HTKT==============
+                        if (($('#EcomType').val() == 'Nghiệp vụ' || $('#EcomType').val() == 'Thái độ') && $.inArray('00012', $('#JobTitle').val().split(',')) == -1 &&
+                            ($.inArray('00098', $('#JobTitle').val().split(',')) == -1 && $.inArray('00101', $('#JobTitle').val().split(',')) == -1) &&
+                            ($.inArray('00476', $('#JobTitle').val().split(',')) != -1 || $.inArray('00261', $('#JobTitle').val().split(',')) != -1)) {
+                            $txtCc.tagsinput('add', { Code: "***sale.leader.ecom", Name: "sale.leader.ecom", Type: "GroupMail" });
+                            $txtCc.tagsinput('remove', { Code: "1097", Name: "1097 - Lê Trần Hà - HaLT13", Type: "Employee" });
+                            $txtCc.tagsinput('remove', { Code: "1631", Name: "1631 - Nguyễn Lương Trung - trungnl", Type: "Employee" });
+                            $txtCc.tagsinput('remove', { Code: "0217", Name: "0217 - Lâm Tăng Chung - chunglt", Type: "Employee" });
+                            $txtCc.tagsinput('remove', { Code: "1028", Name: "1028 - Nguyễn Minh Chiến - ChienNM2", Type: "Employee" });
+                        }
+                        //▲ Add - TrungnC3 - 26/12/2017 - add thêm group Sale.leader.Ecom vào call log nếu là TVBH & HTKT==============
+                    }
+                    else if ($('#EcomType').val() == 'F.friends') {
+                        $txtCc.tagsinput('add', { Code: "14941", Name: "14941 - Nguyễn Thanh Phương - phuongnt104", Type: "Employee" });
+                        $txtCc.tagsinput('add', { Code: "16683", Name: "16683 - Phan Quốc Huy - HuyPQ21", Type: "Employee" });
+                        $txtCc.tagsinput('add', { Code: "1033", Name: "1033 - Nguyễn Thị Kim Thoa - thoantk3", Type: "Employee" });
+                        $txtCc.tagsinput('add', { Code: "16435", Name: "16435 - Nguyễn Thị Kim Loan - LoanNTK9", Type: "Employee" });
+
+                        //▼ Add - VietMXH - 28/09/2017 - Add Team Dự án FFriends===========
+                        $txtCc.tagsinput('add', { Code: "7865", Name: "7865 - Lê Thị Hồng Nhung - NhungLTH12", Type: "Employee" });
+                        //▲ Add============================================================
+
+                    }
+                        //▼ Add - TrungnC3 - 26/12/2017 - Add Group Support==============
+
+                        //▼	Edit - ChuongNT3 - 11/07/2018 - CLog GQKN Loại Subsidy => To & CC ==================================================
+                    else if ($.inArray($('#EcomType').val(), ['Subsidy', 'Nợ khóa máy', 'Chưa gỡ Knox (SSD)', 'Sim sóng', 'Khác (SSD)', 'Version cũ bị khóa máy (SSD)', 'Tư vấn gói cước SSD', 'Đã nạp, máy bị khóa']) != -1) {      //ChuongNT3 - 17/01/2018 - add CC loại mới
+                        $txtCc.tagsinput('add', { Code: "***FRTSUPPORT", Name: "FRTSUPPORT", Type: "GroupMail" });
+                        $txtStaff.tagsinput('add', { Code: "20311", Name: "20311 - Nguyễn Nhật Phong - PhongNN4", Type: "Employee" });
+                        $txtStaff.tagsinput('add', { Code: "7158", Name: "7158 - Trần Thị Thu Thủy - ThuyTTT13", Type: "Employee" });
+                        $txtStaff.tagsinput('add', { Code: "18390", Name: "18390 - Võ Văn Giáp - GiapVV3", Type: "Employee" });
+
+                    }
+                        //▲	Edit - ChuongNT3 - 11/07/2018 - CLog GQKN Loại Subsidy => To & CC ==================================================
+
+                        //▼ Add - TrungnC3 - 26/12/2017 - Add AnCTT@fpt.com.vn nếu là trả góp 0%==============
+                    else if ($('#EcomType').val() == 'Trả góp 0%') {
+                        $txtCc.tagsinput('add', { Code: "0873", Name: "0873 - Cao Thị Thùy An - AnCTT", Type: "Employee" });
+                    }
+                    //▲ Add - TrungnC3 - 26/12/2017 - Add AnCTT@fpt.com.vn nếu là trả góp 0%==============
+                    //▲ Add - TrungnC3 - 26/12/2017 - Add Group Support==============
+                    $txtCc.on('beforeItemRemove', function (event) {
+                        if (event.item.Code === "3160" || event.item.Code === '***FRT.CSKH'
+                            //|| event.item.Code === "12074"                  //ChuongNT3 - 04/12/2018 - thêm ds nvvp
+                            || event.item.Code === "3247"
+
+                            //▼ Add - VietMXH - 28/09/2017 - Add Team Dự án FFriends===========
+                            || event.item.Code === "7865"
+                            //▲ Add============================================================
+                            //▼ Add - ThuongNM2 - 12/04/2019 - Add Group BH Theo vùng miền==============
+                            || ((event.item.Code === '***FRT.BaohanhMB' || event.item.Code === '***FRT.BaohanhMN' || event.item.Code === '***FRT.BaohanhMT') && ($('#EcomTypeParent').val() == 'Bảo hành'))
+                            //▲ Add - ThuongNM2 - 12/04/2019 - Add Group BH Theo vùng miền==============
+                            ) {
+                            event.cancel = true;
+                        }
+                    });
+
+                    //try
+                    //{
+                    //    if ( empDefault != undefined &&  empDefault != null && empDefault !== ''  && empDefault.length > 0) {
+                    //        $.each(empDefault, function (index, item) {
+                    //            $txtStaff.tagsinput('add', { Code: item.Code, Name: item.Name, Type: item.Type });
+                    //        });
+                    //        $txtStaff.on('beforeItemRemove', function (event) {
+                    //            $.each(empDefault, function (index, item) {
+                    //                if (item.Code == event.item.Code) {
+                    //                    event.cancel = true;                                    
+                    //                }
+                    //            });    
+                    //        });
+                    //    }
+
+                    //}
+                    //catch (err) {
+                    //    console.log('empDefault is not avaiable');
+                    //}
+                    try {
+                        if (DefaultCc != undefined && DefaultCc != null && DefaultCc !== '' && DefaultCc.length > 0) {
+                            $.each(DefaultCc, function (index, item) {
+                                $txtCc.tagsinput('add', { Code: item.Code, Name: item.Name, Type: item.Type });
+                            });
+                            $txtCc.on('beforeItemRemove', function (event) {
+                                $.each(DefaultCc, function (index, item) {
+                                    if (item.Code == event.item.Code) {
+                                        event.cancel = true;
+                                    }
+                                });
+                            });
+
+                        }
+                    }
+                    catch (err) {
+                        console.log('DefaultCc is not avaiable');
+                    }
+                    try {
+                        if (maNVEcom != undefined && maNVEcom != null && maNVEcom !== '') {
+                            var getNhanVienEcom = $.grep(response, function (item, index) {
+                                return item.Code == maNVEcom;
+                            });
+                            if (getNhanVienEcom != '' && getNhanVienEcom != null && getNhanVienEcom != undefined && getNhanVienEcom.length > 0) {
+                                $txtCc.tagsinput('add', {
+                                    Code: getNhanVienEcom[0].Code, Name: getNhanVienEcom[0].Name, Type: getNhanVienEcom[0].Type
+                                });
+                                $txtCc.on('beforeItemRemove', function (event) {
+                                    if (event.item.Code === getNhanVienEcom[0].Code) {
+                                        event.cancel = true;
+                                    }
+                                });
+                            }
+                        }
+                    }
+                    catch (err) {
+                        console.log('maNVEcom is not avaiable');
+                    }
+                } else {
+                    $txtCc.removeAttr("disabled");
+                    $txtStaff.attr("disabled", "disabled");
+                }
+            });
+        }
+        renderTagInputStaffAndCc();
+
+        var renderAppointment = function () {
+            var now = new Date();
+            var day = (now.getDate() < 10) ? '0' + now.getDate() : now.getDate();
+            var month = ((now.getMonth() + 1) < 10) ? '0' + (now.getMonth() + 1) : (now.getMonth() + 1);
+            var oneDay = (now.getYear() + 1900) + '-' + month + '-' + day;
+
+            var housr = (now.getHours() < 10) ? '0' + now.getHours() : now.getHours();
+            var minutes = (now.getMinutes() < 10) ? '0' + now.getMinutes() : now.getMinutes();
+            var time = housr + ":" + minutes + ":00";
+
+            $datadataAppointmentStart.val(oneDay);
+            $dataAppointmentEnd.val(oneDay);
+            $timeDayOrKind.val(time);
+
+            $slDayOrKind.multiselect({
+                maxHeight: 200,
+                buttonWidth: '100%',
+                buttonText: function (options, select) {
+                    if (options.length === 0) {
+                        return 'Chưa chọn';
+                    }
+                    else if (options.length > 5) {
+                        return "Đã chọn (" + options.length + ")";
+                    }
+                    else {
+                        var labels = [];
+                        options.each(function () {
+                            if ($(this).attr('label') !== undefined) {
+                                labels.push($(this).attr('label'));
+                            }
+                            else {
+                                labels.push($(this).html());
+                            }
+                        });
+                        return labels.join(', ') + '';
+                    }
+                },
+                onChange: function (option, checked, select) {
+                    if ($('#scheduleTypeData').val() == null)
+                        $('#scheduleTypeDataHidden').val("");
+                    else
+                        $('#scheduleTypeDataHidden').val($('#scheduleTypeData').val());
+
+                }
+            });
+            var dayOfMonth = [];
+            for (i = 0; i < 31; i++) {
+                var newdata = { label: (i + 1), value: i + 1 };
+                dayOfMonth.push(newdata);
+            }
+            $slDayOrKind.multiselect('dataprovider', dayOfMonth);
+
+            $chkDayOrKind.change(function () {
+                var stage = $(this).is(':checked');
+                if (stage) {
+                    var dayOfWeek = [];
+                    for (i = 0; i < 6; i++) {
+                        var newdata = { label: 'Thứ ' + (i + 2), value: i + 2 };
+                        dayOfWeek.push(newdata);
+                    }
+                    dayOfWeek.push({ label: 'Chủ Nhật', value: 1 });
+                    $slDayOrKind.multiselect('dataprovider', dayOfWeek);
+                }
+                else {
+                    var dayOfMonth = [];
+                    for (i = 0; i < 31; i++) {
+                        var newdata = { label: (i + 1), value: i + 1 };
+                        dayOfMonth.push(newdata);
+                    }
+                    $slDayOrKind.multiselect('dataprovider', dayOfMonth);
+                }
+            });
+        };
+        renderAppointment();
+        var RenderLoaiKhieuNai = function () {
+            $.get('/Assignments/GetCatagoryTree', { type: 19 }, function (data) {
+                var tree = [];
+                $.each(data, function (index, item) {
+                    //if (item.Name != 'Hỗ trợ kỹ thuật' && item.Name != 'Tư vấn bán hàng')
+                    //{
+                    var newdata = {
+                        id: item.Id,
+                        parent: item.ParentId,
+                        text: item.Name,
+                        type: 'Fa'
+                    };
+                    tree.push(newdata);
+                    //}                    
+                });
+                dataComplain = tree;
+                dataComplainExcept = $.grep(dataComplain, function (item, index) {
+                    return item.text != 'Hỗ trợ kỹ thuật' && item.text != 'Tư vấn bán hàng'
+                });
+                //ChuongNT3 - 04/07/2018 - loại 19 - bảo hành outbound
+                // ChuongNT3 - 01/10/2018 - fix GQKN
+                var Kenh = $('#Kenh').val() == null || $('#Kenh').val() == undefined ? '' : $('#Kenh').val();
+                $('#complain-tree').on('changed.jstree', function (e, data) {
+                    var i, j, name, id, children, parent; //ChuongNT3 - 13/06/2018 - loại 19 - chọn nhánh nhỏ nhất
+                    //ChuongNT3 - 04/07/2018 - loại 19 - bảo hành outbound
+                    // ChuongNT3 - 01/10/2018 - fix GQKN
+                    //var arrOtherData = $('#OtherData').val().split(',')
+                    for (i = 0, j = data.selected.length; i < j; i++) {
+                        name = data.instance.get_node(data.selected[i]).text;
+                        id = data.instance.get_node(data.selected[i]).id;
+                        parent = data.instance.get_node(data.selected[i]).parent;
+                        children = data.instance.get_node(data.selected[i]).children.length; //ChuongNT3 - 13/06/2018 - loại 19 - chọn nhánh nhỏ nhất
+                    }
+                    //ChuongNT3 - 13/06/2018 - loại 19 - chọn nhánh nhỏ nhất
+                    // Edit - TuanNA98 - 17/01/2020 - Loại 19 - chọn nhánh nhỏ nhất
+                    //if ((parent == '#' && children > 0) {
+                    if (children > 0) {
+                        XData.Render_Message('error', 'Chỉ có thể chọn mục nhỏ nhất');
+                        return false;
+                    }
+                    //ChuongNT3 - 13/06/2018 - loại 19 - chọn nhánh nhỏ nhất
+                    //['1195', '1196', '1197', '1199', '1200', '1206', '1207', '1208', '2333', '2334', '2335','2336', '2337'] -- Thực
+                    // ChuongNT3 - 01/10/2018 - fix GQKN
+                    if (Kenh == 'Bảo hành' && $.inArray(id, ['2287', '2288', '2289', '2291', '2292', '2298', '2299', '2300', '4336', '4337', '4338', '4339', '4340']) == -1) {
+                        XData.Render_Message('error', 'Không được phép chọn những mục này');
+                        return false;
+                    }
+                    //ChuongNT3 - 04/07/2018 - loại 19 - bảo hành outbound
+                    $.each(dataComplain, function (index, item) {
+                        if (item.id == id && (item.parent != '#' || item.text == 'Thái độ' ||
+                        item.text == 'Khác' || item.text == 'Nghiệp vụ' || item.text == 'F.friends' || item.text == 'Subsidy' || item.text == 'Trả góp 0%' || item.text == 'Check MDMH' || item.text == 'Thu hộ'
+                        || item.text == 'Ecom'//▶  Add - TuanNA89 - 22/10/2019 - Calllog khiếu nại, loại khiếu nại Ecom
+                            )) { //▶  Add - ThuongNM2 - 12/04/2019 - Add Group BH Theo vùng miền==============
+                            //console.log(item);
+                            $('#complainName').val(name);
+                            $('#EcomType').val(name)
+                            $('#SystemId').val(id);
+                            if (item.parent == '#') {
+                                $('#EcomTypeParent').val(name);
+                            } else {
+                                $.each(dataComplain, function (index1, item1) {
+                                    if (item1.id == item.parent) {
+                                        $('#EcomTypeParent').val(item1.text);
+                                    }
+                                });
+
+                            }
+                            $('#complain-tree-g').hide();
+
+                            if (name != 'Thái độ' && name != 'Nghiệp vụ') {
+                                $txtCc.tagsinput('remove', { Code: "1631", Name: "1631 - Nguyễn Lương Trung - trungnl", Type: "Employee" }, { preventPost: true });
+                                $txtCc.tagsinput('remove', { Code: "0217", Name: "0217 - Lâm Tăng Chung - chunglt", Type: "Employee" }, { preventPost: true });
+                                $txtCc.tagsinput('remove', { Code: "1028", Name: "1028 - Nguyễn Minh Chiến - ChienNM2", Type: "Employee" }, { preventPost: true });
+                            }
+                            else if ((name == 'Thái độ' || name == 'Nghiệp vụ')
+                                  && ($.inArray('00098', $('#JobTitle').val().split(',')) != -1 || $.inArray('00101', $('#JobTitle').val().split(',')) != -1
+                                  || $.inArray('00012', $('#JobTitle').val().split(',')) != -1)) {
+                                $txtCc.tagsinput('add', { Code: "1631", Name: "1631 - Nguyễn Lương Trung - trungnl", Type: "Employee" });
+                                $txtCc.tagsinput('add', { Code: "0217", Name: "0217 - Lâm Tăng Chung - chunglt", Type: "Employee" });
+                                $txtCc.tagsinput('add', { Code: "1028", Name: "1028 - Nguyễn Minh Chiến - ChienNM2", Type: "Employee" });
+                            }
+                            if (name == 'F.friends') {
+                                $txtCc.tagsinput('add', { Code: "14941", Name: "14941 - Nguyễn Thanh Phương - phuongnt104", Type: "Employee" });
+                                $txtCc.tagsinput('add', { Code: "16683", Name: "16683 - Phan Quốc Huy - HuyPQ21", Type: "Employee" });
+                                $txtCc.tagsinput('add', { Code: "1033", Name: "1033 - Nguyễn Thị Kim Thoa - thoantk3", Type: "Employee" });
+                                $txtCc.tagsinput('add', { Code: "16435", Name: "16435 - Nguyễn Thị Kim Loan - LoanNTK9", Type: "Employee" });
+
+                                //▼ Add - VietMXH - 28/09/2017 - Add Team Dự án FFriends===========
+                                $txtCc.tagsinput('add', { Code: "7865", Name: "7865 - Lê Thị Hồng Nhung - NhungLTH12", Type: "Employee" });
+                                //▲ Add============================================================
+
+                            }
+                            else if (name != 'F.friends') {
+                                $txtCc.tagsinput('remove', { Code: "14941", Name: "14941 - Nguyễn Thanh Phương - phuongnt104", Type: "Employee" }, { preventPost: true });
+                                $txtCc.tagsinput('remove', { Code: "16683", Name: "16683 - Phan Quốc Huy - HuyPQ21", Type: "Employee" }, { preventPost: true });
+                                $txtCc.tagsinput('remove', { Code: "1033", Name: "1033 - Nguyễn Thị Kim Thoa - thoantk3", Type: "Employee" }, { preventPost: true });
+                                $txtCc.tagsinput('remove', { Code: "16435", Name: "16435 - Nguyễn Thị Kim Loan - LoanNTK9", Type: "Employee" }, { preventPost: true });
+                            };
+                            //▼ Add - TrungnC3 - 26/12/2017 - Add Group Support==============
+
+                            //▼	Edit - ChuongNT3 - 11/07/2018 - CLog GQKN Loại Subsidy => To & CC  ==================================================
+                            if ($.inArray(name, ['Subsidy', 'Nợ khóa máy', 'Chưa gỡ Knox (SSD)', 'Sim sóng', 'Khác (SSD)', 'Version cũ bị khóa máy (SSD)', 'Tư vấn gói cước SSD', 'Đã nạp, máy bị khóa']) != -1) {            //ChuongNT3 - 17/01/2018 - add CC loại mới
+                                $txtCc.tagsinput('add', { Code: "***FRTSUPPORT", Name: "FRTSUPPORT", Type: "GroupMail" });
+                                $txtStaff.tagsinput('add', { Code: "20311", Name: "20311 - Nguyễn Nhật Phong - PhongNN4", Type: "Employee" });
+                                $txtStaff.tagsinput('add', { Code: "7158", Name: "7158 - Trần Thị Thu Thủy - ThuyTTT13", Type: "Employee" });
+                                $txtStaff.tagsinput('add', { Code: "18390", Name: "18390 - Võ Văn Giáp - GiapVV3", Type: "Employee" });
+
+                            } else {
+                                $txtCc.tagsinput('remove', { Code: "***FRTSUPPORT", Name: "FRTSUPPORT", Type: "GroupMail" });
+                                $txtStaff.tagsinput('remove', { Code: "20311", Name: "20311 - Nguyễn Nhật Phong - PhongNN4", Type: "Employee" });
+                                $txtStaff.tagsinput('remove', { Code: "7158", Name: "7158 - Trần Thị Thu Thủy - ThuyTTT13", Type: "Employee" });
+                                $txtStaff.tagsinput('remove', { Code: "18390", Name: "18390 - Võ Văn Giáp - GiapVV3", Type: "Employee" });
+
+                            };
+                            //▲	Edit - ChuongNT3 - 11/07/2018 - CLog GQKN Loại Subsidy => To & CC ==================================================
+
+                            //▼ Add - TrungnC3 - 26/12/2017 - Add AnCTT@fpt.com.vn nếu là trả góp 0%==============
+                            //============================================================================================================================
+                            if (name == 'Trả góp 0%') {
+                                $txtCc.tagsinput('add', { Code: "0873", Name: "0873 - Cao Thị Thùy An - AnCTT", Type: "Employee" });
+                            }
+                            else if (name != 'Trả góp 0%') {
+                                $txtCc.tagsinput('remove', { Code: "0873", Name: "0873 - Cao Thị Thùy An - AnCTT", Type: "Employee" });
+                            };
+                            //▲ Add - TrungnC3 - 26/12/2017 - Add AnCTT@fpt.com.vn nếu là trả góp 0%==============
+                            //▼ Add - TrungnC3 - 26/12/2017 - add thêm group Sale.leader.Ecom vào call log nếu là TVBH & HTKT==============
+
+                            //============================================================================================================================
+                            //if (name == 'Nghiệp vụ' &&
+                            //    ($.inArray('00476', $('#JobTitle').val().split(',')) != -1 || $.inArray('00261', $('#JobTitle').val().split(',')) != -1
+                            //    || $.inArray('00098', $('#JobTitle').val().split(',')) != -1 || $.inArray('00101', $('#JobTitle').val().split(',') != -1))) {
+                            //    $txtCc.tagsinput('add', { Code: "***sale.leader.ecom", Name: "sale.leader.ecom", Type: "GroupMail" });
+                            //}
+                            //else if (name != 'Nghiệp vụ') {
+                            //    $txtCc.tagsinput('remove', { Code: "***sale.leader.ecom", Name: "sale.leader.ecom", Type: "GroupMail" });
+                            //};
+                            //▲ Add - TrungnC3 - 26/12/2017 - add thêm group Sale.leader.Ecom vào call log nếu là TVBH & HTKT==============
+                            //▼ Add - TrungnC3 - 26/12/2017 - Add CC user theo vùng miền==============
+
+                            //============================================================================================================================
+                            if (name == 'Nghiệp vụ' &&
+                                ($.inArray('00098', $('#JobTitle').val().split(',')) != -1 || $.inArray('00101', $('#JobTitle').val().split(',')) != -1) &&
+                                (!!$('#RegionOutbound').val() && ($.inArray($('#RegionOutbound').val(), ['00002', '00003', '00006']) != -1))) {
+                                if (!!$('#ShopIDCallCenter').val()) {
+                                    //console.log(111111);
+                                    var dataShop_split = $('#ShopIDCallCenter').val().split(',');
+                                    var arr = dataShopAPR_Code;
+                                    var datareturn = [];
+                                    if (!!dataShop_split && dataShop_split.length > 0) {
+
+                                        $.each(dataShop_split, function (i, e) {
+                                            if (arr.indexOf(e) != -1) {
+                                                datareturn.push(e);
+                                            };
+                                        });
+                                    };
+                                    if (datareturn.length > 0) {
+                                        $txtCc.tagsinput('add', { Code: "1097", Name: "1097 - Lê Trần Hà - HaLT13", Type: "Employee" });
+                                    };
+                                };
+                                $txtCc.tagsinput('add', { Code: "1028", Name: "1028 - Nguyễn Minh Chiến - ChienNM2", Type: "Employee" });
+                            }
+                            else if (name != 'Nghiệp vụ') {
+                                $txtCc.tagsinput('remove', { Code: "1028", Name: "1028 - Nguyễn Minh Chiến - ChienNM2", Type: "Employee" });
+                                $txtCc.tagsinput('remove', { Code: "1097", Name: "1097 - Lê Trần Hà - HaLT13", Type: "Employee" });
+                            };
+
+                            //============================================================================================================================
+                            if (name == 'Nghiệp vụ' &&
+                                ($.inArray('00098', $('#JobTitle').val().split(',')) != -1 || $.inArray('00101', $('#JobTitle').val().split(',')) != -1) &&
+                                (!!$('#RegionOutbound').val() && ($.inArray($('#RegionOutbound').val(), ['00005']) != -1))) {
+                                if (!!$('#ShopIDCallCenter').val()) {
+                                    //console.log(22222222);
+                                    var dataShop_split = $('#ShopIDCallCenter').val().split(',');
+                                    var arr = dataShopAPR_Code;
+                                    var datareturn = [];
+                                    if (!!dataShop_split && dataShop_split.length > 0) {
+                                        $.each(dataShop_split, function (i, e) {
+                                            if (arr.indexOf(e) != -1) {
+                                                datareturn.push(e);
+                                            };
+                                        });
+                                    };
+                                    if (datareturn.length > 0) {
+                                        $txtCc.tagsinput('add', { Code: "1097", Name: "1097 - Lê Trần Hà - HaLT13", Type: "Employee" });
+                                    };
+                                };
+                                $txtCc.tagsinput('add', { Code: "0217", Name: "0217 - Lâm Tăng Chung - ChungLT", Type: "Employee" });
+                            }
+                            else if (name != 'Nghiệp vụ') {
+                                $txtCc.tagsinput('remove', { Code: "0217", Name: "0217 - Lâm Tăng Chung - ChungLT", Type: "Employee" });
+                                $txtCc.tagsinput('remove', { Code: "1097", Name: "1097 - Lê Trần Hà - HaLT13", Type: "Employee" });
+                            };
+
+                            //============================================================================================================================
+                            if (name == 'Nghiệp vụ' &&
+                                ($.inArray('00098', $('#JobTitle').val().split(',')) != -1 || $.inArray('00101', $('#JobTitle').val().split(',')) != -1) &&
+                                (!!$('#RegionOutbound').val() && ($.inArray($('#RegionOutbound').val(), ['00204', '00205', '00067', '00484', '00498']) != -1))) {
+                                if (!!$('#ShopIDCallCenter').val()) {
+                                    //console.log(33333333);
+                                    var dataShop_split = $('#ShopIDCallCenter').val().split(',');
+                                    var arr = dataShopAPR_Code;
+                                    var datareturn = [];
+                                    if (!!dataShop_split && dataShop_split.length > 0) {
+
+                                        $.each(dataShop_split, function (i, e) {
+                                            if (arr.indexOf(e) != -1) {
+                                                datareturn.push(e);
+                                            };
+                                        });
+                                    };
+                                    if (datareturn.length > 0) {
+                                        $txtCc.tagsinput('add', { Code: "1097", Name: "1097 - Lê Trần Hà - HaLT13", Type: "Employee" });
+                                    };
+                                };
+                                $txtCc.tagsinput('add', { Code: "1631", Name: "1631 - Nguyễn Lương Trung - TrungNL", Type: "Employee" });
+                            }
+                            else if (name != 'Nghiệp vụ') {
+                                $txtCc.tagsinput('remove', { Code: "1631", Name: "1631 - Nguyễn Lương Trung - TrungNL", Type: "Employee" });
+                                $txtCc.tagsinput('remove', { Code: "1097", Name: "1097 - Lê Trần Hà - HaLT13", Type: "Employee" });
+                            };
+
+                            //============================================================================================================================
+                            if (name == 'Nghiệp vụ' &&
+                                ($.inArray('00098', $('#JobTitle').val().split(',')) != -1 || $.inArray('00101', $('#JobTitle').val().split(',')) != -1) &&
+                                (!!$('#ShopIDCallCenter').val())) {
+                                var dataShop_split = $('#ShopIDCallCenter').val().split(',');
+                                var arr = dataShopAPR_Code;
+                                var datareturn = [];
+                                if (!!dataShop_split && dataShop_split.length > 0) {
+
+                                    $.each(dataShop_split, function (i, e) {
+                                        if (arr.indexOf(e) != -1) {
+                                            datareturn.push(e);
+                                        }
+                                    });
+                                };
+                                if (datareturn.length > 0) {
+                                    $txtCc.tagsinput('add', { Code: "1097", Name: "1097 - Lê Trần Hà - HaLT13", Type: "Employee" });
+                                };
+                            }
+                            else if (name != 'Nghiệp vụ') {
+                                $txtCc.tagsinput('remove', { Code: "1097", Name: "1097 - Lê Trần Hà - HaLT13", Type: "Employee" });
+                            };
+                            //▲ Add - TrungnC3 - 26/12/2017 - Add CC user theo vùng miền==============
+                            //▲ Add - TrungnC3 - 26/12/2017 - Add Group Support==============
+                            //▼ Add - ThuongNM2 - 12/04/2019 - Add Group BH Theo vùng miền==============
+                            if ($('#EcomTypeParent').val() == 'Bảo hành') {
+                                if (RegionWarehouseByUser == 'Bắc') {
+                                    $txtCc.tagsinput('add', { Code: "***FRT.BaohanhMB", Name: "FRT.BaohanhMB", Type: "GroupMail" });
+                                }
+                                else if (RegionWarehouseByUser == 'Trung') {
+                                    $txtCc.tagsinput('add', { Code: "***FRT.BaohanhMT", Name: "FRT.BaohanhMT", Type: "GroupMail" });
+                                }
+                                else if (RegionWarehouseByUser == 'Nam') {
+                                    $txtCc.tagsinput('add', { Code: "***FRT.BaohanhMN", Name: "FRT.BaohanhMN", Type: "GroupMail" });
+                                }
+                                else {
+
+                                }
+                            }
+                            else {
+                                $txtCc.tagsinput('remove', { Code: "***FRT.BaohanhMB", Name: "FRT.BaohanhMB", Type: "GroupMail" });
+                                $txtCc.tagsinput('remove', { Code: "***FRT.BaohanhMT", Name: "FRT.BaohanhMT", Type: "GroupMail" });
+                                $txtCc.tagsinput('remove', { Code: "***FRT.BaohanhMN", Name: "FRT.BaohanhMN", Type: "GroupMail" });
+                            }
+                            //▲ Add - ThuongNM2 - 12/04/2019 - Add Group BH Theo vùng miền==============
+                            return true;
+                        }
+                    });
+                }).jstree({
+                    'core': {
+                        'data': dataComplainExcept
+                    },
+                    "plugins": ["wholerow", "search", "types"],
+                    "types": {
+                        "default": { "icon": "/assets/images/Maps-Pin-Place-icon.png" }
+                    }
+                });
+                if ($('#EcomType').val() != '' && $('#EcomType').val() != undefined && $('#EcomType').val() != null) {
+                    $('#complainName').val($('#EcomType').val());
+
+                    $.each(dataComplain, function (index, item) {
+                        if (item.text == $('#EcomType').val()) {
+                            $('#SystemId').val(item.id);
+                        }
+                    });
+                }
+            });
+
+        };
+        RenderLoaiKhieuNai();
+    };
+    render();
+
+    $('#refreshComplain').click(function () {
+        $('#complainName').val('Chọn loại yêu cầu');
+        $('#searchComplain').val('');
+        $('#EcomType').val('');
+        $('#complain-tree').jstree("deselect_all");
+        $('#complain-tree').jstree("close_all");
+    });
+    var isInt = function (n) { return (parseInt(n) == n); }
+    //▼ Add - TuanNA89 - 20/04/2020 - Thêm field nội dung tóm tắt
+    $('input[type=radio][name=ConfirmCalllogType]').change(function () {
+        var loaiCLKN = $("input[name=ConfirmCalllogType]:checked").val();
+        if (['Khiếu nại', 'Hỗ trợ'].indexOf(loaiCLKN) > -1) {
+            $('#summarymessage').prop('hidden', false);
+        }
+        else {
+            $('#summarymessage').prop('hidden', true);
+        }
+    });
+    //▲ Add - TuanNA89 - 20/04/2020 - Thêm field nội dung tóm tắt
+    $('#btnSend').click(function () {
+        $('#myModal').modal({ backdrop: 'static', keyboard: false, show: true });
+
+        var txtSoSO_check = (($('#txtSoSO').val() !== '' || $('#txtSoSO').val() !== null || $('#txtSoSO').val() !== undefined)) ? $('#txtSoSO').val() : null;
+        var txtSoPBH_check = (($('#txtSoPhieuBH').val() !== '' || $('#txtSoPhieuBH').val() !== null || $('#txtSoPhieuBH').val() !== undefined)) ? $('#txtSoPhieuBH').val() : null;
+        //ChuongNT3 - 11/09/2018 - thêm sđt
+        var txtSDT_check = (($('#txtSDT').val() !== '' || $('#txtSDT').val() !== null || $('#txtSDT').val() !== undefined)) ? $('#txtSDT').val() : null;
+
+        var confirmCalllogType = jQuery("input:radio[name=ConfirmCalllogType]:checked").val();
+        if (confirmCalllogType == '' || confirmCalllogType == undefined || confirmCalllogType == null) {
+            $('#myModal').modal('hide');
+            XData.Render_Message('error', 'Vui lòng chọn loại calllog');
+            return;
+        };
+
+        if ($('#EcomType').val() == '' || $('#EcomType').val() == null || $('#EcomType').val() == undefined) {
+            $('#myModal').modal('hide');
+            XData.Render_Message('error', 'Vui lòng chọn loại khiếu nại');
+            return;
+        };
+
+        if ((txtSoSO_check === '' || txtSoSO_check === null || txtSoSO_check === undefined) &&
+            ($.inArray($('#EcomTypeParent').val(), ["Đổi trả"]) !== -1)) {
+            $('#myModal').modal('hide');
+            XData.Render_Message('error', 'Vui lòng nhập số SO khi chọn loại khiếu nại Đổi trả');
+            return false;
+        };
+        //▼ Edit - ChuongNT3 - 11/07/2018 - CLog GQKN Loại Subsidy => To & CC
+        if ($.inArray($('#EcomTypeParent').val(), ["Bảo hành"]) != -1 && $.inArray($('#EcomType').val(), ["Mượn máy"]) == -1) {
+            if ($.inArray($('#EcomType').val(), ["Đổi shop nhận máy"]) != -1) {
+                if ((txtSoPBH_check === '' || txtSoPBH_check === null || txtSoPBH_check === undefined)
+                    && (txtSoSO_check === '' || txtSoSO_check === null || txtSoSO_check === undefined)) {
+                    $('#myModal').modal('hide');
+                    XData.Render_Message('error', 'Vui lòng nhập số phiếu BH hoặc số SO khi chọn loại đổi shop nhận máy');
+                    return false;
+                }
+            };
+            if ((txtSoPBH_check === '' || txtSoPBH_check === null || txtSoPBH_check === undefined) &&
+                    (txtSoSO_check === '' || txtSoSO_check === null || txtSoSO_check === undefined)) {
+                $('#myModal').modal('hide');
+                XData.Render_Message('error', 'Vui lòng nhập số SO hoặc số phiếu BH khi chọn loại khiếu nại Bảo hành');
+                return false;
+            };
+        };
+
+        if ($.inArray($('#EcomTypeParent').val(), ["Bảo hành vàng"]) != -1 && $.inArray($('#EcomType').val(), ["Mượn máy (BHV)"]) == -1) {
+            if ($.inArray($('#EcomType').val(), ["Đổi shop nhận máy (BHV)"]) != -1) {
+                if ((txtSoPBH_check === '' || txtSoPBH_check === null || txtSoPBH_check === undefined)
+                    && (txtSoSO_check === '' || txtSoSO_check === null || txtSoSO_check === undefined)) {
+                    $('#myModal').modal('hide');
+                    XData.Render_Message('error', 'Vui lòng nhập số phiếu BH hoặc số SO khi chọn loại đổi shop nhận máy (BHV)');
+                    return false;
+                }
+            };
+            if ((txtSoPBH_check === '' || txtSoPBH_check === null || txtSoPBH_check === undefined) &&
+                    (txtSoSO_check === '' || txtSoSO_check === null || txtSoSO_check === undefined)) {
+                $('#myModal').modal('hide');
+                XData.Render_Message('error', 'Vui lòng nhập số SO hoặc số phiếu BH khi chọn loại khiếu nại Bảo hành vàng');
+                return false;
+            };
+        };
+        //▲ Edit - ChuongNT3 - 11/07/2018 - CLog GQKN Loại Subsidy => To & CC
+        if ((txtSoPBH_check !== '' && txtSoPBH_check !== null && txtSoPBH_check !== undefined) && txtSoPBH_check.length > 10 && parseInt(txtSoPBH_check) >= 2147483647) {
+            $('#myModal').modal('hide');
+            XData.Render_Message('error', 'Số phiếu bảo hành nhập vào không đúng, Vui lòng kiểm tra lại');
+            return false;
+        }
+        //ChuongNT3 - 11/09/2018 - thêm sđt
+        if (txtSDT_check != null && txtSDT_check !== '' && txtSDT_check !== undefined) {
+            if (checkPhoneNumber(txtSDT_check.toString()) == false) {
+                $('#myModal').modal('hide');
+                XData.Render_Message('error', 'Số điện thoại sai định dạng');
+                return false;
+            }
+        } else {
+            $('#myModal').modal('hide');
+            XData.Render_Message('error', 'Bạn phải nhập số điện thoại');
+            return false;
+        }
+        //ChuongNT3 - 11/09/2018 - thêm sđt
+        if ($('#Title').val() == '' || $('#Title').val().length == 0) {
+            $('#myModal').modal('hide');
+            XData.Render_Message('error', 'Vui lòng nhập tiêu đề');
+            $('#Title').focus();
+            return;
+        };
+        if ($('#txtMessage').code() == '' || $('#txtMessage').code().length == 0) {
+            $('#myModal').modal('hide');
+            XData.Render_Message('error', 'Vui lòng nhập nội dung');
+            return;
+        };
+        /*▼ ChuongNT3 - 20/11/2018 - add sđt*/
+        var TitleNew = '';
+        var PhoneNumber = ''
+        if (txtSDT_check !== '' || txtSDT_check !== null || txtSDT_check !== undefined) {
+            PhoneNumber = ' - Số điện thoại: ' + txtSDT_check;
+        }
+        if ($.inArray($('#EcomTypeParent').val(), ["Đổi trả", "Bảo hành", "Bảo hành vàng"]) !== -1) {
+            var SONumber = '';
+            if (txtSoSO_check !== '' || txtSoSO_check !== null || txtSoSO_check !== undefined) {
+                SONumber = ' - Số SO: ' + txtSoSO_check;
+            };
+            var PBHNumber = '';
+            if (txtSoPBH_check !== '' || txtSoPBH_check !== null || txtSoPBH_check !== undefined) {
+                PBHNumber = ' - Số PBH: ' + txtSoPBH_check;
+            };
+
+            TitleNew = $('#EcomType').val() + PhoneNumber + SONumber + PBHNumber + ' - ' + $('#Title').val();
+        }
+        else {
+            TitleNew = $('#EcomType').val() + PhoneNumber + ' - ' + $('#Title').val();
+        }
+        /*▲	ChuongNT3 - 20/11/2018 - add sđt*/
+        //▼ Add - TuanNA89 - 20/04/2020 - Thêm field nội dung tóm tắt
+        var NoiDungTomTat = $('#txtSummaryMessage').val();
+        if (['Khiếu nại', 'Hỗ trợ'].indexOf(confirmCalllogType) > -1) {
+            if (NoiDungTomTat.length == 0) {
+                $('#myModal').modal('hide');
+                XData.Render_Message('error', 'Vui lòng nhập nội dung tóm tắt đối với loại CallLog Khiếu nại và Hỗ trợ');
+                return;
+            }
+        }
+        //▲ Add - TuanNA89 - 20/04/2020 - Thêm field nội dung tóm tắt
+        $('#Title').val(TitleNew);
+
+        var form = $("form#form-createBO");
+        form.attr("action", "/Requests/CreateBO");
+        form.submit();
+    });
+    $(document).mouseup(function (e) {
+        var complain = $('#complain-tree-g'); txtCatagori = $('#complainName');
+
+        if (!complain.is(e.target)
+          && complain.has(e.target).length === 0 && !txtCatagori.is(e.target)) {
+            complain.hide();
+        }
+
+    });
+});

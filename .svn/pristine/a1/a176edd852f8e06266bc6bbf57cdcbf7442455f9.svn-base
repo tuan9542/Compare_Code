@@ -1,0 +1,325 @@
+﻿SET QUOTED_IDENTIFIER ON
+SET ANSI_NULLS ON
+GO
+/*
+==================================================
+Author			:	TuanNA89
+Create date		:	20/01/2020
+Description		:	Tạo CL Tripi
+Note			:	
+==================================================
+Test:
+
+*/
+ALTER PROCEDURE CallLogTripi_Type162_Create
+   @LoaiXuLy int = 0
+  , @BookingId BIGINT = 0
+  , @MaChuyenDi NVARCHAR(500) = ''
+  , @MaChuyenVe NVARCHAR(500) = ''
+  , @GioiTinh NVARCHAR(20) = ''
+  , @HoTen NVARCHAR(100) = ''
+  , @Email NVARCHAR(100) = ''
+  , @SDT VARCHAR(20) = ''
+  , @NoiDungTraoDoi NVARCHAR(MAX) = ''
+  , @User VARCHAR(50) = ''
+  , @DocEntry BIGINT = 0
+  , @ShopCode VARCHAR(50) = ''
+  , @MaDichVu VARCHAR(50) = ''
+  , @Result_Out INT = 0 OUT
+  , @Msg_Out NVARCHAR(500) = '' OUT
+  , @RequestId_Out BIGINT = 0 OUT
+  , @Email_Title_Out NVARCHAR(500) = '' OUT
+  , @Email_Body_Out NVARCHAR(2000) = '' OUT
+  , @Email_To_Out NVARCHAR(500) = '' OUT
+  , @Email_Cc_Out NVARCHAR(500) = '' OUT
+  , @Email_Bcc_Out NVARCHAR(500) = '' OUT
+AS
+    BEGIN
+		INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+		VALUES (
+		           N'ChecTimeTripi'       -- Title - nvarchar(300)
+		         , @HoTen       -- Error - nvarchar(max)
+		         , 0         -- Status - tinyint
+		         , GETDATE() -- TimeCreate - datetime
+		       )
+
+        DECLARE
+            @Message_Log NVARCHAR(MAX) = N''
+          , @StoreName   NVARCHAR(300) = OBJECT_NAME(@@PROCID);
+        SET @Message_Log = CONCAT(N'EXEC ', @StoreName);
+		SET @Message_Log = CONCAT(@Message_Log, N' @LoaiXuLy=N''' , ISNULL(@LoaiXuLy, 'NULL') , '''');
+        SET @Message_Log = CONCAT(@Message_Log, N', @BookingId=N''' , ISNULL(@BookingId, 'NULL') , '''');
+        SET @Message_Log = CONCAT(@Message_Log, N', @MaChuyenDi=N''' , ISNULL(@MaChuyenDi, 'NULL') , '''');
+        SET @Message_Log = CONCAT(@Message_Log, N', @MaChuyenVe=N''' , ISNULL(@MaChuyenVe, 'NULL') , '''');
+        SET @Message_Log = CONCAT(@Message_Log, N', @GioiTinh=N''' , ISNULL(@GioiTinh, 'NULL') , '''');
+        SET @Message_Log = CONCAT(@Message_Log, N', @HoTen=N''' , ISNULL(@HoTen, 'NULL') , '''');
+        SET @Message_Log = CONCAT(@Message_Log, N', @Email=N''' , ISNULL(@Email, 'NULL') , '''');
+        SET @Message_Log = CONCAT(@Message_Log, N', @SDT=N''' , ISNULL(@SDT, 'NULL') , '''');
+		SET @Message_Log = CONCAT(@Message_Log, N', @NoiDungTraoDoi=N''' , ISNULL(@NoiDungTraoDoi, 'NULL') , '''');
+		SET @Message_Log = CONCAT(@Message_Log, N', @User=N''' , ISNULL(@User, 'NULL') , '''');
+		SET @Message_Log = CONCAT(@Message_Log, N', @DocEntry=N''' , ISNULL(@DocEntry, 'NULL') , '''');
+		SET @Message_Log = CONCAT(@Message_Log, N', @ShopCode=N''' , ISNULL(@ShopCode, 'NULL') , '''');
+		SET @Message_Log = CONCAT(@Message_Log, N', @MaDichVu=N''' , ISNULL(@MaDichVu, 'NULL') , '''');
+
+        --===Ghi Log===
+        INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+        VALUES (
+                   @StoreName   -- Title - nvarchar(300)
+                 , @Message_Log -- Error - nvarchar(max)
+                 , 0            -- Status - tinyint
+                 , GETDATE()    -- TimeCreate - datetime
+               );
+        BEGIN TRY
+            DECLARE
+                @TieuDe      NVARCHAR(MAX) = N''
+              , @NoiDung     NVARCHAR(MAX) = ''
+              , @MaVungMien  NVARCHAR(50)  = ''
+              , @TenVungMien NVARCHAR(500) = ''
+              , @TenShop     NVARCHAR(500) = ''
+              , @NgayTao     DATETIME      = GETDATE()
+			  , @TenLoaiXuLy NVARCHAR(500) = ''
+			  , @IdLoaiXuLy INT = 0
+			  , @IdLoaiXuLy_Con INT = 0
+
+            SELECT TOP 1
+                   @MaVungMien  = E.RegionHierachyCode
+            FROM
+                   dbo.F03_Employees AS E ( NOLOCK )
+            WHERE
+                   E.EmployeeCode = @User;
+
+            SELECT TOP 1
+                   @TenShop  = CONCAT(W.WarehouseCodeB1, ' - ', W.WarehouseName)
+            FROM
+                   dbo.Warehouse AS W ( NOLOCK )
+            WHERE
+                   W.WarehouseCodeB1 = @ShopCode;
+
+            SELECT TOP 1
+                   @TenVungMien = R.RegionHierachyName
+            FROM
+                   dbo.F03_RegionHierachies AS R ( NOLOCK )
+            WHERE
+                   R.RegionHierachyCode = @MaVungMien;
+
+			SELECT TOP 1 @IdLoaiXuLy = I.Id, @TenLoaiXuLy = I.Name FROM dbo.Items AS I (NOLOCK) WHERE I.TypeId = 162 AND I.ParentId = 0 AND I.KeyUnique = @LoaiXuLy
+
+			SET @TieuDe = CONCAT(N'{0} - ', @TenVungMien, N' - ', @TenShop, N' - ', FORMAT(GETDATE(), 'dd/MM/yyyy'));			
+
+			SET @NoiDung = N'<table>'
+							+ CONCAT(N'<tr><td>Mã đặt vé:</td><td>',ISNULL(@BookingId,''),N'</td></tr>')
+							+ CONCAT(N'<tr><td>Mã chặng đi:</td><td>',ISNULL(@MaChuyenDi,''),N'</td></tr>')
+							+ CONCAT(N'<tr><td>Mã chặng về:</td><td>',ISNULL(@MaChuyenVe,''),N'</td></tr>')
+							+ CONCAT(N'<tr><td>Giới tính:</td><td>',ISNULL(@GioiTinh,''),N'</td></tr>')
+							+ CONCAT(N'<tr><td>Họ tên người liên hệ:</td><td>',ISNULL(@HoTen,''),'</td></tr>')
+							--+ CONCAT(N'<tr><td>Địa chỉ:</td><td>',@,'</td></tr>')
+							+ CONCAT(N'<tr><td>Email:</td><td>',ISNULL(@Email,''),N'</td></tr>')
+							+ CONCAT(N'<tr><td>Số điện thoại:</td><td>',ISNULL(@SDT,''),'</td></tr>')
+							+ N'</table>'
+							+ N'<br>';
+
+            if(@LoaiXuLy IN (1, 5))
+			BEGIN
+				SET @NoiDung += N'<label style="padding-left: 10px;"><input type="radio" name="XacNhanHuy_162" value="1"> <b>Xác nhận huỷ<b></label>';
+				SET @NoiDung += N'<label style="padding-left: 10px;"><input type="radio" name="XacNhanHuy_162" value="2"> <b>Xác nhận không huỷ<b></label>';
+				SET @TieuDe = REPLACE(@TieuDe, N'{0}', @TenLoaiXuLy)
+			END
+			ELSE IF(@LoaiXuLy IN (2, 3, 4)) 
+			BEGIN
+				SET @NoiDung += N'<label>Mã đặt vé mới: </label><input type="text" id="BookingId_new_162">'
+				SET @NoiDung += N'</br></br>'
+				SET @NoiDung += N'<label style="padding-left: 10px;"><input type="checkbox" name="HuyYeuCallLog_162" value="1"> <b>KH đổi ý</b></label>'
+				SET @TieuDe = REPLACE(@TieuDe, N'{0}', @TenLoaiXuLy)
+			END
+			ELSE IF (@LoaiXuLy IN (6))
+			BEGIN
+			    SET @NoiDung += N'<label>Phí thay đổi: </label><input type="text" id="MoneyChange_162">'
+				SET @NoiDung += N'</br></br>'
+				SET @NoiDung += N'<label style="padding-left: 10px;"><input type="checkbox" name="HuyYeuCallLog_162" value="1"> <b>KH đổi ý</b></label>'
+				DECLARE @TenDichVu NVARCHAR(500) = ''
+				SELECT TOP 1 @TenDichVu = I.Name, @IdLoaiXuLy_Con = I.Id FROM dbo.Items AS I (NOLOCK) WHERE I.TypeId = 162 AND I.ParentId = @IdLoaiXuLy AND I.KeyUnique = @MaDichVu
+				SET @TieuDe = REPLACE(@TieuDe, N'{0}', @TenDichVu)
+			END 
+
+            DECLARE @RequestID BIGINT;
+            EXEC dbo.Request_InsertNoSelect
+                @RequestID = @RequestId_Out OUTPUT -- bigint
+			  , @ItemId = @IdLoaiXuLy
+              , @Sender = @User                    -- varchar(40)
+              , @Assigner = ''                     -- varchar(3000)
+              , @Title = @TieuDe                   -- nvarchar(300)
+              , @Content = @NoiDung                -- nvarchar(max)
+              , @TypeId = 162                      -- int
+              , @StepNo = 1                        -- int
+              , @FromShop = @ShopCode              -- varchar(40)
+              , @TimeAppear = @NgayTao             -- datetime
+              , @Status = 1                        -- tinyint
+              , @CreateBy = @User;                 -- varchar(10)
+
+            IF ( @RequestId_Out > 0 )
+                BEGIN
+                    INSERT INTO dbo.RequestDetails
+                    (
+                        RequestId
+                      , Status
+					  , Quantity
+                      , Property1
+                      , Property2
+                      , Property3
+                      , Property4
+                      , Property5
+                      , Property6
+                      , Property7
+					  , Quantity1
+					  , Property9
+					  , Quantity3
+                    )
+                    VALUES (
+                               @RequestId_Out
+                             , 1
+							 , @LoaiXuLy
+                             , @BookingId
+                             , @MaChuyenDi
+                             , @MaChuyenVe
+                             , @GioiTinh
+                             , @HoTen
+                             , @Email
+                             , @SDT
+							 , @DocEntry
+							 , @MaDichVu
+							 , @IdLoaiXuLy_Con
+                           );
+
+					INSERT INTO dbo.Conversations
+					(
+					    RequestId
+					  , StepNo
+					  , Sender
+					  , Message
+					  , CreateBy
+					  , Type
+					  , Status
+					  , RequestDetailId
+					  , TimeCreate
+					)
+					VALUES (
+					           @RequestId_Out         -- RequestId - bigint
+					         , 1         -- StepNo - int
+					         , N'-1'       -- Sender - nvarchar(40)
+					         , @NoiDungTraoDoi       -- Message - nvarchar(max)
+					         , N'-1'       -- CreateBy - nvarchar(max)
+					         , 2         -- Type - tinyint
+					         , 1         -- Status - tinyint
+					         , NULL         -- RequestDetailId - bigint
+					         , GETDATE() -- TimeCreate - datetime
+					       )
+
+					INSERT INTO dbo.Assigners
+					(
+					    RequestId
+					  , EmployeeCode
+					  , StepNo
+					  , Type
+					  , Status
+					  , TimeCreate
+					  , GroupMail
+					  , CreateBy
+					  , TimeUpdate
+					  , UpdateBy
+					)
+					VALUES (
+					           @RequestId_Out         -- RequestId - bigint
+					         , @User       -- EmployeeCode - nvarchar(40)
+					         , 1         -- StepNo - int
+					         , 2         -- Type - int
+					         , 1         -- Status - tinyint
+					         , GETDATE() -- TimeCreate - datetime
+					         , NULL       -- GroupMail - nvarchar(300)
+					         , NULL       -- CreateBy - nvarchar(50)
+					         , GETDATE() -- TimeUpdate - datetime
+					         , NULL       -- UpdateBy - nvarchar(50)
+					       )
+
+					EXEC dbo.CallLogTripi_Type162_GetMailInfor
+					    @RequestId = @RequestId_Out                             -- bigint
+					  , @Result_Out = @Result_Out OUTPUT           -- int
+					  , @Email_Title_Out = @Email_Title_Out OUTPUT -- nvarchar(500)
+					  , @Email_Body_Out = @Email_Body_Out OUTPUT   -- nvarchar(2000)
+					  , @Email_To_Out = @Email_To_Out OUTPUT       -- nvarchar(500)
+					  , @Email_Cc_Out = @Email_Cc_Out OUTPUT       -- nvarchar(500)
+					  , @Email_Bcc_Out = @Email_Bcc_Out OUTPUT     -- nvarchar(500)
+
+					  INSERT INTO dbo.EmailQueues
+					  (
+					      RequestID
+					    , TypeID
+					    , Subject
+					    , Body
+					    , Email
+					    , Cc
+					    , Bcc
+					    , CreateDateTime
+					    , AppearDateTime
+					    , SendDateTime
+					    , Status
+					    , IsNew
+					    , KeyNum
+					    , StoreName
+					    , Note
+					  )
+					  VALUES (
+					             @Result_Out         -- RequestID - bigint
+					           , 162         -- TypeID - int
+					           , @Email_Title_Out       -- Subject - nvarchar(300)
+					           , @Email_Body_Out       -- Body - nvarchar(max)
+					           , @Email_To_Out        -- Email - varchar(max)
+					           , @Email_Cc_Out        -- Cc - varchar(max)
+					           , @Email_Bcc_Out        -- Bcc - varchar(max)
+					           , GETDATE() -- CreateDateTime - datetime
+					           , GETDATE() -- AppearDateTime - datetime
+					           , GETDATE() -- SendDateTime - datetime
+					           , 2         -- Status - int
+					           , NULL      -- IsNew - bit
+					           , 0         -- KeyNum - bigint
+					           , N'CallLogTripi_Type162_Create'       -- StoreName - nvarchar(250)
+					           , N'Mail tạo từ CL CallLogTripi_Type162_Create, đẩy mail bằng API'       -- Note - nvarchar(250)
+					         )
+					
+                    SELECT
+                        @Result_Out = 1
+                      , @Msg_Out    = CONCAT(N'Tạo yêu cầu thành công. Mã yêu cầu ', @RequestId_Out);
+                END;
+            ELSE
+                BEGIN
+                    SELECT @Result_Out = 0, @Msg_Out = N'Tạo yêu cầu thất bại';
+                END;
+
+        END TRY
+        BEGIN CATCH
+            DECLARE @ErrorMessage NVARCHAR(MAX) = N'Lỗi ';
+            SET @ErrorMessage = CONCAT(@ErrorMessage, @Message_Log, ' - ', ERROR_MESSAGE());
+
+            --	===Ghi Log===
+            INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+            VALUES (
+                       @StoreName    -- Title - nvarchar(300)
+                     , @ErrorMessage -- Error - nvarchar(max)
+                     , 1             -- Status - tinyint
+                     , GETDATE()     -- TimeCreate - datetime
+                   );
+
+            SELECT
+                @Result_Out = 0
+              , @Msg_Out    = CONCAT(N'Tạo yêu cầu thất bại. Lỗi ', ERROR_MESSAGE());
+        END CATCH;
+    END;
+
+		INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+		VALUES (
+		           N'ChecTimeTripi'       -- Title - nvarchar(300)
+		         , @HoTen       -- Error - nvarchar(max)
+		         , 0         -- Status - tinyint
+		         , GETDATE() -- TimeCreate - datetime
+		       )
+GO
+

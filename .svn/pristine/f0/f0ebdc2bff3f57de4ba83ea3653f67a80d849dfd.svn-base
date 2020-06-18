@@ -1,0 +1,1469 @@
+﻿SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;
+GO
+/*
+==================================================
+Author			:	? - VietMXH
+Create date		:	20/03/2016 - 07/08/2018 10:00
+Description		:	Check Hạn mức Hành chính
+Note			:	FRT_BW
+				:	[10.96.254.143].FRTInsideV2
+				:	[LOCAL].FRTCallLogV2
+==================================================
+Test:
+EXEC Items_CheckLimitValue_ProductHC
+  @RequestId = 0 -- Mã CallLog
+, @Results = 0 -- 0: trường hợp tạo, 1: trường hợp huỷ
+*/
+ALTER PROCEDURE dbo.Items_CheckLimitValue_ProductHC
+(
+    @RequestId BIGINT = 0 -- Mã CallLog
+  , @Results INT = 0 -- 0: trường hợp tạo, 1: trường hợp huỷ
+)
+AS
+    BEGIN
+        BEGIN TRY
+            ----IF ( @RequestId = 4224125 )
+            ----    BEGIN
+            ----        RETURN; 
+            ----    END;
+
+            DECLARE @ErrorMessage_Log1 NVARCHAR(MAX) = N'';
+            SET @ErrorMessage_Log1 = N'Log: [Items_CheckLimitValue_ProductHC]';
+            SET @ErrorMessage_Log1 += N', @RequestId=''' + ISNULL(CONVERT(NVARCHAR(50), @RequestId), 'NULL') + N'''';
+            SET @ErrorMessage_Log1 += N', @Results=''' + ISNULL(CONVERT(NVARCHAR(50), @Results), 'NULL') + N'''';
+            SET @ErrorMessage_Log1 += N' ! ';
+
+            --	===Ghi Log===
+            INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+            VALUES (
+                       N'Items_CheckLimitValue_ProductHC' -- Title - nvarchar(300)
+                     , @ErrorMessage_Log1 -- Error - nvarchar(max)
+                     , 0 -- Status - tinyint
+                     , GETDATE() -- TimeCreate - datetime
+                   );
+
+            --==Lấy List CallLog được truyền vào
+            ----SELECT
+            ----    [Index]
+            ----  , Value
+            ----INTO
+            ----    #Temp_ListCallog
+            ----FROM
+            ----    dbo.fnSplitString(@RequestId, ','); 
+            --//▼  Add - ThuongNM2 - 02/08/2019 - Loại 23 - HC
+            DECLARE @Time_F DATETIME;
+            DECLARE
+                @Type_ID INT
+              , @From_SHOP VARCHAR(100)
+              , @From_OFFICE VARCHAR(100);
+            SELECT TOP 1
+                   @Time_F = TimeCreate
+                 , @Type_ID = TypeId
+                 , @From_SHOP = FromShop
+                 , @From_OFFICE = FromOffice
+            FROM
+                dbo.Requests ( NOLOCK )
+            WHERE
+                Id = @RequestId;
+
+            EXEC dbo.sp_CalllogGiuLuongTruyThuAoDongPhuc_23 @RequestID = @RequestId; -- bigint Áo đồng phục -- LuanNT44-06/09/2019-23
+
+            --//▲  Add - ThuongNM2 - 02/08/2019 - Loại 23 - HC
+            DECLARE @month INT = DATEPART(MONTH, @Time_F);
+            DECLARE @year INT = DATEPART(YEAR, @Time_F);
+            --==Lấy List CallLog được truyền vào
+
+            --==Tạo Bảng tạm chứa danh sách thiết bị từ BI
+            CREATE TABLE #Temp_DeviceFromBI
+            (
+                MaNhom BIGINT
+              , TenNhom NVARCHAR(MAX)
+              , MaThietBi INT
+              , TenThietBi NVARCHAR(MAX)
+              , GiaThietBi BIGINT
+              , DonVi NVARCHAR(MAX)
+              , HinhThucXuat NVARCHAR(50)
+              , Loai INT
+              , ItemCode NVARCHAR(50)
+              , MaNhomSP NVARCHAR(50)
+              , TenNhomSP NVARCHAR(200)
+              , TrongLuong NVARCHAR(500)
+            );
+
+            INSERT INTO #Temp_DeviceFromBI
+            (
+                MaNhom
+              , TenNhom
+              , MaThietBi
+              , TenThietBi
+              , GiaThietBi
+              , DonVi
+              , HinhThucXuat
+              , Loai
+              , ItemCode
+              , MaNhomSP
+              , TenNhomSP
+              , TrongLuong
+            )
+            EXEC FRT_BW.dbo.FRT_Callog_DSThietBi @Loai = NULL, @tyle = 1;
+
+            ----SELECT * FROM #Temp_DeviceFromBI
+            ----DROP TABLE #Temp_DeviceFromBI
+
+            /*					
+		@Loai INT=NULL, ---- 1 : HC , 2 : Mar
+		@tyle INT = 0 --- 0: active , 1 : ALL 
+		*/
+            --==Tạo Bảng tạm chứa danh sách thiết bị từ BI
+
+            --==Tạo Bảng tạm chứa chi tiết CallLog
+            CREATE TABLE #Temp_RequestDetails
+            (
+                RequestId BIGINT
+              , ItemId INT
+              , MaNhom INT
+              , TenThietBi NVARCHAR(3000)
+              , Quantity INT
+              , Quantity1 INT -- Edit - ThuongNM2 -07.06.2018
+              , QuantityAvaiable INT
+              , Price INT
+              , WarehouseCodeB1 INT
+              , WarehouseName NVARCHAR(3000)
+              , WarehouseCode INT
+              , Property1 NVARCHAR(3000)
+            );
+            --==Tạo Bảng tạm chứa chi tiết CallLog
+
+            --==Insert dữ liệu vào bảng tạm chi tiết CallLog
+            ----DECLARE
+            ----    @Index INT = 1
+            ----  , @IndexTotal INT = ( SELECT
+            ----                            COUNT(1)
+            ----                        FROM
+            ----                            ----#Temp_ListCallog
+            ----                      );
+
+            ----WHILE ( @Index <= @IndexTotal )
+            IF ( @RequestId > 0 )
+                BEGIN
+                    DECLARE @Id BIGINT; -- Mã requestId sau khi SplitString	
+                    ----SELECT
+                    ----    @Id = Value
+                    ----FROM
+                    ----    ----#Temp_ListCallog
+                    ----WHERE
+                    ----    [Index] = @Index; 
+
+                    SET @Id = @RequestId;
+
+                    INSERT INTO #Temp_RequestDetails
+                    (
+                        RequestId
+                      , ItemId
+                      , MaNhom
+                      , TenThietBi
+                      , Quantity
+                      , Quantity1
+                      , QuantityAvaiable
+                      , Price
+                      , WarehouseCodeB1
+                      , WarehouseName
+                      , WarehouseCode
+                      , Property1
+                    )
+                    SELECT
+                        RD.RequestId
+                      , RD.ItemId
+                      , B.MaNhom
+                      , B.TenThietBi
+                      , RD.Quantity
+                      , RD.Quantity1
+                      , RD.QuantityAvaiable
+                      , RD.Price
+                      , W.WarehouseCodeB1
+                      , W.WarehouseName
+                      , WarehouseCode
+                      , RD.Property1
+                    FROM
+                        dbo.RequestDetails ( NOLOCK ) RD
+                        LEFT JOIN dbo.Requests ( NOLOCK ) R
+                            ON RD.RequestId = R.Id
+                        LEFT JOIN #Temp_DeviceFromBI B
+                            ON B.MaThietBi = RD.ItemId
+                        INNER JOIN dbo.Warehouse W ( NOLOCK )
+                            ON W.WarehouseCode = ISNULL(R.FromShop, ToShop)
+                    WHERE
+                        R.Id = @Id
+                        AND (
+                                RD.Status = 1
+                                OR (
+                                       RD.Status = 0
+                                       AND RD.ItemId IN ( SELECT B.MaThietBi FROM #Temp_DeviceFromBI B WHERE B.MaNhom = 1 )
+                                   )
+                            )
+                    ORDER BY
+                        W.WarehouseName;
+
+                    PRINT N'INSERT  INTO #Temp_RequestDetails';
+
+                ----SET @Index += 1;
+                END;
+            --==Insert dữ liệu vào bảng tạm chi tiết CallLog
+
+
+            ----NgoanHT--
+            --INSERT INTO dbo.NgoanHT_RequestDetails
+            --        ( RequestId ,
+            --          ItemId ,
+            --          MaNhom ,
+            --          TenThietBi ,
+            --          Quantity ,
+            --          QuantityAvaiable ,
+            --          Price ,
+            --          WarehouseCodeB1 ,
+            --          WarehouseName ,
+            --          WarehouseCode ,
+            --          Property1 ,
+            --          TimeNow
+            --        )
+            --SELECT RequestId, ItemId, MaNhom, TenThietBi, Quantity, QuantityAvaiable, Price, WarehouseCodeB1, WarehouseName, WarehouseCode, Property1, GETDATE() FROM #Temp_RequestDetails
+            --NgoanHT--
+
+            --SELECT * FROM #Temp_RequestDetails RETURN;
+            --==Tạo bảng tạm Tổng tiền theo số lượng đặt của thiết bị
+            CREATE TABLE #Temp_SumMoneyByItem
+            (
+                RequestId BIGINT
+              , WarehouseCode INT
+              , WarehouseCodeB1 INT
+              , WarehouseName NVARCHAR(3000)
+              , ItemId INT
+              , TenThietBi NVARCHAR(3000)
+              , MaNhom INT
+              , SoLuong INT
+              , DonGia INT
+              , TongTien INT
+            );
+            --==Tạo bảng tạm Tổng tiền theo số lượng đặt của thiết bị
+
+            --==Tạo bảng tạm Tổng tiền theo số lượng đặt của thiết bị của Request
+            INSERT INTO #Temp_SumMoneyByItem
+            (
+                RequestId
+              , WarehouseCode
+              , WarehouseCodeB1
+              , WarehouseName
+              , ItemId
+              , TenThietBi
+              , MaNhom
+              , SoLuong
+              , DonGia
+              , TongTien
+            )
+            SELECT
+                RequestId
+              , WarehouseCode
+              , WarehouseCodeB1
+              , WarehouseName
+              , ItemId
+              , TenThietBi
+              , MaNhom
+              , SoLuong = SUM(Quantity)
+              , Price AS DonGia
+              --▼ Hân YC 15/08/2019 sửa số lượng confirm
+              --, TongTien = CASE WHEN @Results = 0 THEN ( SUM(ISNULL(QuantityAvaiable, Quantity) * Price) )
+              --                  WHEN @Results = 1 THEN ( SUM(ISNULL(QuantityAvaiable, Quantity) * Price) )
+              --             END
+              , TongTien = CASE
+                               WHEN @Results = 0 THEN ( SUM(ISNULL(Quantity1, Quantity) * Price))
+                               WHEN @Results = 1 THEN ( SUM(ISNULL(Quantity1, Quantity) * Price))
+                           END
+            --▲ Hân YC 15/08/2019 sửa số lượng confirm
+            FROM
+                #Temp_RequestDetails
+            GROUP BY
+                RequestId
+              , WarehouseCode
+              , WarehouseCodeB1
+              , WarehouseName
+              , ItemId
+              , TenThietBi
+              , MaNhom
+              , Price;
+            --==Tạo bảng tạm Tổng tiền theo số lượng đặt của thiết bị của Request
+
+            --==Tạo bảng tạm list danh sách Shop
+
+            --SELECT * FROM #Temp_SumMoneyByItem RETURN;
+            CREATE TABLE #Temp_ShopCode ( STT INT IDENTITY(1, 1), WarehouseCode NVARCHAR(MAX));
+
+            INSERT INTO #Temp_ShopCode ( WarehouseCode )
+            SELECT DISTINCT WarehouseCode FROM #Temp_RequestDetails;
+            --==Tạo bảng tạm list danh sách Shop
+
+            --==Tạo bảng tạm chứa định mức của shop theo Request
+            CREATE TABLE #Tmp_LimitForShop
+            (
+                MaNhom INT
+              , TenNhom NVARCHAR(MAX)
+              , MaShop NVARCHAR(MAX)
+              , WarehouseName NVARCHAR(MAX)
+              , DinhMuc INT
+              , Thang INT
+              , Nam INT
+              , HanMuc NUMERIC(18, 6)
+              , HanMucSan NUMERIC(18, 6)
+            );
+            --==Tạo bảng tạm chứa định mức của shop theo Request
+
+            --==Insert bảng tạm chứa định mức của shop theo Request
+            DECLARE
+                @IndexWare INT = 1
+              , @IndexTotalWare INT = ( SELECT MAX(STT)FROM #Temp_ShopCode );
+            --SELECT * FROM #Temp_ShopCode RETURN;
+            WHILE ( @IndexWare <= @IndexTotalWare )
+                BEGIN
+                    DECLARE @ShopCode NVARCHAR(40) = ( SELECT TOP 1 WarehouseCode FROM #Temp_ShopCode WHERE STT = @IndexWare );
+                    DECLARE @ShopCodeB1 VARCHAR(40) = (
+                                                          SELECT TOP 1
+                                                                 WarehouseCodeB1
+                                                          FROM
+                                                              dbo.Warehouse WITH ( NOLOCK )
+                                                          WHERE
+                                                              WarehouseCode = @ShopCode
+                                                              AND Status = 'A'
+                                                      );
+
+                    --SELECT
+                    --    MaNhom
+                    --  , ShopCode
+                    --  , HanMucSanConLai
+                    --INTO
+                    --    #Temp_HanMucTran
+                    --FROM
+                    --    dbo.CallLogHanMucSanHC (NOLOCK)
+                    --WHERE
+                    --    ShopCode = @ShopCodeB1
+                    --    AND Thang = @month
+                    --    AND Nam = @year;
+
+                    CREATE TABLE #Temp_HanMucTran
+                    (
+                        MaNhom INT
+                      , TenNhom NVARCHAR(300)
+                      , MaShop NVARCHAR(40)
+                      , ShopCode NVARCHAR(300)
+                      , DinhMuc FLOAT
+                      , Thang INT
+                      , Nam INT
+                      , HanMuc FLOAT
+                      , HanMucSanConLai FLOAT
+                    );
+
+                    ----PRINT N'@ShopCodeB1: ';
+                    ----PRINT @ShopCodeB1;
+
+                    INSERT INTO #Temp_HanMucTran
+                    (
+                        MaNhom
+                      , TenNhom
+                      , MaShop
+                      , ShopCode
+                      , DinhMuc
+                      , Thang
+                      , Nam
+                      , HanMuc
+                      , HanMucSanConLai
+                    )
+                    EXEC [LOCAL].FRTCallLogV2.dbo.Items_LimitedValue
+                        @ShopCode = @ShopCodeB1
+                      , @TypeId = 23;
+                    ----	EXEC [LOCAL].FRTCallLogV2.dbo.Items_LimitedValue @ShopCode = '30824', @TypeId = 23
+
+                    CREATE TABLE #Tmp_LimitForShop_BI
+                    (
+                        MaNhom INT
+                      , TenNhom NVARCHAR(MAX)
+                      , MaShop NVARCHAR(MAX)
+                      , WarehouseName NVARCHAR(MAX)
+                      , DinhMuc INT
+                      , Thang INT
+                      , Nam INT
+                      , HanMuc NUMERIC(18, 6)
+                    );
+
+                    INSERT INTO #Tmp_LimitForShop_BI ( MaNhom, TenNhom, MaShop, WarehouseName, DinhMuc, Thang, Nam, HanMuc )
+                    EXEC FRT_BW.dbo.FRT_Callog_DSDinhMuc_Shop
+                        @Shop = @ShopCodeB1
+                      , @Thang = @month
+                      , @Nam = @year
+                      , @Loai = 1;
+
+                    INSERT INTO #Tmp_LimitForShop
+                    (
+                        MaNhom
+                      , TenNhom
+                      , MaShop
+                      , WarehouseName
+                      , DinhMuc
+                      , Thang
+                      , Nam
+                      , HanMuc
+                      , HanMucSan
+                    )
+                    SELECT
+                        L.MaNhom
+                      , L.TenNhom
+                      , L.MaShop
+                      , L.WarehouseName
+                      , L.DinhMuc
+                      , L.Thang
+                      , L.Nam
+                      , L.HanMuc
+                      , ISNULL(H.HanMucSanConLai, 0) AS HanMucSan
+                    FROM
+                        #Tmp_LimitForShop_BI AS L
+                        LEFT JOIN #Temp_HanMucTran AS H
+                            ON H.ShopCode = L.MaShop
+                               AND H.MaNhom = L.MaNhom;
+
+                    DROP TABLE
+                        #Temp_HanMucTran
+                      , #Tmp_LimitForShop_BI;
+                    SET @IndexWare += 1;
+                END;
+            --==Insert bảng tạm chứa định mức của shop theo Request
+
+            --==Select bảng tạm Chi tiết hạn mức đặt của shop
+            SELECT
+                ROW_NUMBER() OVER ( ORDER BY MaShop ) 'STT'
+              , B1.RequestId AS RequestId
+              , B1.WarehouseCode AS WarehouseCode
+              , B1.WarehouseCodeB1 AS WarehouseCodeB1
+              , B2.WarehouseName AS WarehouseName
+              , B1.SoLuong AS SoLuong
+              , B1.DonGia AS DonGia
+              , B1.TongTien AS TongTien
+              , B2.MaNhom AS MaNhom
+              , B2.TenNhom AS TenNhom
+              , B1.ItemId AS ItemId
+              , B1.TenThietBi AS TenThietBi
+              , B2.DinhMuc AS DinhMuc
+              , B2.Thang AS Thang
+              , B2.Nam AS Nam
+              , 'VuotMuc' = CASE
+                                WHEN @Results = 0 THEN 0 - ISNULL(TongTien, 0)
+                                WHEN @Results = 1 THEN ISNULL(TongTien, 0)
+                            END
+            INTO
+                #Temp_ChiTietDat
+            FROM
+                #Tmp_LimitForShop B2
+                INNER JOIN #Temp_SumMoneyByItem B1
+                    ON B1.WarehouseCodeB1 = B2.MaShop
+                       AND B1.MaNhom = B2.MaNhom;
+
+
+            PRINT N'Tạo chi Tiết';
+            --==Select bảng tạm Chi tiết hạn mức đặt của shop
+
+            DECLARE
+                @IdBefore NVARCHAR(MAX) = N''
+              , @Result INT = 0;
+
+            ----BEGIN TRAN;
+            BEGIN TRY
+                --==Insert vào bảng UserTemp và Update Hạn mức trần nhóm 1	
+                SELECT
+                    WarehouseCodeB1 AS ShopCodeB1
+                  , MaNhom AS GroupId
+                  , SUM(VuotMuc) AS GroupValue
+                  , 1 AS Status
+                  , DATEPART(mm, GETDATE()) AS Month
+                  , DATEPART(yyyy, GETDATE()) AS Year
+                  , CONVERT(NVARCHAR(50), RequestId) AS RequestId
+                INTO
+                    #temp_Update
+                FROM
+                    #Temp_ChiTietDat
+                WHERE
+                    VuotMuc <> 0
+                GROUP BY
+                    RequestId
+                  , WarehouseCodeB1
+                  , MaNhom;
+
+                --DECLARE @SoTienHanMuc NUMERIC(18, 6) = ( SELECT TOP 1 GroupValue FROM #temp_Update WHERE GroupId = 1 AND Month = @month AND Year = @year );
+                --DECLARE @ShopCode_Update NVARCHAR(40) = ( SELECT TOP 1 ShopCodeB1 FROM #temp_Update WHERE GroupId = 1 AND Month = @month AND Year = @year )
+
+                --     UPDATE
+                --         dbo.CallLogHanMucSanHC
+                --     SET
+                --         HanMucSanConLai = ISNULL(HanMucSanConLai,0) - ISNULL(@SoTienHanMuc,0),
+                --Remark = ISNULL(Remark,'') + N'Update hạn mức còn lại shop tháng: ' + CONVERT(NVARCHAR(20), @month)+'/'+CONVERT(NVARCHAR(20), @year)
+                --     WHERE
+                --         ShopCode = @ShopCode_Update
+                --         AND Thang = @month
+                --         AND Nam = @year;
+
+                INSERT INTO dbo.ItemUsedTmp ( ShopCodeB1, GroupId, GroupValue, Status, Month, Year, RequestId )
+                SELECT
+                    ShopCodeB1
+                  , GroupId
+                  , GroupValue
+                  , Status
+                  , Month
+                  , Year
+                  , RequestId
+                FROM
+                    #temp_Update;
+                --==Insert vào bảng UserTemp và Update Hạn mức trần nhóm 1
+
+                SELECT
+                    @IdBefore = STUFF(( SELECT ',' + RequestId FROM #temp_Update FOR XML PATH('')), 1, 1, '');
+
+                --==Tạo calllog Xác nhận truy thu
+                SELECT
+                    MaNhom
+                  , ItemId
+                  , TenThietBi
+                  , ThanhTienSanPham = CASE
+                                           WHEN @Results = 0 THEN ( SUM(ISNULL(Quantity1, Quantity) * Price)) -- Edit - ThuongNM2 -07.06.2018
+                                           WHEN @Results = 1 THEN ( SUM(ISNULL(Quantity1, Quantity) * Price)) -- Edit - ThuongNM2 -07.06.2018
+                                       END
+                --INTO
+                --    #Temp_CreateCallLog
+                --FROM
+                --    #Temp_RequestDetails
+                --WHERE
+                --    (
+                --      MaNhom IN ( 5, 6 )
+                --      AND Property1 = N'Xuất từ NCC'
+                --    )
+                --    OR ( MaNhom IN ( 1 ) ) -- Edit - ThuongNM2 -07.06.2018
+                --GROUP BY
+                --    ItemId
+                --  , TenThietBi
+                --  , MaNhom;
+                INTO
+                    #Temp_CreateCallLog
+                FROM
+                    #Temp_RequestDetails
+                WHERE
+                    ( MaNhom IN ( 5, 6, 8, 18 ) AND Property1 = N'Xuất từ NCC' )
+                    OR ( MaNhom IN ( 1 ))
+                GROUP BY
+                    ItemId
+                  , TenThietBi
+                  , MaNhom;
+
+                -- ▼ Edit - ThuongNM2 - 2018/09/25 Thay đổi rule HM BBDG
+
+                DECLARE @ThanhTienNhom1 INT = 0;
+                DECLARE @FromShopHN NVARCHAR(50) = ( SELECT FromShop FROM dbo.Requests ( NOLOCK ) WHERE Id = @RequestId );
+                DECLARE @HaNoi NVARCHAR(50) = ( SELECT RegionL2 FROM dbo.Warehouse WHERE WarehouseCode = @FromShopHN );
+                IF ( ISNULL(@HaNoi, '') = '00006' )
+                    BEGIN
+
+                        SELECT
+                            @ThanhTienNhom1 = SUM(ISNULL(R.Quantity1, R.Quantity) * R.Price)
+                        FROM
+                            #Temp_RequestDetails AS R
+                        WHERE
+                            R.MaNhom = 1
+                            AND R.ItemId IN ( 445, 446, 852 )
+                            AND LEFT(ISNULL(CONVERT(NVARCHAR(100), R.WarehouseCodeB1), 'FAIL'), 1) <> '4';
+                    END;
+                --NgoanHT--
+                --INSERT INTO dbo.NgoanHT_CreateCallLog
+                --        ( MaNhom ,
+                --          ItemId ,
+                --          TenThietBi ,
+                --          ThanhTienSanPham,
+                --	TimeNow
+                --        )
+                --SELECT MaNhom, ItemId, TenThietBi, ThanhTienSanPham, GETDATE() FROM #Temp_CreateCallLog
+                --NgoanHT--
+
+                --SELECT * FROM #Temp_CreateCallLog
+
+
+                SELECT
+                    MaNhom
+                  , SUM(ThanhTienSanPham) AS ThanhTienNhomSP
+                INTO
+                    #ThanhTienNhom
+                FROM
+                    #Temp_CreateCallLog
+                GROUP BY
+                    MaNhom;
+                IF ( ISNULL(@HaNoi, '') = '00006' )
+                    BEGIN
+                        UPDATE
+                            #ThanhTienNhom
+                        SET
+                            ThanhTienNhomSP = ISNULL(@ThanhTienNhom1, 0)
+                        WHERE
+                            MaNhom = 1;
+                    -- ▲ Edit - ThuongNM2 - 2018/09/25 Thay đổi rule HM BBDG
+
+                    --SELECT * FROM #Temp_CreateCallLog
+                    --SELECT * FROM #ThanhTienNhom
+                    END;
+                SELECT
+                    MaNhom
+                  , TenNhom
+                  , MaShop
+                  , WarehouseName
+                  , DinhMuc
+                  , Thang
+                  , Nam
+                  , HanMuc
+                  , HanMucSan
+                INTO
+                    #Tmp_Limit_CreateCallLog
+                FROM
+                    #Tmp_LimitForShop;
+                --Ngoan----
+                SELECT
+                    LM.MaNhom
+                  , LM.DinhMuc
+                  , LM.HanMuc
+                  , LM.HanMucSan
+                  --, CASE WHEN LM.MaNhom <> 1 THEN /*( LM.DinhMuc - TT.ThanhTienNhomSP )*/ ( TT.ThanhTienNhomSP - LM.HanMucSan )
+                  --       ELSE ( TT.ThanhTienNhomSP - LM.HanMucSan )
+                  --  END AS SoTienVuot
+                  , CASE
+                        WHEN LM.DinhMuc < 0 THEN ( TT.ThanhTienNhomSP )
+                        ELSE ( CASE
+                                   WHEN ( LM.DinhMuc >= TT.ThanhTienNhomSP ) THEN 0
+                                   ELSE ( TT.ThanhTienNhomSP - LM.DinhMuc )
+                               END
+                             )
+                    END AS SoTienVuot -- Edit - ThuongNM2 - 19.06.2018
+                  , TT.ThanhTienNhomSP
+                INTO
+                    #Temp_Final
+                FROM
+                    #ThanhTienNhom TT
+                    INNER JOIN #Tmp_Limit_CreateCallLog LM
+                        ON LM.MaNhom = TT.MaNhom
+                GROUP BY
+                    LM.MaNhom
+                  , LM.DinhMuc
+                  , LM.HanMuc
+                  , LM.HanMucSan
+                  , TT.ThanhTienNhomSP
+                  , LM.HanMucSan;
+
+                --SELECT * FROM #ThanhTienNhom
+                --SELECT * FROM #Temp_Final
+
+                DECLARE
+                    @GiaTriTruyThu FLOAT
+                  , @MaCallLogTruyThu BIGINT
+                  , @TypeId INT;
+                SELECT
+                    ROW_NUMBER() OVER ( ORDER BY MaNhom ) 'STT'
+                  , MaNhom
+                  , DinhMuc
+                  , HanMuc
+                  , HanMucSan
+                  , SUM(SoTienVuot) AS SumAll
+                  , ThanhTienNhomSP
+                INTO
+                    #TempFinalTruyThu
+                FROM
+                    #Temp_Final
+                WHERE
+                    SoTienVuot > 0
+                GROUP BY
+                    MaNhom
+                  , DinhMuc
+                  , HanMuc
+                  , HanMucSan
+                  , ThanhTienNhomSP;
+
+                --▼ Edit - ThuongNM2 - 12.07.2018 - Loại 23
+                DECLARE @ShopCode_Update NVARCHAR(40) = (
+                                                            SELECT TOP 1
+                                                                   ShopCodeB1
+                                                            FROM
+                                                                #temp_Update
+                                                            WHERE
+                                                                GroupId = 1
+                                                                AND Month = @month
+                                                                AND Year = @year
+                                                        );
+                -- ▼ Edit - ThuongNM2 - 2018/09/25 Thay đổi rule HM BBDG
+                IF ( @ShopCode_Update <> '' )
+                    BEGIN
+                        IF ( @Results = 0 )
+                            BEGIN
+                                UPDATE
+                                    CH
+                                SET
+                                    CH.HanMucSanConLai = ISNULL(CH.HanMucSanConLai, 0) - ISNULL(TT.ThanhTienNhomSP, 0)
+                                  , CH.Remark = CASE
+                                                    WHEN @HaNoi = '00006' THEN ISNULL(CH.Remark, '') + ISNULL(( N' - (' + CONVERT(NVARCHAR(50), GETDATE(), 121) + N'): Items_CheckLimitValue_ProductHC-UPDATE HanMucSanConLai. Update hạn mức còn lại shop tháng: ' + CONVERT(NVARCHAR(20), @month) + '/' + CONVERT(NVARCHAR(20), @year) + N' - RequestId: ' + ISNULL(CONVERT(NVARCHAR(50), @RequestId), 'NULL') + N'Rule mới!' ), '')
+                                                    ELSE ISNULL(CH.Remark, '') + ISNULL(( N' - (' + CONVERT(NVARCHAR(50), GETDATE(), 121) + N'): Items_CheckLimitValue_ProductHC-UPDATE HanMucSanConLai. Update hạn mức còn lại shop tháng: ' + CONVERT(NVARCHAR(20), @month) + '/' + CONVERT(NVARCHAR(20), @year) + N' - RequestId: ' + ISNULL(CONVERT(NVARCHAR(50), @RequestId), 'NULL') + N'Rule cũ!' ), '')
+                                                END
+                                  , CH.SoCLOrder = CONCAT(CH.SoCLOrder, ',', CONVERT(NVARCHAR(100), ISNULL(@RequestId, 0)))
+                                FROM
+                                    dbo.CallLogHanMucSanHC AS CH
+                                    INNER JOIN #ThanhTienNhom AS TT
+                                        ON TT.MaNhom = CH.MaNhom
+                                WHERE
+                                    CH.ShopCode = @ShopCode_Update
+                                    AND CH.Thang = @month
+                                    AND CH.Nam = @year;
+                            END;
+                        ELSE IF ( @Results = 1 )
+                                 BEGIN
+                                     UPDATE
+                                         CH
+                                     SET
+                                         CH.HanMucSanConLai = ISNULL(CH.HanMucSanConLai, 0) + ISNULL(TT.ThanhTienNhomSP, 0)
+                                       , CH.Remark = ISNULL(CH.Remark, '') + ISNULL(( N' - (' + CONVERT(NVARCHAR(50), GETDATE(), 121) + N'): Items_CheckLimitValue_ProductHC-UPDATE HanMucSanConLai. Update hạn mức còn lại shop tháng: ' + CONVERT(NVARCHAR(20), @month) + '/' + CONVERT(NVARCHAR(20), @year) + N' - RequestId: ' + ISNULL(CONVERT(NVARCHAR(50), @RequestId), 'NULL') + N'Hủy CL!' ), '')
+                                     FROM
+                                         dbo.CallLogHanMucSanHC AS CH
+                                         INNER JOIN #ThanhTienNhom AS TT
+                                             ON TT.MaNhom = CH.MaNhom
+                                     WHERE
+                                         CH.ShopCode = @ShopCode_Update
+                                         AND CH.Thang = @month
+                                         AND CH.Nam = @year;
+                                 END;
+
+                    END;
+                -- ▲ Edit - ThuongNM2 - 2018/09/25 Thay đổi rule HM BBDG
+                SET @MaCallLogTruyThu = TRY_CONVERT(BIGINT, @RequestId);
+                PRINT 'GiaTriTuyThu:' + CONVERT(NVARCHAR(MAX), @GiaTriTruyThu);
+                DECLARE @StepNo INT;
+                SELECT
+                    @TypeId = TypeId
+                  , @StepNo = StepNo
+                FROM
+                    dbo.Requests ( NOLOCK )
+                WHERE
+                    Id = @MaCallLogTruyThu;
+
+                IF ( @TypeId = 23 )
+                    BEGIN
+                        DELETE #TempFinalTruyThu WHERE MaNhom = 1; --Loại 23 - Không truy thu với nhóm bao bì
+                    END;
+                --▲ Edit - ThuongNM2 - 12.07.2018 - Loại 23
+
+                DECLARE @CountTruyThu INT = ( SELECT COUNT(1)FROM #TempFinalTruyThu );
+
+                IF (( SELECT COUNT(1)FROM #TempFinalTruyThu ) > 0
+                    AND @TypeId = 23
+                    AND @Results = 0
+                   --AND 1 = 2 --LuanNT44-14/02/2020-mở truy thu -- Edit - ThuongNM2 - 05.01.2019 - Không sinh phiếu truy thu khi up thực  --LuanNT44-02/01/2020-23-note: thuytv4 yc không sinh truy thu shop đến ngày 10.01.2020
+                   )
+                    BEGIN
+                        INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+                        VALUES (
+                                   N'Items_CheckLimitValue_ProductHC: StepNO' -- Title - nvarchar(300)
+                                 , CONVERT(NVARCHAR(20), @StepNo) + ' - ' + CONVERT(NVARCHAR(50), @RequestId) + ' - ' + CONVERT(NVARCHAR(40), @CountTruyThu) -- Error - nvarchar(max)
+                                 , 0 -- Status - tinyint
+                                 , GETDATE() -- TimeCreate - datetime
+                               );
+
+
+
+                        DECLARE
+                            @TitleCallLog NVARCHAR(MAX)
+                          , @ContentGiuLuong NVARCHAR(MAX)
+                          , @ShopCodeB1GiuLuong NVARCHAR(40)
+                          , @ShopNameGiuLuong NVARCHAR(300)
+                          , @OfficeNameGiuLuong NVARCHAR(300)
+                          , @OfficeGiuLuong NVARCHAR(40)
+                          , @Assigner NVARCHAR(40)
+                          , @ReuqestIdRe BIGINT
+                          , @SoNguoiBiTruyThu INT
+                          , @MaYeuCau BIGINT;
+
+                        SELECT
+                            W.WarehouseCode
+                          , W.WarehouseCodeB1
+                          , W.WarehouseName
+                          , W.OrganizationHierachyCode
+                        INTO
+                            #Tmp_Warehouse_GiuLuong
+                        FROM
+                            dbo.Warehouse AS W ( NOLOCK )
+                        WHERE
+                            W.WarehouseCode = @ShopCode;
+
+                        SELECT
+                            @ShopCodeB1GiuLuong = W.WarehouseCodeB1
+                          , @ShopNameGiuLuong = W.WarehouseName
+                          , @OfficeNameGiuLuong = O.OrganizationHierachyName
+                          , @OfficeGiuLuong = O.OrganizationHierachyCode
+                        FROM
+                            #Tmp_Warehouse_GiuLuong AS W
+                            INNER JOIN dbo.OrganizationHierachiesAddress AS O ( NOLOCK )
+                                ON O.OrganizationHierachyCode = W.OrganizationHierachyCode;
+
+                        SET @TitleCallLog = N'[Truy thu hành chính] - ' + ISNULL(CONVERT(VARCHAR(20), @RequestId), '') + N'- Xác nhận truy thu - ' + ISNULL(@ShopCodeB1GiuLuong, '') + N' - ' + ISNULL(@ShopNameGiuLuong, '') + N' - ' + ISNULL(@OfficeNameGiuLuong, '');
+
+                        SET @ContentGiuLuong = N'Hệ thống tự sinh ra calllog xác nhận truy thu từ yêu cầu đồ dùng hành chính: <a href="/Requests/Details/' + CONVERT(NVARCHAR(100), @RequestId) + N'" target="_blank">' + CONVERT(NVARCHAR(100), @RequestId) + N'</a>';
+
+                        SET @MaYeuCau = CONVERT(BIGINT, ISNULL(@RequestId, 0));
+
+                        SELECT TOP 1
+                               @Assigner = Assigner
+                        FROM
+                            dbo.RequestSteps ( NOLOCK )
+                        WHERE
+                            RequestId = @RequestId
+                            AND StepNo = 2
+                            AND Status = 1;
+
+                        --▼ Edit - LuanNT44 - 03/06/2020 10:50 - lấy nv truy thu theo chức danh từ inside
+                        --JobTitleCode IN ( '00004', '00005', '00448', '00447', '00407', '00671' )
+                        CREATE TABLE #tmp_NVInside ( EmployeeCode NVARCHAR(MAX), EmployeeName NVARCHAR(MAX));
+                        INSERT INTO #tmp_NVInside ( EmployeeCode, EmployeeName )
+                        EXEC [10.96.254.143].FRTInsideV2.dbo.CallLog_GetEmployeeOffDayByShop
+                            @WarehouseCode = @ShopCode; -- varchar(20)
+
+                        DECLARE @log_tmp_NVInside NVARCHAR(MAX) = STUFF((
+                                                                            SELECT ( ',' + CONCAT(N.EmployeeCode, '-', N.EmployeeName))
+                                                                            FROM
+                                                                                #tmp_NVInside N
+                                                                            FOR XML PATH('')
+                                                                        )
+                                                                      , 1
+                                                                      , 1
+                                                                      , ''
+                                                                       );
+                        SET @log_tmp_NVInside += N' ,@ShopCode:' + ISNULL(@ShopCode, 'null');
+                        INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+                        VALUES (
+                                   N'Items_CheckLimitValue_ProductHC' -- Title - nvarchar(300)
+                                 , @log_tmp_NVInside -- Error - nvarchar(max)
+                                 , 0 -- Status - tinyint
+                                 , GETDATE() -- TimeCreate - datetime
+                               );
+                        SELECT
+                            T.EmployeeCode
+                          , T.EmployeeName
+                          , E.WarehouseCode
+                          , E.OrganizationHierachyCode
+                        INTO
+                            #Temp_EmpBiTruyThu
+                        FROM
+                            dbo.F03_Employees E ( NOLOCK )
+                            INNER JOIN #tmp_NVInside T
+                                ON E.EmployeeCode = T.EmployeeCode;
+                        DROP TABLE #tmp_NVInside;
+                        --▲ Edit - LuanNT44 - 03/06/2020 10:50 - lấy nv truy thu theo chức danh từ inside
+
+                        ----SELECT * FROM #Temp_EmpBiTruyThu
+
+                        SET @SoNguoiBiTruyThu = ISNULL(( SELECT COUNT(1)FROM #Temp_EmpBiTruyThu ), 0);
+
+
+                        CREATE TABLE #Tmp_FinalTruyThu_20180526
+                        (
+                            STT INT IDENTITY(1, 1)
+                          , MaNhom INT
+                          , DinhMuc FLOAT
+                          , HanMuc FLOAT
+                          , HanMucSan FLOAT
+                          , SumAll FLOAT
+                          , ThanhTienSanPhan FLOAT
+                        );
+
+                        INSERT INTO #Tmp_FinalTruyThu_20180526 ( MaNhom, DinhMuc, HanMuc, HanMucSan, SumAll, ThanhTienSanPhan )
+                        SELECT
+                            T.MaNhom
+                          , T.DinhMuc
+                          , T.HanMuc
+                          , T.HanMucSan
+                          , T.SumAll
+                          , T.ThanhTienNhomSP
+                        FROM
+                            #TempFinalTruyThu AS T;
+
+                        DECLARE
+                            @Min INT = 1
+                          , @Max INT = ( SELECT MAX(STT)FROM #Tmp_FinalTruyThu_20180526 );
+
+
+                        CREATE TABLE #Tmp_Main_20180526
+                        (
+                            STT INT IDENTITY(1, 1)
+                          , Id BIGINT
+                          , EmpCode NVARCHAR(40)
+                          , ShopCode NVARCHAR(40)
+                          , Money1 FLOAT
+                          , SoThang INT
+                          , OrganizationHierachyCode NVARCHAR(40)
+                          , MaNhom INT
+                          , DinhMuc FLOAT
+                          , HanMuc FLOAT
+                          , HanMucSan FLOAT
+                          , ThanhTienNhomSP FLOAT
+                          , SumAll FLOAT
+                        );
+
+
+                        --▼ Edit ThuongNM2 - 2018.07.25 - Thêm rule khi không có người bị truy thu
+                        IF ( @SoNguoiBiTruyThu > 0 )
+                            BEGIN
+                                PRINT 'Có người vi phạm';
+                                WHILE ( @Min <= @Max )
+                                    BEGIN
+
+                                        DECLARE
+                                            @SoTienTruyThu FLOAT
+                                          , @MaNhom INT
+                                          , @DinhMuc_TruyThu FLOAT
+                                          , @HanMuc_TruyThu FLOAT
+                                          , @HanMucSan_TruyThu FLOAT
+                                          , @ThanhTienNhomSP_TruyThu FLOAT
+                                          , @SumAll FLOAT;
+
+                                        SELECT
+                                            @SoTienTruyThu = T.SumAll
+                                          , @MaNhom = T.MaNhom
+                                          , @DinhMuc_TruyThu = T.DinhMuc
+                                          , @HanMuc_TruyThu = T.HanMuc ----- 
+                                          , @HanMucSan_TruyThu = T.HanMucSan
+                                          , @ThanhTienNhomSP_TruyThu = T.ThanhTienSanPhan
+                                          , @SumAll = T.SumAll
+                                        FROM
+                                            #Tmp_FinalTruyThu_20180526 AS T
+                                        WHERE
+                                            T.STT = @Min;
+                                        PRINT 'SoTienTruyThu: ' + CONVERT(NVARCHAR(MAX), @SoTienTruyThu);
+                                        INSERT INTO #Tmp_Main_20180526
+                                        (
+                                            Id
+                                          , EmpCode
+                                          , ShopCode
+                                          , Money1
+                                          , SoThang
+                                          , OrganizationHierachyCode
+                                          , MaNhom
+                                          , DinhMuc
+                                          , HanMuc
+                                          , HanMucSan
+                                          , ThanhTienNhomSP
+                                          , SumAll
+                                        )
+                                        SELECT
+                                            @RequestId AS Id
+                                          , T.EmployeeCode AS EmpCode
+                                          , T.WarehouseCode AS ShopCode
+                                          , CASE
+                                                WHEN @SoNguoiBiTruyThu > 0 THEN (( @SoTienTruyThu ) / @SoNguoiBiTruyThu )
+                                                ELSE 0
+                                            END 'Money1'
+                                          ----, CASE WHEN @DinhMuc_TruyThu < 0 THEN (@SoTienTruyThu / @SoNguoiBiTruyThu)
+                                          ----       ELSE @DinhMuc_TruyThu
+                                          ----  END AS 'Money1'
+                                          , 1 'SoThang'
+                                          , T.OrganizationHierachyCode AS OrganizationHierachyCode
+                                          , @MaNhom
+                                          , @DinhMuc_TruyThu
+                                          , @HanMuc_TruyThu
+                                          , @HanMucSan_TruyThu
+                                          , @ThanhTienNhomSP_TruyThu
+                                          , @SumAll
+                                        FROM
+                                            #Temp_EmpBiTruyThu T;
+
+                                        SET @Min = @Min + 1;
+                                    END;
+                            END;
+                        ELSE
+                            BEGIN
+                                PRINT 'Không có người vi phạm';
+                                INSERT INTO #Tmp_Main_20180526
+                                (
+                                    Id
+                                  , EmpCode
+                                  , ShopCode
+                                  , Money1
+                                  , SoThang
+                                  , OrganizationHierachyCode
+                                  , MaNhom
+                                  , DinhMuc
+                                  , HanMuc
+                                  , HanMucSan
+                                  , ThanhTienNhomSP
+                                  , SumAll
+                                )
+                                SELECT
+                                    @RequestId
+                                  , NULL
+                                  , @ShopCode
+                                  , SumAll
+                                  , 1
+                                  , NULL
+                                  , MaNhom
+                                  , DinhMuc
+                                  , HanMuc
+                                  , HanMucSan
+                                  , ThanhTienSanPhan
+                                  , SumAll
+                                FROM
+                                    #Tmp_FinalTruyThu_20180526;
+
+                            END;
+                        --▲ Edit ThuongNM2 - 2018.07.25 - Thêm rule khi không có người bị truy thu
+
+                        DROP TABLE #Tmp_FinalTruyThu_20180526;
+
+                        CREATE TABLE #Tmp_RequestDetails_20180526
+                        (
+                            Thang INT
+                          , Nam INT
+                          , Emp NVARCHAR(40)
+                          , Shop NVARCHAR(40)
+                          , SoTienGiu FLOAT
+                          , MaNhom INT
+                          , HanMuc FLOAT
+                          , HanMucSan FLOAT
+                          , ThanhTienSanPham FLOAT
+                          , SumAll FLOAT
+                          , SoTienVuot FLOAT
+                        );
+
+                        DECLARE
+                            @MinD INT = 1
+                          , @MaxD INT = ( SELECT MAX(STT)FROM #Tmp_Main_20180526 );
+
+                        WHILE ( @MinD <= @MaxD )
+                            BEGIN
+
+                                DECLARE
+                                    @MoneyKeep_While FLOAT
+                                  --, @Money50Percent FLOAT = 0
+                                  --EXEC [SV_THUC_FRT_INSIDE].FRTInsideV2.dbo.Calllog_TruyThuLuongThucNhan
+                                  --                        @EmployeeCode = @EmployeeCode_While;
+                                  , @MaNhom_Main NVARCHAR(40)
+                                  , @EmployeeCode_Main NVARCHAR(40)
+                                  , @ShopCode_Main NVARCHAR(40)
+                                  , @DinhMuc_Main FLOAT
+                                  , @HanMuc_Main FLOAT
+                                  , @HanMucSan_Main FLOAT
+                                  , @ThanhTienSanPham_Main FLOAT
+                                  , @SumAll_Main FLOAT;
+
+                                SELECT
+                                    @MoneyKeep_While = TM.Money1
+                                  , @MaNhom_Main = TM.MaNhom
+                                  , @EmployeeCode_Main = TM.EmpCode
+                                  , @ShopCode_Main = TM.ShopCode
+                                  , @DinhMuc_Main = TM.DinhMuc
+                                  , @HanMuc_Main = TM.HanMuc
+                                  , @HanMucSan_Main = TM.HanMucSan
+                                  , @ThanhTienSanPham_Main = TM.ThanhTienNhomSP
+                                  , @SumAll_Main = TM.SumAll
+                                FROM
+                                    #Tmp_Main_20180526 AS TM
+                                WHERE
+                                    STT = @MinD;
+                                CREATE TABLE #Tmp_TruyThuLuongThucNhan --- Chứa lương của nhân viên
+                                ( TruyThuLuongThucNhan MONEY );
+
+                                INSERT INTO #Tmp_TruyThuLuongThucNhan ( TruyThuLuongThucNhan )
+                                EXEC [10.96.254.143].FRTInsideV2.dbo.Calllog_TruyThuLuongThucNhan
+                                    @EmployeeCode = @EmployeeCode_Main;
+                                -------------------------------------------
+                                DECLARE @Money50Percent MONEY = ( SELECT TruyThuLuongThucNhan FROM #Tmp_TruyThuLuongThucNhan ); --giới hạn giu luong 1 tháng = 50% lương
+                                DROP TABLE #Tmp_TruyThuLuongThucNhan;
+                                CREATE TABLE #Temp_SoTienGiu ( STT INT IDENTITY(1, 1), SoTienGiu FLOAT );
+                                PRINT 'MoneyWhile' + CONVERT(NVARCHAR(MAX), @MoneyKeep_While);
+                                IF ( @Money50Percent > 0 )
+                                    BEGIN
+                                        WHILE ( @MoneyKeep_While > 0 )
+                                            BEGIN
+                                                IF ( @MoneyKeep_While > @Money50Percent )
+                                                    BEGIN
+                                                        INSERT #Temp_SoTienGiu ( SoTienGiu ) VALUES ( @Money50Percent );
+                                                        SET @MoneyKeep_While -= @Money50Percent;
+                                                    END;
+                                                ELSE
+                                                    BEGIN
+                                                        INSERT #Temp_SoTienGiu ( SoTienGiu ) VALUES ( @MoneyKeep_While );
+                                                        SET @MoneyKeep_While = 0;
+                                                    END;
+                                            END;
+                                    END;
+                                ELSE
+                                    BEGIN
+                                        INSERT #Temp_SoTienGiu VALUES ( @MoneyKeep_While );
+                                    END;
+
+                                ---SELECT * FROM #Temp_SoTienGiu
+
+                                DECLARE @DateNow DATE;
+
+                                SET @DateNow = CASE
+                                                   WHEN DAY(GETDATE()) >= 11 THEN GETDATE()
+                                                   ELSE DATEADD(mm, -1, GETDATE())
+                                               END;
+
+                                DECLARE
+                                    @IndexMount INT = 1
+                                  , @CoutnMouthGl INT = ISNULL(( SELECT COUNT(1)FROM #Temp_SoTienGiu ), 1);
+
+
+                                IF ( SELECT COUNT(1)FROM #Temp_SoTienGiu ) > 0
+                                    BEGIN
+                                        WHILE ( @IndexMount <= @CoutnMouthGl )
+                                            BEGIN
+                                                DECLARE
+                                                    @mountInline INT = DATEPART(mm, @DateNow)
+                                                  , @yeatInline INT = DATEPART(yyyy, @DateNow);
+
+                                                INSERT INTO #Tmp_RequestDetails_20180526
+                                                (
+                                                    Thang
+                                                  , Nam
+                                                  , Emp
+                                                  , Shop
+                                                  , SoTienGiu
+                                                  , MaNhom
+                                                  , HanMuc
+                                                  , HanMucSan
+                                                  , ThanhTienSanPham
+                                                  , SumAll
+                                                  , SoTienVuot
+                                                )
+                                                SELECT
+                                                    @mountInline
+                                                  , @yeatInline
+                                                  , @EmployeeCode_Main
+                                                  , @ShopCode_Main
+                                                  , TS.SoTienGiu
+                                                  , @MaNhom_Main
+                                                  , @HanMuc_Main
+                                                  , CASE
+                                                        WHEN ( @HanMuc_Main - @ThanhTienSanPham_Main ) < 0 THEN 0
+                                                        ELSE ( @HanMuc_Main - @ThanhTienSanPham_Main )
+                                                    END
+                                                  , @ThanhTienSanPham_Main
+                                                  , @SumAll_Main
+                                                  , CASE
+                                                        WHEN @DinhMuc_Main < 0 THEN @ThanhTienSanPham_Main
+                                                        ELSE ( CASE
+                                                                   WHEN ( @DinhMuc_Main >= @ThanhTienSanPham_Main ) THEN 0
+                                                                   ELSE ( @ThanhTienSanPham_Main - @DinhMuc_Main )
+                                                               END
+                                                             )
+                                                    END
+                                                FROM
+                                                    #Temp_SoTienGiu AS TS
+                                                WHERE
+                                                    TS.STT = @IndexMount
+                                                ORDER BY
+                                                    STT ASC;
+                                                SET @DateNow = DATEADD(mm, 1, @DateNow);
+
+                                                SET @IndexMount = @IndexMount + 1;
+                                            END;
+                                    END;
+
+                                DROP TABLE #Temp_SoTienGiu;
+
+                                SET @MinD = @MinD + 1;
+                            END;
+
+
+                        DROP TABLE #Tmp_Main_20180526;
+                        PRINT N'@ReuqestIdRe';
+                        ----PRINT @ReuqestIdRe;
+                        ----PRINT @Assigner;
+                        ----PRINT @TitleCallLog;
+                        ----PRINT @ContentGiuLuong;
+                        ----PRINT @OfficeNameGiuLuong;
+
+                        EXEC dbo.Request_InsertNoSelect
+                            @RequestID = @ReuqestIdRe OUTPUT
+                          , @Sender = @Assigner
+                          , @Assigner = ''
+                          , @Title = @TitleCallLog
+                          , @Content = ''
+                          , @TypeId = 185
+                          , @StepNo = 1
+                          , @ToShop = @ShopCode
+                          , @ToOffice = @OfficeGiuLuong
+                          ----, @FromShop = ''
+                          ----, @FromOffice = ''
+                          ----, @RequestIdRefer = @MaYeuCau
+                          , @IsHighlight = 0
+                          ----, @TimeAppear = NULL
+                          , @ItemId = 0
+                          , @Status = 1
+                          , @CreateBy = '';
+                        ----, @SaleCode = N''
+
+
+                        PRINT N'@ReuqestIdRe';
+                        PRINT @ReuqestIdRe;
+
+                        ---SELECT * FROM #Tmp_RequestDetails_20180526
+
+                        IF ( @ReuqestIdRe > 0 )
+                            BEGIN
+                                ----SELECT * FROM NgoanHT_Log_Tmp_RequestDetails_20180526
+
+                                ----DROP TABLE dbo.NgoanHT_Log_Tmp_RequestDetails_20180526
+                                --NgoanHT--
+                                --                  INSERT  INTO dbo.NgoanHT_Log_Tmp_RequestDetails_20180526
+                                --                          (
+                                --                            RequestId
+                                --                          , Quantity
+                                --                          , Status
+                                --                          , EmpCode
+                                --                          , ShopCode
+                                --                          , Approved
+                                --                          , Quantity1
+                                --                          , Money1
+                                --                          , Money3
+                                --                          , Property10
+                                --                          , Property11
+                                --                          , Property12
+                                --                          , Quantity6
+                                --                          , Money4
+                                --		, Row_DateTime
+                                --        )
+                                --                  SELECT
+                                --                      @ReuqestIdRe AS RequestId
+                                --                    , TR.Thang AS Quantity
+                                --                    , 1 AS Status
+                                --                    , TR.Emp AS EmpCode
+                                --                    , TR.Shop AS ShopCode
+                                --                    , 0 AS Approved
+                                --                    , TR.Nam AS Quantity1
+                                --                    , TR.SoTienGiu AS Money1 --Tien
+                                --                    , TR.SoTienVuot AS Money3
+                                --                    , CONVERT(NVARCHAR(100), @RequestId) AS Property10
+                                --                    , CONVERT(NVARCHAR(100), TR.HanMuc) AS Property11
+                                --                    , CONVERT(NVARCHAR(100), TR.HanMucSan) AS Property12
+                                --                    , TR.MaNhom AS Quantity6
+                                --                    , TR.ThanhTienSanPham AS Money4
+                                --  , GETDATE() AS Row_DateTime
+                                ------INTO NgoanHT_Log_Tmp_RequestDetails_20180526
+                                --                  FROM
+                                --                      #Tmp_RequestDetails_20180526 AS TR
+
+                                --NgoanHT--
+
+                                UPDATE dbo.Requests SET RequestIdRefer = @MaYeuCau WHERE Id = @ReuqestIdRe;
+
+                                INSERT INTO dbo.RequestDetails
+                                (
+                                    RequestId
+                                  , Quantity
+                                  , Status
+                                  , EmpCode
+                                  , ShopCode
+                                  , Approved
+                                  , Quantity1
+                                  , Money1
+                                  , Money3
+                                  , Property10
+                                  , Property11
+                                  , Property12
+                                  , Quantity6
+                                  , Money4
+                                )
+                                SELECT
+                                    @ReuqestIdRe AS RequestId
+                                  , TR.Thang AS Quantity
+                                  , 1 AS Status
+                                  , TR.Emp AS EmpCode
+                                  , TR.Shop AS ShopCode
+                                  , 0 AS Approved
+                                  , TR.Nam AS Quantity1
+                                  , TR.SoTienGiu AS Money1 --Tien
+                                  , TR.SoTienVuot AS Money3
+                                  , CONVERT(NVARCHAR(100), @RequestId) AS Property10
+                                  , CONVERT(NVARCHAR(100), TR.HanMuc) AS Property11
+                                  , 0 -- Hạn Mức còn lại
+                                  , TR.MaNhom AS Quantity6
+                                  , TR.ThanhTienSanPham AS Money4
+                                FROM
+                                    #Tmp_RequestDetails_20180526 AS TR
+                                WHERE
+                                    TR.SoTienVuot > 0;
+
+                                PRINT N'INSERT  INTO dbo.RequestDetails';
+
+                                INSERT dbo.Conversations
+                                (
+                                    RequestId
+                                  , StepNo
+                                  , Sender
+                                  , Message
+                                  , CreateBy
+                                  , Type
+                                  , Status
+                                  , RequestDetailId
+                                  , TimeCreate
+                                  , Requests_ARCH_Id
+                                )
+                                VALUES (
+                                           @RequestId -- RequestId - bigint
+                                         , 1 -- StepNo - int
+                                         , N'-1' -- Sender - nvarchar(40)
+                                         , N'Auto sinh calllog Xác nhận truy thu do số lượng đặt confirm trên calllog vượt hạn mức sản phẩm: <a href="/Requests/Details/' + CONVERT(NVARCHAR(100), @ReuqestIdRe) + '" target="_blank">' + CONVERT(NVARCHAR(100), @ReuqestIdRe) + N'</a></br >Sau 5 ngày kể từ ngày nhận calllog này nếu anh/chị không phản hồi lại trên calllog, mặc định anh/chị đồng ý với mức truy thu, phòng HC sẽ hoàn tất calllog đồng thời chi phí truy thu sẽ được up tự động lên Inside, Phòng HC sẽ không có trách nhiệm giải quyết bất cứ khiếu nại nào liên quan và thêm ngay sau khi hệ thống sinh ra calllog xác nhận truy thu' -- Message - nvarchar(max)
+                                         , N'-1' -- CreateBy - nvarchar(max)
+                                         , 2 -- Type - tinyint
+                                         , 1 -- Status - tinyint
+                                         , NULL -- RequestDetailId - bigint
+                                         , GETDATE() -- TimeCreate - datetime
+                                         , NULL -- Requests_ARCH_Id - bigint
+                                       );
+
+                                INSERT dbo.Conversations
+                                (
+                                    RequestId
+                                  , StepNo
+                                  , Sender
+                                  , Message
+                                  , CreateBy
+                                  , Type
+                                  , Status
+                                  , RequestDetailId
+                                  , TimeCreate
+                                  , Requests_ARCH_Id
+                                )
+                                VALUES (
+                                           @ReuqestIdRe -- RequestId - bigint
+                                         , 1 -- StepNo - int
+                                         , N'-1' -- Sender - nvarchar(40)
+                                         , N'Sau 5 ngày kể từ ngày nhận calllog này nếu anh/chị không phản hồi lại trên calllog, mặc định anh/chị đồng ý với mức truy thu, phòng HC sẽ hoàn tất calllog đồng thời chi phí truy thu sẽ được up tự động lên Inside, Phòng HC sẽ không có trách nhiệm giải quyết bất cứ khiếu nại nào liên quan và thêm ngay sau khi hệ thống sinh ra calllog xác nhận truy thu' -- Message - nvarchar(max)
+                                         , N'-1' -- CreateBy - nvarchar(max)
+                                         , 2 -- Type - tinyint
+                                         , 1 -- Status - tinyint
+                                         , NULL -- RequestDetailId - bigint
+                                         , GETDATE() -- TimeCreate - datetime
+                                         , NULL -- Requests_ARCH_Id - bigint
+                                       );
+
+                                DECLARE @TitleEmail NVARCHAR(1000) = N'[Truy thu hành chính] - ' + CONVERT(VARCHAR(50), @ReuqestIdRe) + N' - ' + @TitleCallLog;
+
+                                EXEC dbo.Email_MakeByProcess
+                                    @RequestId = @ReuqestIdRe -- bigint
+                                  , @Title = @TitleEmail -- nvarchar(300)
+                                  , @TypeProcess = 1; -- int
+                            END;
+
+                        DROP TABLE #Tmp_RequestDetails_20180526;
+
+                        DROP TABLE
+                            #Tmp_Warehouse_GiuLuong
+                          , #Temp_EmpBiTruyThu;
+
+                    END;
+
+                DROP TABLE
+                    #temp_Update
+                  , #Temp_CreateCallLog
+                  , #ThanhTienNhom
+                  , #Tmp_Limit_CreateCallLog
+                  , #Temp_Final
+                  , #TempFinalTruyThu;
+                --==Tạo calllog Xác nhận truy thu
+                SET @Result = 1;
+            ----COMMIT;
+            END TRY
+            BEGIN CATCH
+                ----ROLLBACK;
+                DECLARE @ErrorMessage_Err NVARCHAR(2000);
+                SELECT
+                    @ErrorMessage_Err = N'Lỗi: Items_CheckLimitValue_ProductHC_-BEGIN TRAN:' + ERROR_MESSAGE() + CONVERT(NVARCHAR(40), ERROR_LINE());
+
+                -- ===Ghi Log===
+                INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+                VALUES (
+                           N'Items_CheckLimitValue_ProductHC' -- Title - nvarchar(300)
+                         , @ErrorMessage_Err -- Error - nvarchar(max)
+                         , 1 -- Status - tinyint
+                         , GETDATE() -- TimeCreate - datetime
+
+                       );
+
+                SET @Result = 0;
+
+            ----RAISERROR(@ErrorMessage, 16, 1);
+            END CATCH;
+            PRINT '@Result ' + CONVERT(NVARCHAR(20), @Result);
+            IF ( @Result = 1 )
+                BEGIN
+                    INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+                    VALUES (
+                               N'Items_CheckLimitValue_ProductHC: Log' -- Title - nvarchar(300)
+                             , @IdBefore -- Error - nvarchar(max)
+                             , 0 -- Status - tinyint
+                             , GETDATE() -- TimeCreate - datetime
+                           );
+
+                    ----------------- 26.04.2017 thay doi ben cl update status bang items temp luon
+                    CREATE TABLE #temp_Result_From_BI ( Result INT, List NVARCHAR(MAX));
+                    INSERT INTO #temp_Result_From_BI ( Result, List )
+                    EXEC FRT_BW.dbo.FRT_Callog_Update_DinhMuc @RequesID = @IdBefore;
+
+                    IF ( SELECT Result FROM #temp_Result_From_BI ) = 1
+                        BEGIN
+                            DECLARE @list NVARCHAR(MAX) = N'';
+                            SELECT @list = List FROM #temp_Result_From_BI;
+
+                            SELECT [Index], Value INTO #temp_B FROM dbo.fnSplitString(@list, ',');
+
+                            UPDATE
+                                dbo.ItemUsedTmp
+                            SET
+                                [Status] = 0
+                            WHERE
+                                RequestId IN ( SELECT Value FROM #temp_B );
+
+                            DROP TABLE #temp_B;
+                        END;
+                    DROP TABLE #temp_Result_From_BI;
+                END;
+
+            --== Xóa bảng Tạm
+            DROP TABLE
+                ----#Temp_ListCallog,
+                #Temp_DeviceFromBI
+              , #Temp_RequestDetails
+              , #Temp_SumMoneyByItem
+              , #Temp_ShopCode
+              , #Tmp_LimitForShop
+              , #Temp_ChiTietDat;
+        END TRY
+        BEGIN CATCH
+            DECLARE @ErrorMessage NVARCHAR(MAX) = N'';
+            SET @ErrorMessage = N'Lỗi: [Items_CheckLimitValue_ProductHC]';
+            SET @ErrorMessage += N', @RequestId=''' + ISNULL(CONVERT(NVARCHAR(50), @RequestId), 'NULL') + N'''';
+            SET @ErrorMessage += N', @Results=''' + ISNULL(CONVERT(NVARCHAR(50), @Results), 'NULL') + N'''';
+            SET @ErrorMessage += N' - ERROR_MESSAGE: ' + ERROR_MESSAGE() + N' - ERROR_LINE: ' + CONVERT(NVARCHAR, ERROR_LINE());
+
+            --	===Ghi Log===
+            INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+            VALUES (
+                       N'Items_CheckLimitValue_ProductHC' -- Title - nvarchar(300)
+                     , @ErrorMessage -- Error - nvarchar(max)
+                     , 1 -- Status - tinyint
+                     , GETDATE() -- TimeCreate - datetime
+                   );
+        END CATCH;
+    END;
+
+----SELECT * FROM dbo.Logs(NOLOCK) WHERE Title=N'Items_CheckLimitValue_ProductHC' AND CHARINDEX(N'', Error)>0 ORDER BY Id DESC
+----SELECT * FROM dbo.Logs(NOLOCK) WHERE TimeCreate>'2018-05-28' AND Title=N'Items_CheckLimitValue_ProductHC' ORDER BY Id DESC
+
+
+
+GO
+

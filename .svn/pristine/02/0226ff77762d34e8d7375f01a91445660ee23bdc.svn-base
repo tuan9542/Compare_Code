@@ -1,0 +1,390 @@
+﻿@{
+    ViewBag.Title = "Tạo yêu cầu BO";
+    Layout = "~/Views/Shared/PageLayout.cshtml";
+}
+
+@section StyleTop{
+    @Styles.Render("~/request/createBo/style")
+    <link rel="stylesheet" type="text/css" href="~/assets/plugins/jstree/themes/default/style.css" />
+    <script>
+
+        //▼	Edit - VietMXH - 02/08/2018 - Check đuôi file==================================================
+        var g_Allow_FileExt_Str = '@System.Configuration.ConfigurationManager.AppSettings["Allow_FileExt_Str"]';
+        //▲	Edit - VietMXH - 02/08/2018 - Check đuôi file==================================================
+
+    </script>
+
+}
+@if (TempData["Message"] != null)
+{
+    <script>
+        toastr.options = { "closeButton": true, "newestOnTop": true, "showMethod": "show", "hideMethod": "hide" }
+        toastr["error"]("@Html.Raw(TempData["Message"])")
+    </script>
+}
+@section ScriptEnd{
+    @Scripts.Render("~/request/createBo/script")
+    <script src="~/assets/plugins/bootstrap-multiselect/js/bootstrap-multiselect.js"></script>
+    <script src="~/assets/plugins/bootstrap-tagsinput/js/bootstrap3-typeahead.js"></script>
+    @if (ViewBag.EmpsByShopsOrOffices != null)
+    {
+        <script>
+            var empDefault=@Html.Raw(ViewBag.EmpsByShopsOrOffices);
+        </script>
+    }
+    @if (ViewBag.DefaultCc != null)
+    {
+        <script>
+            var DefaultCc=@Html.Raw(ViewBag.DefaultCc);
+        </script>
+    }
+    @if (ViewBag.EcomId != null)
+    {
+        <script>
+            $('#EcomId').val('@ViewBag.EcomId');
+        </script>
+    }
+    @if (ViewBag.EcomType != null)
+    {
+        <script>
+            $('#EcomType').val('@ViewBag.EcomType');
+        </script>
+    }
+    @if (ViewBag.EcomTypeParent != null)
+    {
+        <script>
+            $('#EcomTypeParent').val('@ViewBag.EcomTypeParent');
+        </script>
+    }
+    @*ChuongNT3 - 01/10/2018 - fix GQKN*@
+    @*@if (ViewBag.OtherData != null)
+        {
+            <script>
+                $('#OtherData').val('@ViewBag.OtherData');
+            </script>
+        }*@
+    @if (ViewBag.ShopID != null)
+    {
+        <script>
+            $('#ShopID').val('@ViewBag.ShopID');
+        </script>
+    }
+    @if (ViewBag.JobTitle != null)
+    {
+        <script>
+            $('#JobTitle').val('@ViewBag.JobTitle');
+        </script>
+    }
+    @if (ViewBag.CalllogType != null)
+    {
+        <script>
+            var calllogType = '@Html.Raw(ViewBag.CalllogType)';
+        </script>
+    }
+    @if (ViewBag.MaNVEcom != null)
+    {
+        <script>
+            var maNVEcom = '@Html.Raw(ViewBag.MaNVEcom)';
+        </script>
+    }
+    @if (ViewBag.SoPhieuBH != null)
+    {
+        <script>
+            var soPhieuBH = '@Html.Raw(ViewBag.SoPhieuBH)';
+        </script>
+    }
+    @if (ViewBag.SoSO != null)
+    {
+        <script>
+            var soSO = '@Html.Raw(ViewBag.SoSO)';
+        </script>
+    }
+
+    @if (ViewBag.RegionOutbound != null)
+    {
+        <script>
+            $('#RegionOutbound').val('@ViewBag.RegionOutbound');
+        </script>
+    }
+    @if (ViewBag.ShopIDCallCenter != null)
+    {
+        <script>
+            $('#ShopIDCallCenter').val('@ViewBag.ShopIDCallCenter');
+        </script>
+    }
+    @*ChuongNT3 - 01/10/2018 - fix GQKN*@
+    @if (ViewBag.Kenh != null)
+    {
+        <script>
+            $('#Kenh').val('@ViewBag.Kenh');
+        </script>
+    }
+    else
+    {
+        var Kenh = "";
+    }
+    @if (ViewBag.Ecom != null)
+    {
+        <script>
+            $('#Ecom').val('@ViewBag.Ecom');
+        </script>
+    }
+    @if (ViewBag.DataFrom != null)
+    {
+        <script>
+            $('#DataFrom').val('@ViewBag.DataFrom');
+        </script>
+    }
+
+
+    @*ChuongNT3 - 01/10/2018 - fix GQKN*@
+
+    <!--ChuongNT3 - 11/09/2018 - thêm sđt-->
+    @if (ViewBag.SDT != null)
+    {
+        <script>
+            var sdt = '@Html.Raw(ViewBag.SDT)';
+        </script>
+    }
+    else
+    {
+        <script>
+            var sdt = $('#txtSDT').val();
+        </script>
+    }
+    @*▼ Add - ThuongNM2 - 12/04/2019 - Add Group BH Theo vùng miền==============*@
+    @if (ViewBag.Region != null)
+    {
+        <script>
+            var RegionWarehouseByUser = '@Html.Raw(ViewBag.Region)';
+        </script>
+    }
+    @*▲ Add - ThuongNM2 - 12/04/2019 - Add Group BH Theo vùng miền==============*@
+
+    <!--ChuongNT3 - 11/09/2018 - thêm sđt-->
+    <!--▼ Add - TuanNA89 - 14/05/2020 - thêm Tên KH-->
+    @if (ViewBag.TenKH != null)
+    {
+        <script>
+            var tenKH = '@Html.Raw(ViewBag.TenKH)';
+        </script>
+    }
+    else
+    {
+        <script>
+            var tenKH = $('#txtTenKH').val();
+        </script>
+    }
+    <!--▲ Add - TuanNA89 - 14/05/2020 - thêm Tên KH-->
+}
+
+
+@using (Html.BeginForm("CreateBO", "Requests", System.Web.Mvc.FormMethod.Post, new { id = "form-createBO", name = "form-createBO", enctype = "multipart/form-data" }))
+{
+    @Html.AntiForgeryToken()
+    <div id="main-wrapper" class="container">
+        <div class="row m-t-md">
+            @Html.Partial("PageLayoutLeft")
+            <div class="col-md-10">
+                <div class="mailbox-content">
+                    <div class="compose-body">
+                        <div class="form-horizontal">
+                            <div class="form-group" hidden>
+                                <label for="to" class="col-sm-2 control-label">To:</label>
+                                <div class="col-sm-10">
+
+                                    <input type="text" id="txtStaff" name="txtStaff" data-val="true" class="form-control user-tag" />
+                                </div>
+                            </div>
+                            <div class="form-group cc">
+                                <label for="to" class="col-sm-2 control-label">Cc:</label>
+                                <div class="col-sm-10">
+                                    <input type="text" id="Cc" name="Cc" data-val="true" class="form-control user-tag" />
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin-top:-15px;">
+                                <label for="request-type" class="col-sm-2 control-label">Chọn loại CallLog: </label>
+                                <label class="radio-inline">
+                                    <input type="radio" name="ConfirmCalllogType" data-val="true" value="Khiếu nại"> Khiếu nại
+                                </label>
+                                <label class="radio-inline">
+                                    <input type="radio" name="ConfirmCalllogType" data-val="true" value="Thông tin"> Thông tin
+                                </label>
+                                <label class="radio-inline">
+                                    <input type="radio" name="ConfirmCalllogType" data-val="true" value="Hỗ trợ"> Hỗ trợ  <!--ChuongNT3 - 06/09/2018 - thêm loại kết quả xử lý-->
+                                </label>
+                            </div>
+                            <div class="form-group" style="margin-top:-15px;">
+                                <label for="request-type" class="col-sm-2 control-label" style="margin-left:0px;">Loại khiếu nại</label>
+                                <div class="col-sm-10">
+                                    <div class="input-group m-b-sm" style="width:280px">
+                                        <input type="text" readonly class="form-control" id="complainName" name="Type" aria-describedby="basic-addonOriginal" placeholder="Nhập hoặc chọn loại khiếu nại" />
+                                        <span class="input-group-addon " id="basic-addonCategories">
+                                            <a id="refreshComplain" data-toggle="tooltip" data-placement="top" title="Refresh">
+                                                <i class="fa fa-recycle fa-hover-hidden fa-fw"></i>
+                                                <i class="fa fa-refresh fa-hover-show fa-fw"></i>
+                                            </a>
+                                        </span>
+                                    </div>
+                                    <div id="complain-tree-g" style="position: absolute; z-index: 999998; background-color: #fff; width: 280px; ">
+                                        <input type="text" id="searchComplain" placeholder="Tìm kiếm" class="form-control" />
+                                        <div id="complain-tree" style="max-height: 200px; overflow: scroll; background-color: rgb(242, 242, 242); width: 280px;position: absolute; z-index: 999998; background-color: #fff; "></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin-top:-15px;">
+                                <label for="request-type" class="col-sm-2 control-label" style="margin-left:0px;">Số SO</label>
+                                <div class="col-sm-10">
+                                    <div class="input-group m-b-sm" style="width:280px">
+                                        <input type="text" class="form-control" oninput="this.value=this.value.replace(/[^0-9]/g,'');" id="txtSoSO" name="txtSoSO" placeholder="Nhập số SO" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin-top:-15px;">
+                                <label for="request-type" class="col-sm-2 control-label" style="margin-left:0px;">Số phiếu BH</label>
+                                <div class="col-sm-10">
+                                    <div class="input-group m-b-sm" style="width:280px">
+                                        <input type="text" class="form-control" oninput="this.value=this.value.replace(/[^0-9]/g,'');" id="txtSoPhieuBH" name="txtSoPhieuBH" placeholder="Nhập số phiếu BH" />
+                                    </div>
+                                </div>
+                            </div>
+                            <!--▼ Add - TuanNA89 - 14/05/2020 - thêm Tên KH-->
+                            <div class="form-group" style="margin-top:-15px;">
+                                <label for="request-type" class="col-sm-2 control-label" style="margin-left:0px;">Tên KH</label>
+                                <div class="col-sm-10">
+                                    <div class="input-group m-b-sm" style="width:280px">
+                                        <input type="text" class="form-control" id="txtTenKH" name="txtTenKH" placeholder="Nhập tên KH" />
+                                    </div>
+                                </div>
+                            </div>
+                            <!--▲ Add - TuanNA89 - 14/05/2020 - thêm Tên KH-->
+                            <!--ChuongNT3 - 11/09/2018 - thêm sđt-->
+                            <div class="form-group" style="margin-top:-15px;">
+                                <label for="request-type" class="col-sm-2 control-label" style="margin-left:0px;">Số điện thoại</label>
+                                <div class="col-sm-10">
+                                    <div class="input-group m-b-sm" style="width:280px">
+                                        <input type="tel" class="form-control" id="txtSDT" name="txtSDT" placeholder="Nhập số điện thoại" />
+                                    </div>
+                                </div>
+                            </div>
+                            <!--ChuongNT3 - 11/09/2018 - thêm sđt-->
+                            <!--TuanNA89 - 20/04/2020 - Thêm field nội dung tóm tắt-->
+                            <div class="form-group" style="margin-top:-15px;">
+                                <label for="request-type" class="col-sm-2 control-label" style="margin-left:0px;">Nội dung tóm tắt</label>
+                                <div class="col-sm-10">
+                                    <div class="input-group m-b-sm" style="width:75%">
+                                        <input type="text" class="form-control" id="txtSummaryMessage" name="txtSummaryMessage" placeholder="Nhập nội dung tóm tắt" />
+                                    </div>
+                                </div>
+                            </div>
+                            <!--TuanNA89 - 20/04/2020 - Thêm field nội dung tóm tắt-->
+                            <div class="form-group" style="margin-top:-15px;">
+                                <label for="subject" class="col-sm-2 control-label">Tiêu đề:</label>
+                                <div style="width:75%" class="col-sm-9">
+                                    <input type="text" id="Title" name="Title" class="form-control " value="@ViewBag.RequestTitle" />
+                                </div>
+                                <div style="width: 3%; float: left; margin-top: 6px;" data-toggle="tooltip" title="Đăt lịch">
+                                    <a class="schedule-toggle" style="color: #808080">
+                                        <i class="fa fa-clock-o fa-hover-hidden fa-fw"></i>
+                                        <i class="fa fa-keyboard-o fa-hover-show fa-fw"></i>
+                                    </a>
+                                </div>
+                                <div style="width: 3%; float: left; margin-top: 6px;" data-toggle="tooltip" title="Đính kèm file">
+                                    <a class="file-toggle" style="color: #808080">
+                                        <i class="fa fa-paperclip fa-hover-hidden fa-fw"></i>
+                                        <i class="fa fa-keyboard-o fa-hover-show fa-fw"></i>
+                                    </a>
+                                </div>
+
+                            </div>
+                            @*<div class="form-group">
+                                    <div class="col-sm-2"></div>
+                                    <label for="to" class="col-sm-10" style="color:red; font-style:italic">
+                                        Lưu ý: Tạo tiêu đề call log theo format "Loại khiếu nại - nội dung cần hỗ trợ".
+                                    </label>
+
+                                </div>
+                                <div class="form-group">
+                                    <div class="col-sm-2"></div>
+                                    <label for="to" class="col-sm-10" style="margin-top: -17px; color: red; font-style: italic">
+                                        Trong đó, loại khiếu nại: Bảo hành/Đổi trả/Sản phẩm/Khuyến mại/Nghiệp vụ/Thái độ.
+                                    </label>
+                                </div>*@
+                            <div class="form-group file-upload">
+                                <label for="to" class="col-sm-2 control-label">File đính kèm</label>
+                                <div class="col-sm-10 ">
+                                    <input class="form-control" type="file" multiple id="fileUpload" name="fileUpload" onchange="checkFileUploads(this);" />
+                                </div>
+                            </div>
+
+                            <div class="form-group schedule">
+                                <label class="col-sm-2 control-label">Ngày</label>
+                                <div class="col-sm-5">
+                                    <input type="date" id="dateFrom" data-date-format="DD MMMM YYYY" name="dateFrom" data-val="true" class="form-control" />
+                                </div>
+                                <label class="col-sm-2 control-label">Đến</label>
+                                <div class="col-sm-3">
+                                    <input type="date" id="dateTo" name="dateTo" data-date-format="DD MMMM YYYY" data-val="true" class="form-control" />
+                                </div>
+                            </div>
+
+                            <div class="form-group schedule">
+                                <label class="col-sm-2 control-label">Theo Ngày/Thứ </label>
+                                <div class="col-sm-1">
+                                    <div class="ios-switch pull-right switch-md" style="display:inline-block">
+                                        <input type="checkbox" data-val="true" name="schedule" id="schedule" class="js-switch pull-right fixed-header-check">
+                                    </div>
+                                </div>
+                                <div class="col-sm-4">
+                                    <select class="form-control" id="scheduleTypeData" name="scheduleTypeData" multiple="multiple"></select>
+                                </div>
+                                <label class="col-sm-2 control-label">Giờ gửi</label>
+                                <div class="col-sm-3">
+                                    <input type="time" id="timeSend" name="timeSend" data-val="true" class="form-control" />
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                    <div class="compose-message">
+                        <textarea class="sum-note" id="txtMessage" border="1" name="txtMessage" data-val="true">@ViewBag.Content</textarea>
+                    </div>
+
+
+                    <div class="compose-options">
+                        <div class="pull-right">
+                            <button type="button" class="btn btn-success" data-toggle="modal" id="btnSend">
+                                <i class="fa fa-send m-r-xs"></i>Gửi yêu cầu
+                            </button>
+                        </div>
+                    </div>
+
+                    @Html.Hidden("hiddenShops")
+                    @Html.Hidden("hiddenOrgi")
+                    @Html.Hidden("scheduleTypeDataHidden")
+                    @Html.Hidden("typeId")
+                    @Html.Hidden("GroupId")
+                    @Html.Hidden("EcomId")
+                    @Html.Hidden("EcomType")
+                    @Html.Hidden("EcomTypeParent")
+                    @Html.Hidden("OtherData")
+                    @Html.Hidden("ShopID")
+                    @Html.Hidden("JobTitle")
+                    @Html.Hidden("SystemId")
+                    @Html.Hidden("RegionOutbound")
+                    @Html.Hidden("ShopIDCallCenter")
+                    @*ChuongNT3 - 01/10/2018 - fix GQKN*@
+                    @Html.Hidden("Ecom")
+                    @Html.Hidden("DataFrom")
+                    @Html.Hidden("Kenh")
+                    @*ChuongNT3 - 01/10/2018 - fix GQKN*@
+                </div>
+            </div>
+        </div>
+
+    </div>
+    <div id="myModal" class="modal fade" role="dialog" style="margin-left:50%; margin-top:20%">
+        <img src="~/assets/images/reload.gif" alt="Smiley face" height="100" width="100">
+    </div>
+}
+

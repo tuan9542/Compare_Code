@@ -1,0 +1,906 @@
+﻿SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;
+GO
+/*
+==================================================
+Author			:	? - VietMXH
+Create date		:	? - 14/11/2019 14:50
+Description		:	BC Chi tiết Thiết bị
+Note			:	
+==================================================
+Test:
+EXEC Report_ItemDetail
+    @TypeId = 23
+  , @Items = ''
+  , @RegionCode = ''
+  , @OriginalCode = ''
+  , @GroupItemId = ''
+  , @TimeStart = '2019-10-01'
+  , @TimeEnd = '2019-11-30'
+  , @TimeStartHC = ''
+  , @TimeEndHC = ''
+  , @DeliveryType = '0'
+*/
+ALTER PROCEDURE dbo.Report_ItemDetail
+(
+    @TypeId INT = 0 -- Mã loại yêu cầu
+  , @Items VARCHAR(3000) = '' -- Danh sách mã thiết bị , cách nhau bằng dấu phẩy
+  , @RegionCode VARCHAR(4000) = '' -- Mã vùng miền shop người tạo
+  , @OriginalCode VARCHAR(4000) = '' --Phân cấp tổ chức
+  , @GroupItemId VARCHAR(3000) = '' -- Nhóm hàng
+  , @TimeStart DATETIME = '' -- Từ ngày
+  , @TimeEnd DATETIME = '' -- Đến ngày
+  , @TimeStartHC DATETIME = '' -- Từ ngày HC duyệt
+  , @TimeEndHC DATETIME = '' -- Đến ngày HC duyệt
+  , @DeliveryType NVARCHAR(300) = '0'
+)
+AS
+    BEGIN
+        BEGIN TRY
+            SET NOCOUNT ON;
+
+            INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+            VALUES (
+                       N'Report_ItemDetail'
+                     -- Title - nvarchar(300)
+                     , '@TypeId: ' + CONVERT(NVARCHAR(40), @TypeId) + ',@Items: ' + @Items + ',@RegionCode: ' + @RegionCode + ',@OriginalCode: ' + @OriginalCode + ',@GroupItemId: ' + @GroupItemId + ',@TimeStart: ' + CONVERT(NVARCHAR(40), @TimeStart, 121) + ',@TimeEnd: ' + CONVERT(NVARCHAR(40), @TimeEnd, 121) + ',@TimeStartHC: ' + CONVERT(NVARCHAR(40), @TimeStartHC, 121) + ',@TimeEndHC: ' + CONVERT(NVARCHAR(40), @TimeEndHC, 121) + ',@DeliveryType: ' + CONVERT(NVARCHAR(40), @DeliveryType)
+                     -- Error - nvarchar(max)
+                     , 0
+                     -- Status - tinyint
+                     , GETDATE() -- TimeCreate - datetime
+                   );
+
+            --▼	Edit - VietMXH - 14/11/2019 - Test Data Thực==================================================
+            ----EXEC SV_THUC_FRT_CALLLOG_IN.FRTCallLogV2.dbo.Report_ItemDetail
+            ----    @TypeId = @TypeId -- int
+            ----  , @Items = @Items -- varchar(3000)
+            ----  , @RegionCode = @RegionCode -- varchar(4000)
+            ----  , @OriginalCode = @OriginalCode -- varchar(4000)
+            ----  , @GroupItemId = @GroupItemId -- varchar(3000)
+            ----  , @TimeStart = @TimeStart -- datetime
+            ----  , @TimeEnd = @TimeEnd -- datetime
+            ----  , @TimeStartHC = @TimeStartHC -- datetime
+            ----  , @TimeEndHC = @TimeEndHC -- datetime
+            ----  , @DeliveryType = @DeliveryType; -- nvarchar(300)
+            ----RETURN;
+            --▲	Edit - VietMXH - 14/11/2019 - Test Data Thực==================================================
+
+            IF (
+                   ISNULL(@TypeId, 0) = 0
+                   AND ( CONVERT(TIME, GETDATE()) BETWEEN '08:30:00' AND '22:00:00' )
+               )
+                BEGIN
+                    RETURN;
+                END;
+
+            IF ( @TimeEndHC <> '' )
+                SET @TimeEndHC = @TimeEndHC + ' 23:59:00';
+            IF ( @TimeEnd <> '' )
+                SET @TimeEnd = @TimeEnd + ' 23:59:00';
+
+            DECLARE @Loai INT = 1;
+
+            IF ( @TypeId = 22 )
+                SET @Loai = 2;
+
+            CREATE TABLE #Tmp_Type ( Loai INT );
+
+            IF ( @TypeId = 22 )
+                BEGIN
+                    INSERT INTO #Tmp_Type ( Loai ) VALUES ( 22 );
+                    INSERT INTO #Tmp_Type ( Loai ) VALUES ( 115 );
+                END;
+
+            IF ( @TypeId = 23 )
+                BEGIN
+                    INSERT INTO #Tmp_Type ( Loai ) VALUES ( 23 );
+                    INSERT INTO #Tmp_Type ( Loai ) VALUES ( 125 );
+                    INSERT INTO #Tmp_Type ( Loai ) VALUES ( 126 );
+                    INSERT INTO #Tmp_Type ( Loai ) VALUES ( 127 );
+                    INSERT INTO #Tmp_Type ( Loai ) VALUES ( 128 );
+                    INSERT INTO #Tmp_Type ( Loai ) VALUES ( 129 );
+                    INSERT INTO #Tmp_Type ( Loai ) VALUES ( 152 );
+                END;
+
+            IF ( @TypeId = 130 )
+                BEGIN
+                    INSERT INTO #Tmp_Type ( Loai ) VALUES ( 155 );
+                    INSERT INTO #Tmp_Type ( Loai ) VALUES ( 130 );
+                    INSERT INTO #Tmp_Type ( Loai ) VALUES ( 162 );
+                END;
+
+            -------------▼ ChuongNT3 - 06/04/2018 - Thêm ID Bill , ngày HC -> NVC , NVC -> Shop 
+            CREATE TABLE #Temp_BangTrungGian
+            (
+                OrderNumber NVARCHAR(40)
+              , SendedDateTime DATETIME
+              , ReceivedDateTime DATETIME
+              , Status INT
+            );
+            SELECT
+                NT.orderNumber
+              , NT.NTReceivedDateTime
+              , NT.NTSendedDateTime
+              , NT.DocStatus
+            INTO
+                #temp_BangNhatTin
+            FROM
+                FRT_INTERGRATION.dbo.NhatTin_DOInfo NT WITH ( NOLOCK )
+            WHERE
+                LEFT(NT.orderNumber, 2) = 'FC';
+
+            SELECT
+                KR.OrderNumber
+              , KR.SendedDateTime
+              , KR.ReceivedDateTime
+              , KR.TransStatus
+            INTO
+                #temp_BangKerry
+            FROM
+                FRT_INTERGRATION.dbo.Intergration_DOInfo KR WITH ( NOLOCK )
+            WHERE
+                LEFT(KR.OrderNumber, 2) = 'CK';
+
+            INSERT INTO #Temp_BangTrungGian ( OrderNumber, SendedDateTime, ReceivedDateTime, Status )
+            SELECT
+                OrderNumber
+              , SendedDateTime
+              , ReceivedDateTime
+              , TransStatus
+            FROM
+                #temp_BangKerry
+            UNION ALL
+            SELECT
+                orderNumber
+              , NTReceivedDateTime
+              , NTSendedDateTime
+              , DocStatus
+            FROM
+                #temp_BangNhatTin;
+            -------▲ ChuongNT3 - 06/04/2018 - Thêm ID Bill , ngày HC -> NVC , NVC -> Shop
+
+            CREATE TABLE #Tmp_Item
+            (
+                MaNhom INT
+              , TenNhom NVARCHAR(500)
+              , MaThietBi INT
+              , TenThietBi NVARCHAR(500)
+              , GiaThietBi FLOAT
+              , DonVi NVARCHAR(100)
+              , HinhThucXuat NVARCHAR(100)
+              , Loai INT
+              , ItemCode NVARCHAR(50)
+              , MaNhomSP NVARCHAR(50)
+              , TenNhomSP NVARCHAR(200)
+              , TrongLuong NVARCHAR(500)
+            );
+            INSERT INTO #Tmp_Item
+            (
+                MaNhom
+              , TenNhom
+              , MaThietBi
+              , TenThietBi
+              , GiaThietBi
+              , DonVi
+              , HinhThucXuat
+              , Loai
+              , ItemCode
+              , MaNhomSP
+              , TenNhomSP
+              , TrongLuong -- NVARCHAR(500)
+            )
+            EXEC FRT_BW.dbo.FRT_Callog_DSThietBi @Loai = @Loai, @tyle = 1;
+
+            ---------------------- HIỀN.ĐOÀN 01.10.2016 lấy loại danh sách nhóm thiết bị chống trộm
+            CREATE TABLE #Tmp_Item_Group
+            (
+                MaNhom INT
+              , TenNhom NVARCHAR(500)
+              , MaThietBi INT
+              , TenThietBi NVARCHAR(500)
+              , GiaThietBi FLOAT
+              , DonVi NVARCHAR(100)
+              , HinhThucXuat NVARCHAR(100)
+              , Loai INT
+              , ItemCode NVARCHAR(50)
+              , MaNhomSP NVARCHAR(50)
+              , TenNhomSP NVARCHAR(200)
+              , TrongLuong NVARCHAR(500)
+            );
+            INSERT INTO #Tmp_Item_Group
+            (
+                MaNhom
+              , TenNhom
+              , MaThietBi
+              , TenThietBi
+              , GiaThietBi
+              , DonVi
+              , HinhThucXuat
+              , Loai
+              , ItemCode
+              , MaNhomSP
+              , TenNhomSP
+              , TrongLuong -- NVARCHAR(500)
+            )
+            EXEC FRT_BW.dbo.FRT_Callog_DSThietBi @Loai = 22, @tyle = 1;
+
+            SELECT
+                MaNhom
+              , TenNhom
+              , MaThietBi
+              , TenThietBi
+              , GiaThietBi
+              , DonVi
+              , HinhThucXuat
+              , Loai
+              , ItemCode
+              , MaNhomSP
+              , TenNhomSP
+            INTO
+                #Tmp_Tablet_GetNhom
+            FROM
+                #Tmp_Item_Group
+            WHERE
+                MaNhom = 9;
+
+            IF ( @TypeId = 22 )
+                BEGIN
+                    INSERT INTO #Tmp_Item
+                    (
+                        MaNhom
+                      , TenNhom
+                      , MaThietBi
+                      , TenThietBi
+                      , GiaThietBi
+                      , DonVi
+                      , HinhThucXuat
+                      , Loai
+                      , ItemCode
+                      , MaNhomSP
+                      , TenNhomSP
+                    )
+                    SELECT
+                        MaNhom
+                      , TenNhom
+                      , MaThietBi
+                      , TenThietBi
+                      , GiaThietBi
+                      , DonVi
+                      , HinhThucXuat
+                      , Loai
+                      , ItemCode
+                      , MaNhomSP
+                      , TenNhomSP
+                    FROM
+                        #Tmp_Tablet_GetNhom;
+                END;
+
+            ------------------------
+            SELECT
+                Value
+            INTO
+                #Tmp_Filter_Groups
+            FROM
+                dbo.SplitString(@GroupItemId, ',')
+            OPTION ( MAXRECURSION 2000 );
+
+            SELECT
+                Value
+            INTO
+                #Tmp_Filter_Regions
+            FROM
+                dbo.SplitString(@RegionCode, ',')
+            OPTION ( MAXRECURSION 2000 );
+
+            SELECT Value INTO #Tmp_Filter_Items FROM dbo.SplitString(@Items, ',')
+            OPTION ( MAXRECURSION 2000 );
+
+            SELECT
+                Value
+            INTO
+                #Tmp_Filter_Originals
+            FROM
+                dbo.SplitString(@OriginalCode, ',')
+            OPTION ( MAXRECURSION 2000 );
+
+            --	===Lấy DL Warehouse===
+            SELECT
+                ID AS ID
+              , WarehouseCode AS WarehouseCode
+              , WarehouseCodeB1 AS WarehouseCodeB1
+              , WarehouseName AS WarehouseName
+            INTO
+                #Tmp_Warehouse
+            FROM
+                [10.96.254.143].FRTInsideV2.dbo.Warehouse WITH ( NOLOCK )
+            WHERE
+                Status = 'A';
+
+            --	===Lấy DL F03_OrganizationHierachies===
+            SELECT
+                ID AS ID
+              , OrganizationHierachyCode AS OrganizationHierachyCode
+              , OrganizationHierachyName AS OrganizationHierachyName
+            INTO
+                #Tmp_OrganizationHierachies
+            FROM
+                [10.96.254.143].FRTInsideV2.dbo.F03_OrganizationHierachies WITH ( NOLOCK )
+            WHERE
+                Status = 'A';
+
+            --	===Lấy DL F03_Employees===
+            SELECT
+                ID AS ID
+              , EmployeeCode AS EmployeeCode
+              , EmployeeName AS EmployeeName
+              , RegionHierachyCode AS RegionHierachyCode
+            INTO
+                #Tmp_Employees
+            FROM
+                [10.96.254.143].FRTInsideV2.dbo.F03_Employees WITH ( NOLOCK );
+
+            --	===Lấy DL F03_RegionHierachies===
+            SELECT
+                ID AS ID
+              , RegionHierachyCode AS RegionHierachyCode
+              , RegionHierachyName AS RegionHierachyName
+            INTO
+                #Tmp_RegionHierachies
+            FROM
+                [10.96.254.143].FRTInsideV2.dbo.F03_RegionHierachies WITH ( NOLOCK )
+            WHERE
+                Status = 'A';
+
+            --	===Tạo bảng tạm Request===
+            CREATE TABLE #Tmp_Request
+            (
+                Is_ARCH INT
+              , RequestId BIGINT
+              , FromOffice NVARCHAR(50)
+              , isParent BIT
+              , RequestIdRefer BIGINT
+              , Sender NVARCHAR(50)
+              , FromShop NVARCHAR(50)
+              , StepNo INT
+              , TypeId INT
+            );
+
+            --	===Lấy Request===
+            INSERT INTO #Tmp_Request
+            (
+                Is_ARCH
+              , RequestId
+              , FromOffice
+              , isParent
+              , RequestIdRefer
+              , Sender
+              , FromShop
+              , StepNo
+              , TypeId
+            )
+            SELECT --TOP 1
+                0 AS Is_ARCH -- bit
+              , R.Id AS RequestId -- bigint
+              , R.FromOffice AS FromOffice -- nvarchar(50)
+              , R.isParent AS isParent -- bit
+              , R.RequestIdRefer AS RequestIdRefer -- bigint
+              , R.Sender AS Sender -- nvarchar(50)
+              , R.FromShop AS FromShop -- nvarchar(50)
+              , R.StepNo AS StepNo
+              , R.TypeId AS TypeId
+            FROM
+                dbo.Requests AS R ( NOLOCK )
+            WHERE
+                -- R.Id = 1366392
+                -- AND 
+                R.Status IN ( 1, 2, 3, 4 )
+                AND R.StepNo >= 1
+                AND ( @TypeId = 0 OR R.TypeId IN ( SELECT Loai FROM #Tmp_Type ))
+                AND ( @TimeStart = '' OR R.TimeCreate >= @TimeStart )
+                AND ( @TimeEnd = '' OR R.TimeCreate <= @TimeEnd );
+
+            --	===Lấy Request ARCH===
+            INSERT INTO #Tmp_Request
+            (
+                Is_ARCH
+              , RequestId
+              , FromOffice
+              , isParent
+              , RequestIdRefer
+              , Sender
+              , FromShop
+              , StepNo
+              , TypeId
+            )
+            SELECT --TOP 1
+                1 AS Is_ARCH -- bit
+              , R.Id AS RequestId -- bigint
+              , R.FromOffice AS FromOffice -- nvarchar(50)
+              , R.isParent AS isParent -- bit
+              , R.RequestIdRefer AS RequestIdRefer -- bigint
+              , R.Sender AS Sender -- nvarchar(50)
+              , R.FromShop AS FromShop -- nvarchar(50)
+              , R.StepNo AS StepNo
+              , R.TypeId AS TypeId
+            FROM
+                dbo.Requests_ARCH AS R ( NOLOCK )
+            WHERE
+                -- R.Id = 618913
+                -- AND 
+                R.Status IN ( 1, 2, 3, 4 )
+                AND R.StepNo >= 1
+                AND ( @TypeId = 0 OR R.TypeId IN ( SELECT Loai FROM #Tmp_Type ))
+                AND ( @TimeStart = '' OR R.TimeCreate >= @TimeStart )
+                AND ( @TimeEnd = '' OR R.TimeCreate <= @TimeEnd );
+
+            ----SELECT * FROM #Tmp_Request
+
+            --	===Tạo bảng tạm RequestDetail===
+            CREATE TABLE #Tmp_RequestDetail
+            (
+                Is_ARCH INT
+              , RequestId BIGINT
+              , Quantity INT
+              , QuantityAvaiable INT
+              , Quantity1 INT
+              , Quantity2 INT
+              , [Sum] INT
+              , ItemId INT
+              , ShopCode NVARCHAR(40)
+              --------▼ ChuongNT3 - 06/04/2018 - Thêm ID Bill , ngày HC -> NVC , NVC -> Shop 
+              , IdCLBill NVARCHAR(MAX)
+              , ProductCodeBillVC NVARCHAR(40)
+            -------------▲ ChuongNT3 - 06/04/2018 - Thêm ID Bill , ngày HC -> NVC , NVC -> Shop 
+            );
+
+            --	===Lấy RequestDetail===
+            INSERT INTO #Tmp_RequestDetail
+            (
+                Is_ARCH
+              , RequestId
+              , Quantity
+              , QuantityAvaiable
+              , Quantity1
+              , Quantity2
+              , Sum
+              , ItemId
+              , ShopCode
+              ---------▼ ChuongNT3 - 06/04/2018 - Thêm ID Bill , ngày HC -> NVC , NVC -> Shop 
+              , IdCLBill
+              , ProductCodeBillVC
+            ------------▲ ChuongNT3 - 06/04/2018 - Thêm ID Bill , ngày HC -> NVC , NVC -> Shop 
+
+            )
+            SELECT
+                0 AS Is_ARCH -- int
+              , D.RequestId AS RequestId -- bigint
+              , D.Quantity AS Quantity -- int
+              , D.QuantityAvaiable AS QuantityAvaiable -- int
+              , D.Quantity1 AS Quantity1 -- int
+              , D.Quantity2 AS Quantity2 -- int
+              , D.Sum AS Sum -- int
+              , D.ItemId AS ItemId -- int
+              , D.ShopCode AS ShopCode
+              ------▼ ChuongNT3 - 06/04/2018 - Thêm ID Bill , ngày HC -> NVC , NVC -> Shop 
+              , D.Property11 AS Property11
+              , ''
+            ------------▲ ChuongNT3 - 06/04/2018 - Thêm ID Bill , ngày HC -> NVC , NVC -> Shop 
+            FROM
+                dbo.RequestDetails AS D
+            WHERE
+                D.RequestId IN ( SELECT R.RequestId FROM #Tmp_Request AS R WHERE R.Is_ARCH = 0 )
+                AND D.Status = 1;
+
+            --	===Lấy RequestDetail ARCH===
+            INSERT INTO #Tmp_RequestDetail
+            (
+                Is_ARCH
+              , RequestId
+              , Quantity
+              , QuantityAvaiable
+              , Quantity1
+              , Quantity2
+              , Sum
+              , ItemId
+              , ShopCode
+              ------ ▼ ChuongNT3 - 06/04/2018 - Thêm ID Bill , ngày HC -> NVC , NVC -> Shop
+              , IdCLBill
+              , ProductCodeBillVC
+            ------------▲ ChuongNT3 - 06/04/2018 - Thêm ID Bill , ngày HC -> NVC , NVC -> Shop 
+
+            )
+            SELECT
+                1 AS Is_ARCH -- int
+              , D.RequestId AS RequestId -- bigint
+              , D.Quantity AS Quantity -- int
+              , D.QuantityAvaiable AS QuantityAvaiable -- int
+              , D.Quantity1 AS Quantity1 -- int
+              , D.Quantity2 AS Quantity2 -- int
+              , D.Sum AS Sum -- int
+              , D.ItemId AS ItemId -- int
+              , D.ShopCode AS ShopCode
+              ---------▼ ChuongNT3 - 06/04/2018 - Thêm ID Bill , ngày HC -> NVC , NVC -> Shop 
+              , D.Property11 AS Property11
+              , ''
+            ------------▲ ChuongNT3 - 06/04/2018 - Thêm ID Bill , ngày HC -> NVC , NVC -> Shop 
+            FROM
+                dbo.RequestDetails_ARCH AS D
+            WHERE
+                D.RequestId IN ( SELECT R.RequestId FROM #Tmp_Request AS R WHERE R.Is_ARCH = 1 )
+                AND D.Status = 1;
+            ------- ▼ChuongNT3 - 06/04/2018 - Thêm ID Bill , ngày HC -> NVC , NVC -> Shop 
+            DECLARE @RequestId_1 BIGINT;
+            DECLARE @IdBill_1 NVARCHAR(50);
+            DECLARE CR_Detais CURSOR FOR
+            SELECT RequestId, IdCLBill FROM #Tmp_RequestDetail ORDER BY RequestId;
+            OPEN CR_Detais;
+            FETCH NEXT FROM CR_Detais
+            INTO
+                @RequestId_1
+              , @IdBill_1;
+            WHILE @@FETCH_STATUS = 0
+                BEGIN
+                    IF ( ISNULL(@IdBill_1, '') <> '' )
+                        BEGIN
+                            DECLARE @ProD NVARCHAR(40) = (
+                                                             SELECT
+                                                                 ProductCode
+                                                             FROM
+                                                                 dbo.RequestDetails ( NOLOCK )
+                                                             WHERE
+                                                                 RequestId = @IdBill_1
+                                                         );
+                            UPDATE
+                                #Tmp_RequestDetail
+                            SET
+                                IdCLBill = @IdBill_1
+                              , ProductCodeBillVC = @ProD
+                            WHERE
+                                RequestId = @RequestId_1;
+                        END;
+                    FETCH NEXT FROM CR_Detais
+                    INTO
+                        @RequestId_1
+                      , @IdBill_1;
+                END;
+            CLOSE CR_Detais;
+            DEALLOCATE CR_Detais;
+            ------------▲ ChuongNT3 - 06/04/2018 - Thêm ID Bill , ngày HC -> NVC , NVC -> Shop 
+
+            --SELECT * FROM #Tmp_RequestDetail WHERE ISNULL(IdCLBill,0) <> 0
+
+            --	===Lấy KQ===
+            SELECT
+                R.Is_ARCH AS Is_ARCH
+              , ROW_NUMBER() OVER ( ORDER BY I.MaThietBi ) AS Id
+              , R.RequestId AS RequestId
+              , ISNULL(W.WarehouseCode, R.FromOffice) AS WarehouseCode
+              , ISNULL(W.WarehouseName, O.OrganizationHierachyName + '--' + RG.RegionHierachyName) AS WarehouseName
+              , I.MaNhom AS MaNhom
+              , I.TenNhom AS GroupName
+              , I.MaThietBi AS ItemId
+              , I.TenThietBi AS ItemName
+              , SUM(RD.Quantity) AS Quantity
+              , SUM(RD.QuantityAvaiable) AS QuantityAvaiable -- so luong xac nhan xua shop 23
+              , CASE
+                    WHEN @TypeId = 23
+                         OR @TypeId = 130 THEN NULL
+                    ELSE SUM(RD.Quantity1)
+                END AS Quantity1 -- so luogn bao hanh
+              , CASE
+                    WHEN @TypeId = 23
+                         OR @TypeId = 130 THEN NULL
+                    ELSE SUM(RD.Quantity2)
+                END AS Quantity2 -- so luogn cap moi
+              ----, SUM(RD.Quantity) AS Quantity  -- so luong shop dat
+              ----, SUM(RD.QuantityAvaiable) AS QuantityAvaiable  -- so luong xac nhan xua shop 23
+              ----, SUM(RD.Quantity1) AS Quantity1 -- so luogn bao hanh
+              ----, SUM(RD.Quantity2) AS Quantity2 -- so luogn cap moi
+              , I.GiaThietBi AS Price
+              , I.DonVi AS Unit
+              , SUM(ISNULL(RD.[Sum], 0)) AS Sum
+              , I.HinhThucXuat AS TypeDelivery
+              , R.isParent AS isParent
+              , R.RequestIdRefer AS RequestIdRefer
+              , CASE
+                    WHEN ISNULL(R.Sender, '-1') = '-1' THEN N'Hệ thống'
+                    ELSE E.EmployeeCode + '--' + E.EmployeeName
+                END AS EmployeeName
+              , R.Sender AS Sender
+              , RD.ShopCode
+              ------▼ ChuongNT3 - 06/04/2018 - Thêm ID Bill , ngày HC -> NVC , NVC -> Shop 
+              , RD.IdCLBill AS IdCLBill
+              , BTG.SendedDateTime AS NgayNVCGiaoHang
+              , BTG.ReceivedDateTime AS NgayHCGiaoHang
+            ------------▲ ChuongNT3 - 06/04/2018 - Thêm ID Bill , ngày HC -> NVC , NVC -> Shop 
+            INTO
+                #Tmp_Results
+            FROM
+                #Tmp_Request AS R
+                LEFT JOIN #Tmp_RequestDetail AS RD
+                    ON R.RequestId = RD.RequestId
+                       AND R.Is_ARCH = RD.Is_ARCH
+                LEFT JOIN #Tmp_Item AS I
+                    ON I.MaThietBi = RD.ItemId
+                LEFT JOIN #Tmp_Warehouse AS W
+                    ON W.WarehouseCode = R.FromShop
+                LEFT JOIN dbo.RequestSteps ( NOLOCK ) RS2
+                    ON RS2.RequestId = R.RequestId
+                       AND RS2.StepNo = 2
+                LEFT JOIN #Tmp_OrganizationHierachies AS O
+                    ON R.FromOffice = O.OrganizationHierachyCode
+                LEFT JOIN #Tmp_Employees AS E
+                    ON E.EmployeeCode = R.Sender
+                LEFT JOIN #Tmp_RegionHierachies AS RG
+                    ON RG.RegionHierachyCode = E.RegionHierachyCode
+                ---------------▼ ChuongNT3 - 06/04/2018 - Thêm ID Bill , ngày HC -> NVC , NVC -> Shop
+                LEFT JOIN #Temp_BangTrungGian BTG
+                    ON BTG.OrderNumber = RD.ProductCodeBillVC
+            ------------▲ ChuongNT3 - 06/04/2018 - Thêm ID Bill , ngày HC -> NVC , NVC -> Shop 
+            WHERE
+                ( @GroupItemId = '' OR I.MaNhom IN ( SELECT Value FROM #Tmp_Filter_Groups ))
+                AND ( @DeliveryType = '0' OR I.HinhThucXuat = @DeliveryType )
+                AND (
+                        @Items = ''
+                        OR CONVERT(VARCHAR(5), I.MaThietBi)IN ( SELECT Value FROM #Tmp_Filter_Items )
+                    )
+                AND (
+                        @RegionCode = ''
+                        OR W.WarehouseCode IN ( SELECT Value FROM #Tmp_Filter_Regions )
+                    )
+                AND ( @TimeStartHC = '' OR RS2.TimeEnd >= @TimeStartHC )
+                AND ( @TimeEndHC = '' OR RS2.TimeEnd <= @TimeEndHC )
+                AND ( @OriginalCode = '' OR O.ID IN ( SELECT Value FROM #Tmp_Filter_Originals ))
+            GROUP BY
+                R.Is_ARCH
+              , I.MaThietBi
+              , I.TenThietBi
+              , W.WarehouseCode
+              , W.WarehouseName
+              , I.DonVi
+              , I.GiaThietBi
+              , I.MaNhom
+              , I.TenNhom
+              , I.HinhThucXuat
+              , R.RequestId
+              , R.FromOffice
+              , O.OrganizationHierachyName
+              , RG.RegionHierachyName
+              , R.isParent
+              , R.RequestIdRefer
+              , E.EmployeeCode + '--' + E.EmployeeName
+              , R.Sender
+              , RD.ShopCode
+              ------▼ ChuongNT3 - 06/04/2018 - Thêm ID Bill , ngày HC -> NVC , NVC -> Shop
+              , RD.IdCLBill
+              , BTG.SendedDateTime
+              , BTG.ReceivedDateTime
+            ------------▲ ChuongNT3 - 06/04/2018 - Thêm ID Bill , ngày HC -> NVC , NVC -> Shop
+            ORDER BY
+                I.MaThietBi;
+
+            --SELECT * FROM #Tmp_Results WHERE ISNULL(IdCLBill,'') <> ''
+
+            --	===Lấy KQ Cuối cùng===
+            SELECT
+                *
+              , CASE
+                    WHEN R.isParent = 0
+                         AND R.RequestIdRefer IS NULL THEN R.RequestId
+                    WHEN R.isParent = 0
+                         AND R.RequestIdRefer IS NOT NULL THEN R.RequestIdRefer
+                    WHEN R.isParent = 1 THEN R.RequestId
+                    ELSE NULL
+                END AS MaCallogGoc
+              , CASE
+                    WHEN R.isParent = 0
+                         AND R.RequestIdRefer IS NULL THEN NULL
+                    WHEN R.isParent = 0
+                         AND R.RequestIdRefer IS NOT NULL THEN R.RequestId
+                    WHEN R.isParent = 1 THEN R.RequestIdRefer
+                    ELSE NULL
+                END AS MaCallogTach
+            INTO
+                #Tmp_Result_Final
+            FROM
+                #Tmp_Results AS R;
+
+            --	===Tạo bảng tạm MaCallogTach===
+            CREATE TABLE #Tmp_Status_GocTach
+            (
+                Is_ARCH BIT
+              , RequestId BIGINT
+              , Status TINYINT
+              , TypeId INT
+              , StepNo INT
+
+              --▼	Edit - VietMXH - 14/11/2019 - Fix BC Chi tiết Đồ dùng HC==================================================
+              , TimeCreate DATETIME
+            --▲	Edit - VietMXH - 14/11/2019 - Fix BC Chi tiết Đồ dùng HC==================================================
+
+            );
+
+            --	===Tạo bảng tạm MaCallogTach===
+            INSERT INTO #Tmp_Status_GocTach
+            (
+                Is_ARCH
+              , RequestId
+              , Status
+              , TypeId
+              , StepNo
+
+              --▼	Edit - VietMXH - 14/11/2019 - Fix BC Chi tiết Đồ dùng HC==================================================
+              , TimeCreate -- DATETIME
+            --▲	Edit - VietMXH - 14/11/2019 - Fix BC Chi tiết Đồ dùng HC==================================================
+
+            )
+            SELECT
+                0 AS Is_ARCH -- bit
+              , R.Id AS RequestId -- bigint
+              , R.Status AS Status -- tinyint
+              , R.TypeId AS TypeId
+              , R.StepNo AS StepNo
+
+              --▼	Edit - VietMXH - 14/11/2019 - Fix BC Chi tiết Đồ dùng HC==================================================
+              , R.TimeCreate AS TimeCreate -- DATETIME
+            --▲	Edit - VietMXH - 14/11/2019 - Fix BC Chi tiết Đồ dùng HC==================================================
+
+            FROM
+                dbo.Requests AS R ( NOLOCK )
+            WHERE
+                R.Id IN ( SELECT T.MaCallogTach FROM #Tmp_Result_Final AS T )
+                OR R.Id IN ( SELECT G.MaCallogGoc FROM #Tmp_Result_Final AS G );
+
+            --	===Tạo bảng tạm MaCallogTach ARCH===
+            INSERT INTO #Tmp_Status_GocTach
+            (
+                Is_ARCH
+              , RequestId
+              , Status
+              , TypeId
+              , StepNo
+
+              --▼	Edit - VietMXH - 14/11/2019 - Fix BC Chi tiết Đồ dùng HC==================================================
+              , TimeCreate -- DATETIME
+            --▲	Edit - VietMXH - 14/11/2019 - Fix BC Chi tiết Đồ dùng HC==================================================
+
+            )
+            SELECT
+                1 AS Is_ARCH -- bit
+              , R.Id AS RequestId -- bigint
+              , R.Status AS Status -- tinyint
+              , R.TypeId AS TypeId
+              , R.StepNo AS StepNo
+
+              --▼	Edit - VietMXH - 14/11/2019 - Fix BC Chi tiết Đồ dùng HC==================================================
+              , R.TimeCreate AS TimeCreate -- DATETIME
+            --▲	Edit - VietMXH - 14/11/2019 - Fix BC Chi tiết Đồ dùng HC==================================================
+
+            FROM
+                dbo.Requests_ARCH AS R ( NOLOCK )
+            WHERE
+                R.Id IN ( SELECT T.MaCallogTach FROM #Tmp_Result_Final AS T )
+                OR R.Id IN ( SELECT G.MaCallogGoc FROM #Tmp_Result_Final AS G );
+
+            ----SELECT * FROM #Tmp_Status_GocTach
+
+            --	===Xuất All DL===
+            SELECT
+                ----Re.Is_ARCH,
+                Re.Id
+              , Re.RequestId
+              , Re.WarehouseCode
+              , Re.WarehouseName
+              , Re.MaNhom
+              , Re.GroupName
+              , Re.ItemId
+              , Re.ItemName
+              , Re.Quantity
+              , Re.QuantityAvaiable
+              , Re.Quantity1
+              , Re.Quantity2
+              , Re.Price
+              , Re.Unit
+              , Re.Sum
+              , Re.TypeDelivery
+              , Re.isParent
+              , Re.RequestIdRefer
+              , Re.EmployeeName
+              , Re.Sender
+              , Re.MaCallogGoc
+              , Re.MaCallogTach
+              , R.Status AS StatusTach
+              , R2.Status AS StatusGoc
+              , Ma.Name AS 'StatusName'
+              , CASE WHEN R.Status = 5 THEN NULL ELSE Re.MaCallogTach END AS MaCallogTachView
+              , R2.StepNo AS 'StepNo'
+              , CASE WHEN R2.TypeId = 22 THEN whb1.WarehouseName ELSE wh.WarehouseName END AS 'WarehouseNameTo'
+              ---------▼ ChuongNT3 - 06/04/2018 - Thêm ID Bill , ngày HC -> NVC , NVC -> Shop 
+              , Re.IdCLBill AS IdCLBill
+              , FORMAT(Re.NgayHCGiaoHang, 'dd/MM/yyyy HH:mm') AS NgayHCGiaoHang
+              , FORMAT(Re.NgayNVCGiaoHang, 'dd/MM/yyyy HH:mm') AS NgayNVCGiaoHang
+              --------------▲ ChuongNT3 - 06/04/2018 - Thêm ID Bill , ngày HC -> NVC , NVC -> Shop 
+
+              --▼	Edit - VietMXH - 14/11/2019 - Fix BC Chi tiết Đồ dùng HC==================================================
+              , FORMAT(R2.TimeCreate, 'dd/MM/hhhh HH:mm:ss') AS NgayTaoCallLogGoc
+              , FORMAT(R.TimeCreate, 'dd/MM/hhhh HH:mm:ss') AS NgayTaoCallLogTach
+            --▲	Edit - VietMXH - 14/11/2019 - Fix BC Chi tiết Đồ dùng HC==================================================
+
+            FROM
+                #Tmp_Result_Final AS Re
+                LEFT JOIN #Tmp_Status_GocTach AS R
+                    ON R.RequestId = Re.MaCallogTach
+                       AND R.Is_ARCH = Re.Is_ARCH
+                LEFT JOIN #Tmp_Status_GocTach AS R2
+                    ON R2.RequestId = Re.MaCallogGoc
+                       AND R2.Is_ARCH = Re.Is_ARCH
+                LEFT JOIN dbo.MasterDatas ( NOLOCK ) Ma
+                    ON R2.[Status] = Ma.Code
+                       AND Ma.[Group] = 'RequestStatus'
+                       AND R2.TypeId IN ( 22, 23, 115, 152 )
+                LEFT JOIN #Tmp_Warehouse wh
+                    ON Re.ShopCode = wh.WarehouseCode
+                       AND R2.TypeId = 115
+                LEFT JOIN #Tmp_Warehouse whb1
+                    ON Re.ShopCode = whb1.WarehouseCodeB1
+                       AND R2.TypeId = 22
+            ORDER BY
+                Re.RequestId ASC;
+
+            --SELECT * FROM #Tmp_Result_Final WHERE  ISNULL(IdCLBill,0) <> 0
+
+            --	===Xóa bảng tạm===
+            DROP TABLE
+                #Tmp_Type
+              , #Tmp_Item
+              , #Tmp_Item_Group
+              , #Tmp_Tablet_GetNhom
+              , #Tmp_Filter_Groups
+              , #Tmp_Filter_Regions
+              , #Tmp_Filter_Items
+              , #Tmp_Filter_Originals
+              , #Tmp_Warehouse
+              , #Tmp_OrganizationHierachies
+              , #Tmp_Employees
+              , #Tmp_RegionHierachies
+              , #Tmp_Request
+              , #Tmp_RequestDetail
+              , #Tmp_Results
+              , #Tmp_Result_Final
+              , #Tmp_Status_GocTach
+              ---------------▼ ChuongNT3 - 06/04/2018 - Thêm ID Bill , ngày HC -> NVC , NVC -> Shop 
+              , #Temp_BangTrungGian
+              , #temp_BangKerry
+              , #temp_BangNhatTin;
+        ---------------▲ ChuongNT3 - 06/04/2018 - Thêm ID Bill , ngày HC -> NVC , NVC -> Shop 
+        END TRY
+        BEGIN CATCH
+            DECLARE @ErrorMessage NVARCHAR(MAX) = N'';
+            SET @ErrorMessage = N'Lỗi: [Report_ItemDetail]';
+            SET @ErrorMessage += N', @TypeId=''' + ISNULL(CONVERT(NVARCHAR(50), @TypeId), 'NULL') + N'''';
+            SET @ErrorMessage += N', @Items=''' + ISNULL(CONVERT(NVARCHAR(3000), @Items), 'NULL') + N'''';
+            SET @ErrorMessage += N', @RegionCode=''' + ISNULL(CONVERT(NVARCHAR(4000), @RegionCode), 'NULL') + N'''';
+            SET @ErrorMessage += N', @OriginalCode=''' + ISNULL(CONVERT(NVARCHAR(4000), @OriginalCode), 'NULL') + N'''';
+            SET @ErrorMessage += N', @GroupItemId=''' + ISNULL(CONVERT(NVARCHAR(3000), @GroupItemId), 'NULL') + N'''';
+            SET @ErrorMessage += N', @TimeStart=''' + ISNULL(CONVERT(NVARCHAR(50), @TimeStart, 121), 'NULL') + N'''';
+            SET @ErrorMessage += N', @TimeEnd=''' + ISNULL(CONVERT(NVARCHAR(50), @TimeEnd, 121), 'NULL') + N'''';
+            SET @ErrorMessage += N', @TimeStartHC=''' + ISNULL(CONVERT(NVARCHAR(50), @TimeStartHC, 121), 'NULL') + N'''';
+            SET @ErrorMessage += N', @TimeEndHC=''' + ISNULL(CONVERT(NVARCHAR(50), @TimeEndHC, 121), 'NULL') + N'''';
+            SET @ErrorMessage += N', @DeliveryType=''' + ISNULL(CONVERT(NVARCHAR(50), @DeliveryType), 'NULL') + N'''';
+            SET @ErrorMessage += N' - ERROR_MESSAGE: ' + ERROR_MESSAGE() + N' - ERROR_LINE: ' + CONVERT(NVARCHAR, ERROR_LINE());
+
+            --	===Ghi Log===
+            INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+            VALUES (
+                       N'Report_ItemDetail' -- Title - nvarchar(300)
+                     , @ErrorMessage -- Error - nvarchar(max)
+                     , 1 -- Status - tinyint
+                     , GETDATE() -- TimeCreate - datetime
+                   );
+        END CATCH;
+    END;
+
+----SELECT * FROM dbo.Logs(NOLOCK) WHERE Title=N'Report_ItemDetail' ORDER BY Id DESC
+
+GO
+

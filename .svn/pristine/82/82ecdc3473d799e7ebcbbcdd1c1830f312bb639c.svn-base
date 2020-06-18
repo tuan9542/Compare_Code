@@ -1,0 +1,157 @@
+﻿public ActionResult InsertOrUpdateConversation(long requestId, string message, string listShop = "", string type19 = "") //ChuongNT3 - 13/06/2018 - loai 19 
+        {
+            if (UserManager.CurrentUser != null)
+            {
+                var requestMain = new Request();
+                using (var t = new TransactionScope(TransactionScopeOption.Required, new TransactionOptions
+                {
+                    IsolationLevel = System.Transactions.IsolationLevel.ReadUncommitted
+                }))
+                {
+                    requestMain = db.Requests.FirstOrDefault(x => x.Id == requestId);
+                }
+                if (requestMain != null && requestMain.Status == Key.StatusRequest.Complete && requestMain.TypeId == 19)
+                {
+                    return Json('0', JsonRequestBehavior.AllowGet);
+                }
+                else
+                {
+                    RequestDetail requestDetail = new RequestDetail();
+                    using (var t = new TransactionScope(TransactionScopeOption.Required, new TransactionOptions { IsolationLevel = System.Transactions.IsolationLevel.ReadUncommitted }))
+                    {
+                        requestDetail = db.RequestDetails.FirstOrDefault(x => x.RequestId == requestId && x.Status == Key.Status.Available);
+                    }
+
+                    // Add - TuanNA89 - 05/05/2020 - Ghi log cập nhật HXL KH
+                    string messageLog = "";
+                    if(requestDetail.Property6 != listShop)
+                    {
+                        messageLog = Environment.NewLine + "- Shop vi phạm từ " + requestDetail.Property6+ " sang "+ listShop;
+                    }
+                    if (type19 != "")
+                    {
+                        if(requestDetail.Property4 != type19)
+                        {
+                            messageLog = Environment.NewLine + "- Loại CallLog từ " + requestDetail.Property4 + " sang " + type19;
+                        }
+                    }
+                    if(messageLog.Length > 0)
+                    {
+                        Conversation cv_Log = new Conversation
+                        {
+                            RequestId = requestMain.Id,
+                            StepNo = 0,
+                            Sender = "-1",
+                            Message = "User " + UserManager.CurrentUser.InsideCode + " cập nhật HXL khách hàng:" + messageLog,
+                            CreateBy = "-1",
+                            Type = 0,
+                            Status = 0,
+                            TimeCreate = DateTime.Now
+                        };
+                        db.Conversations.Add(cv_Log);
+                    }
+                    // Add - TuanNA89 - 05/05/2020 - Ghi log cập nhật HXL KH
+
+                    requestDetail.Property6 = listShop;
+                    //ChuongNT3 - 13/06/2018 - loại 19
+                    if (type19 != "")
+                    {
+                        requestDetail.Property4 = type19;
+                    }
+                    //ChuongNT3 - 13/06/2018 - loại 19
+
+                    Conversation cv = new Conversation();
+                    using (var t = new TransactionScope(TransactionScopeOption.Required, new TransactionOptions { IsolationLevel = System.Transactions.IsolationLevel.ReadUncommitted }))
+                    {
+                        cv = db.Conversations.FirstOrDefault(x => x.RequestId == requestId
+                        && x.Type == Key.Conversation.Trouble
+                        && x.Status == Key.Status.Available);
+                    }
+
+                    Request request = new Request();
+                    using (var t = new TransactionScope(TransactionScopeOption.Required, new TransactionOptions { IsolationLevel = System.Transactions.IsolationLevel.ReadUncommitted }))
+                    {
+                        request = db.Requests.FirstOrDefault(x => x.RequestIdRefer == requestId);
+                    }
+
+                    Conversation cv2 = new Conversation();
+                    if (request != null)
+                    {
+                        using (var t = new TransactionScope(TransactionScopeOption.Required, new TransactionOptions { IsolationLevel = System.Transactions.IsolationLevel.ReadUncommitted }))
+                        {
+                            cv2 = db.Conversations.FirstOrDefault(x => x.RequestId == request.Id
+                            && x.Type == Key.Conversation.Trouble
+                            && x.Status == Key.Status.Available);
+                        }
+                    }
+
+                    if (cv == null)
+                    {
+                        Conversation conver = new Conversation
+                        {
+                            RequestId = requestId,
+                            StepNo = 0,
+                            Sender = UserManager.CurrentUser.InsideCode,
+                            Message = message,
+                            CreateBy = UserManager.CurrentUser.InsideCode,
+                            Type = Key.Conversation.Trouble,
+                            Status = Key.Status.Available,
+                            TimeCreate = DateTime.Now
+                        };
+                        db.Conversations.Add(conver);
+                        if (request != null)
+                        {
+                            Conversation conver2 = new Conversation
+                            {
+                                RequestId = request.Id,
+                                StepNo = 0,
+                                Sender = UserManager.CurrentUser.InsideCode,
+                                Message = message,
+                                CreateBy = UserManager.CurrentUser.InsideCode,
+                                Type = Key.Conversation.Trouble,
+                                Status = Key.Status.Available,
+                                TimeCreate = DateTime.Now
+                            };
+                            db.Conversations.Add(conver2);
+                        }
+                        //TuanNA89 - 25/05/2020 - Bắn mail khi có cập nhật HXL KH
+                        XMail.Send(requestId, "", XMail.ProcessType.Communicate);
+                    }
+                    else
+                    {
+                        cv.Message = message;
+                        cv.Sender = UserManager.CurrentUser.InsideCode;
+                        cv.TimeCreate = DateTime.Now;
+                        if (cv2 != null && request != null)
+                        {
+                            cv2.Message = message;
+                            cv2.Sender = UserManager.CurrentUser.InsideCode;
+                            cv2.TimeCreate = DateTime.Now;
+                        }
+                        //TuanNA89 - 25/05/2020 - Bắn mail khi có cập nhật HXL KH
+                        XMail.Send(requestId, "", XMail.ProcessType.Communicate);
+                    }
+
+                    List<Permission> permissions = GetPermissions(requestId);
+                    if (permissions.Contains(RequestsController.Permission.Assigner)
+                            && permissions.Contains(RequestsController.Permission.GroupAssigner))
+                    {
+                        if (requestMain != null && requestMain.Status != Key.StatusRequest.Complete)
+                        {
+                            requestMain.Status = Key.StatusRequest.Processing;
+                            requestMain.Assigner = UserManager.CurrentUser.InsideCode;
+                        }
+                    }
+
+                    db.SaveChanges();
+                    //ChuongNT3 - 10/07/2018 - Update ASM 
+                    sql.ExecuteCommand("UpdateASM", CommandType.StoredProcedure, new SqlParameter[] {
+                        new SqlParameter("@RequestId",requestId)
+                        });
+                    //ChuongNT3 - 10/07/2018 - Update ASM 
+                    return Json('1', JsonRequestBehavior.AllowGet);
+                }
+            }
+            else
+                return Json('0', JsonRequestBehavior.AllowGet);
+        }

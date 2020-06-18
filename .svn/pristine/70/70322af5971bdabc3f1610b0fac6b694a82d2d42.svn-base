@@ -1,0 +1,1105 @@
+﻿SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;
+GO
+/*
+==================================================
+Author			:	BacVT - VietMXH
+Create date		:	17/08/2015 - 01/10/2019 17:00
+Description		:	Lấy nội dung email
+Note			:	Link Server:	FRTInsideV2
+==================================================
+Test:
+	SELECT dbo.fn_Email_GetContent(5757736)
+*/
+ALTER FUNCTION dbo.fn_Email_GetContent ( @RequestId BIGINT )
+RETURNS NVARCHAR(MAX)
+AS
+    BEGIN
+
+        --------------------------------------------------
+        --	===Tạo biến cần dùng===
+        DECLARE
+            @Title NVARCHAR(300)
+          , @Status TINYINT
+          , @StatusName NVARCHAR(50) = N''
+          , @RequestGroup NVARCHAR(300) = N''
+          , @RequestType NVARCHAR(300) = N''
+          , @Conversations NVARCHAR(MAX) = N''
+          , @StepNo INT
+          , @TimeFuture DATETIME
+          , @TimeCreate DATETIME
+          , @Sender NVARCHAR(40)
+          , @SenderName NVARCHAR(500) = N''
+          , @Assigners NVARCHAR(MAX) = N''
+          , @Cc NVARCHAR(MAX)
+          , @Assigner1 NVARCHAR(500)
+          , @Date1 DATETIME
+          , @Assigner2 NVARCHAR(500)
+          , @Date2 DATETIME
+          , @Assigner3 NVARCHAR(500)
+          , @Date3 DATETIME
+          , @RequestDetails NVARCHAR(MAX)
+          , @TypeId INT
+          , @ParentId INT
+          , @JobTitle VARCHAR(50) = '';
+
+        --------------------------------------------------
+        --	===Tạo biến bảng chứa DL Nhân viên===
+        DECLARE @Tmp_Employees AS TABLE
+        (
+            EmployeeCode VARCHAR(40)
+          , EmployeeName NVARCHAR(255)
+          , Email NVARCHAR(255)
+          , JobTitle VARCHAR(50)
+        );
+        --	===Lấy DL Nhân viên===
+        INSERT INTO @Tmp_Employees ( EmployeeCode, EmployeeName, Email, JobTitle )
+        SELECT
+            EmployeeCode -- EmployeeCode - varchar(40)
+          , EmployeeName -- EmployeeName - nvarchar(255)
+          , Email -- Email - nvarchar(255)
+          , JobTitle -- JobTitle - varchar(50)
+        FROM
+            dbo.F03_Employees WITH ( NOLOCK );
+
+        --------------------------------------------------
+        --	===Tạo biến bảng chứa DL Chức danh===
+        DECLARE @Tmp_JobTitles AS TABLE ( JobTitleCode VARCHAR(40), JobTitleName NVARCHAR(400));
+        --	===Lấy DL Chức danh===
+        INSERT INTO @Tmp_JobTitles ( JobTitleCode, JobTitleName )
+        SELECT
+            JobTitleCode -- JobTitleCode - varchar(40)
+          , JobTitleName -- JobTitleName - nvarchar(400)
+        FROM
+            dbo.F03_JobTitles WITH ( NOLOCK )
+        WHERE
+            Status = 'A';
+
+        --------------------------------------------------
+        -- ===Tạo biến bảng chứa DL Requests===
+        DECLARE @Tmp_Requests AS TABLE
+        (
+            RequestId BIGINT
+          , Title NVARCHAR(300)
+          , TypeId INT
+          , StepNo INT
+          , TimeCreate DATETIME
+          , TimeFutureFinish DATETIME
+          , Status TINYINT
+          , Sender NVARCHAR(40)
+        );
+        --	===Lấy Requests===
+        INSERT INTO @Tmp_Requests
+        (
+            RequestId
+          , Title
+          , TypeId
+          , StepNo
+          , TimeCreate
+          , TimeFutureFinish
+          , Status
+          , Sender
+        )
+        SELECT
+            Id -- RequestId - bigint
+          , Title -- Title - nvarchar(300)
+          , TypeId -- TypeId - int
+          , StepNo -- StepNo - int
+          , TimeCreate -- TimeCreate - datetime
+          , TimeFutureFinish -- TimeFutureFinish - datetime
+          , Status -- Status - tinyint
+          , Sender -- Sender - nvarchar(40)
+        FROM
+            dbo.Requests ( NOLOCK )
+        WHERE
+            Id = @RequestId;
+
+        --------------------------------------------------
+        -- ===Lấy dữ liệu===
+        SELECT
+            @Title = R.Title
+          , @TypeId = R.TypeId
+          , @StepNo = R.StepNo
+          , @TimeCreate = R.TimeCreate
+          , @TimeFuture = R.TimeFutureFinish
+          , @Sender = R.Sender
+          , @Status = R.Status
+        FROM
+            @Tmp_Requests AS R;
+
+        SELECT
+            @StatusName = ISNULL(Name, '')
+        FROM
+            dbo.MasterDatas ( NOLOCK )
+        WHERE
+            Code = @Status
+            AND [Group] = 'RequestStatus'
+            AND Status = 1;
+
+        SELECT
+            @SenderName = ISNULL(EmployeeName, '')
+          , @JobTitle = ISNULL(JobTitle, '')
+        FROM
+            @Tmp_Employees
+        WHERE
+            EmployeeCode = @Sender;
+
+        SELECT
+            @SenderName += N' - ' + ISNULL(JobTitleName, '')
+        FROM
+            @Tmp_JobTitles
+        WHERE
+            JobTitleCode = @JobTitle;
+
+        SELECT
+            @RequestType = ISNULL(Description, '')
+          , @ParentId = ParentId
+        FROM
+            dbo.Categories ( NOLOCK )
+        WHERE
+            Id = @TypeId;
+
+        SELECT
+            @RequestGroup = ISNULL(Description, '')
+        FROM
+            dbo.Categories ( NOLOCK )
+        WHERE
+            Id = @ParentId;
+
+        --------------------------------------------------
+        --	===Tạo biến bảng chứa DL Conversations theo Requests===
+        DECLARE @Tmp_Conversations_ByRequests AS TABLE
+        (
+            STT INT IDENTITY(1, 1)
+          , RequestId BIGINT
+          , ConversationId BIGINT
+          , Sender NVARCHAR(40)
+          , TimeCreate VARCHAR(20)
+          , Message NVARCHAR(MAX)
+        );
+        --	===Lấy DL Conversations theo Requests===
+        INSERT INTO @Tmp_Conversations_ByRequests ( RequestId, ConversationId, Sender, TimeCreate, Message )
+        SELECT
+            RequestId -- RequestId - bigint
+          , Id -- ConversationId - bigint
+          , Sender -- Sender - nvarchar(40)
+          , CONVERT(VARCHAR(10), TimeCreate, 103) + ' ' + CONVERT(VARCHAR(10), TimeCreate, 108) -- TimeCreate - varchar(20)
+          , dbo.fn_RemoveTags(Message) -- Message - nvarchar(max)
+        FROM
+            dbo.Conversations ( NOLOCK )
+        WHERE
+            RequestId = @RequestId
+            AND RequestDetailId IS NULL
+            AND Type <> 4
+        ORDER BY
+            Id DESC;
+
+        ----SELECT * FROM @Tmp_Conversations_ByRequests
+
+        SELECT
+            @Conversations += N'<br/><b style="color:#8A2BE2">- ' + ISNULL(E.EmployeeName, N'Hệ thống') + N'</b> (' + C_R.TimeCreate + N'): ' + C_R.Message
+        FROM
+            @Tmp_Conversations_ByRequests AS C_R
+            LEFT JOIN @Tmp_Employees AS E
+                ON C_R.Sender = E.EmployeeCode;
+
+        --------------------------------------------------
+        --	===Tạo biến bảng chứa DL Assigners theo Requests===
+        DECLARE @Tmp_Assigners_ByRequests AS TABLE ( STT INT IDENTITY(1, 1), RequestId BIGINT, EmployeeCode NVARCHAR(40));
+        --	===Lấy DL Assigners theo Requests===
+        INSERT INTO @Tmp_Assigners_ByRequests ( RequestId, EmployeeCode )
+        SELECT DISTINCT
+               RequestId -- RequestId - bigint
+             , EmployeeCode -- EmployeeCode - nvarchar(40)
+        FROM
+            dbo.Assigners ( NOLOCK )
+        WHERE
+            RequestId = @RequestId
+            AND Type = 1
+            AND Status = 1
+            AND GroupMail IS NULL;
+
+        ----SELECT * FROM @Tmp_Assigners_ByRequests
+
+        SELECT
+            @Assigners += ISNULL(( ' - ' + T.EmployeeName + '<br/>' ), '')
+        FROM (
+                 SELECT DISTINCT
+                        E.EmployeeName
+                 FROM
+                     @Tmp_Assigners_ByRequests AS A_R
+                     LEFT JOIN @Tmp_Employees AS E
+                         ON A_R.EmployeeCode = E.EmployeeCode
+             ) AS T;
+
+        SELECT
+            @Assigners += ISNULL(( ' - ' + T.GroupMail + '<br/>' ), '')
+        FROM (
+                 SELECT DISTINCT
+                        A.GroupMail
+                 FROM
+                     Assigners AS A ( NOLOCK )
+                 WHERE
+                     A.RequestId = @RequestId
+                     AND A.GroupMail IS NOT NULL
+                     AND A.Status = 1
+             ) AS T;
+
+        ----SELECT @Assigners AS '@Assigners'
+
+        --------------------------------------------------
+        -- ======LẤY THÔNG TIN CHI TIẾT======
+
+        IF ( @TypeId = 48 ) --	48:Xử lý vi phạm
+            BEGIN
+                DECLARE @Tmp__TypeId_48__ReqDet AS TABLE
+                (
+                    STT INT IDENTITY(1, 1)
+                  , ReqDetId INT
+                  , QuyTrinhViPham NVARCHAR(MAX)
+                  , NoiDungViPham NVARCHAR(MAX)
+                  , ShopPhongBan NVARCHAR(300)
+                  , NhanVienViPham NVARCHAR(300)
+                  , MucXLVP NVARCHAR(MAX)
+                  , SoTienPhat NUMERIC(19, 6)
+                  , PercentINC INT
+                  , HuongDanThucHienDung NVARCHAR(MAX)
+                  , HuongDanTraCuuTaiLieuLienQuan NVARCHAR(MAX)
+                  , NguoiGhiNhan NVARCHAR(50)
+                );
+                INSERT INTO @Tmp__TypeId_48__ReqDet
+                (
+                    ReqDetId
+                  , QuyTrinhViPham
+                  , NoiDungViPham -- NVARCHAR(50)
+                  , ShopPhongBan
+                  , NhanVienViPham
+                  , MucXLVP
+                  , SoTienPhat
+                  , PercentINC
+                  , HuongDanThucHienDung
+                  , HuongDanTraCuuTaiLieuLienQuan
+                  , NguoiGhiNhan
+                )
+                SELECT
+                    D.Id AS ReqDetId
+                  , D.Property7 AS QuyTrinhViPham -- nvarchar(max)
+                  , D.Property4 AS NoiDungViPham -- NVARCHAR(50)
+                  , D.ShopCode AS ShopPhongBan
+                  , D.EmpCode AS NhanVienViPham
+                  , D.Property5 AS MucXLVP -- nvarchar(max)
+                  , D.Money1 AS SoTienPhat
+                  , D.Quantity3 AS PercentINC
+                  , D.Property11 AS HuongDanThucHienDung -- nvarchar(max)
+                  , D.Property12 AS HuongDanTraCuuTaiLieuLienQuan -- nvarchar(max)
+                  , D.EmpCode1 AS NguoiGhiNhan -- nvarchar(50)
+                FROM
+                    dbo.RequestDetails AS D ( NOLOCK )
+                WHERE
+                    D.RequestId = @RequestId
+                    AND D.Status = 1
+                ORDER BY
+                    D.Id;
+
+                DECLARE @p__TypeId_48__Body NVARCHAR(MAX) = N'';
+                SELECT
+                    @p__TypeId_48__Body += N'' --
+                                           + N'<tr style="height: 40px">' --
+                                           + N'	<td>' + ISNULL(FORMAT(D.STT, '0'), '') + N'</td>' --
+                                           + N'	<td>' + ISNULL(D.QuyTrinhViPham, '') + N'</td>' --
+                                           + N'	<td>' + ISNULL(D.NoiDungViPham, '') + N'</td>' --
+                                           + N'	<td>' + ISNULL(CONCAT(D.ShopPhongBan, '--', W.WarehouseName), '') + N'</td>' --
+                                           + N'	<td>' + ISNULL(CONCAT(D.NhanVienViPham, '--', E.Email, '--', E.EmployeeName), '') + N'</td>' --
+                                           + N'	<td>' + ISNULL(D.MucXLVP, '') + N'</td>' --
+                                           + N'	<td>' + ISNULL(FORMAT(D.SoTienPhat, '#,##0'), '') + N'</td>' --
+                                           + N'	<td>' + ISNULL(FORMAT(D.PercentINC, '#,##0'), '') + N'</td>' --
+                                           + N'	<td>' + ISNULL(D.HuongDanThucHienDung, '') + N'</td>' --
+                                           + N'	<td>' + ISNULL(D.HuongDanTraCuuTaiLieuLienQuan, '') + N'</td>' --
+                                           + N'	<td>' + ISNULL(D.NguoiGhiNhan, '') + N'</td>' --
+                                           + N'</tr>'
+                FROM
+                    @Tmp__TypeId_48__ReqDet AS D
+                    LEFT JOIN dbo.Warehouse AS W ( NOLOCK )
+                        ON D.ShopPhongBan = W.WarehouseCode
+                    LEFT JOIN @Tmp_Employees AS E
+                        ON D.NhanVienViPham = E.EmployeeCode;
+
+                SET @RequestDetails = N'' --
+                                      + N'<tr>' --
+                                      + N'	<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left" colspan="5">' --
+                                      + N'		<table border="1" style="border-collapse: collapse;width: 100%;height: 100%">' --
+                                      + N'			<thead>' --
+                                      + N'				<tr style="height: 40px">' --
+                                      + N'					<th>STT</th>' --
+                                      + N'					<th>Quy trình/Quy định vi phạm</th>' --
+                                      + N'					<th>Nội dung vi phạm</th>' --
+                                      + N'					<th>Shop/Phòng ban</th>' --
+                                      + N'					<th>Nhân viên vi phạm</th>' --
+                                      + N'					<th>Mức xử lý vi phạm</th>' --
+                                      + N'					<th>Số tiền phạt</th>' --
+                                      + N'					<th>% INC</th>' --
+                                      + N'					<th>Hướng dẫn thực hiện đúng</th>' --
+                                      + N'					<th>Hướng dẫn tra cứu tài liệu liên quan</th>' --
+                                      + N'					<th>Người ghi nhận</th>' --
+                                      + N'				</tr>' --
+                                      + N'			</thead>' --
+                                      + N'			<tbody>' + @p__TypeId_48__Body + N'</tbody>' --
+                                      + N'		</table>' --
+                                      + N'		</br>Mời anh/chị kiểm tra lại và phản hồi cho QA/KSNB trên CallLog <a href="https://calllogbeta.fptshop.com.vn/Requests/Details/' + CONVERT(VARCHAR(10), @RequestId) + N'" target="_blank"><b style="color:orange">' + CONVERT(VARCHAR(10), @RequestId) + N'</b></a> trong vòng 48h.' --
+                                      + N'		</br>Sau thời gian này nếu không nhận được phản hồi của anh chị, Hệ thống sẽ tự động chốt vi phạm và gửi sang Nhân sự để thực hiện các chế tài đã nêu trên!' --
+                                      + N'		</br>Mọi thắc mắc anh chị có thể trực tiếp liên hệ với người xử lý vi phạm để được hỗ trợ 1 cách nhanh nhất' --
+                                      + N'		</br>Chúc anh/chị 1 ngày làm việc hiệu quả!' --
+                                      + N'		</br>Chân thành cảm ơn!' --
+                                      + N'	</td>' --
+                                      + N'</tr>';
+
+                GOTO GOTO__RequestSteps;
+            END;
+
+        IF ( @TypeId = 60 ) -- Xác nhận công nợ
+            BEGIN
+                --------------------------------------------------
+                --	===Tạo biến bảng chứa DL RequestDetails===
+                DECLARE @Tmp_RequestDetails AS TABLE
+                (
+                    RequestId BIGINT
+                  , RequestDetailId BIGINT
+                  , CustomerName NVARCHAR(300)
+                  , SaleCode NVARCHAR(100)
+                  , Time1 NVARCHAR(20)
+                  , Quantity NVARCHAR(50)
+                  , Property1 NVARCHAR(50)
+                  , Property2 NVARCHAR(50)
+                  , Note NVARCHAR(500)
+                  , Money1 NVARCHAR(20)
+                  , Money2 NVARCHAR(20)
+                  , Approved NVARCHAR(20)
+                  , ShopCode NVARCHAR(40)
+                  , UuTien_CongNo INT
+                );
+                --	===Lấy DL RequestDetails===
+                INSERT INTO @Tmp_RequestDetails
+                (
+                    RequestId
+                  , RequestDetailId
+                  , CustomerName
+                  , SaleCode
+                  , Time1
+                  , Quantity
+                  , Property1
+                  , Property2
+                  , Note
+                  , Money1
+                  , Money2
+                  , Approved
+                  , ShopCode
+                  , UuTien_CongNo
+                )
+                SELECT
+                    RequestId -- RequestId - bigint
+                  , Id -- RequestDetailId - bigint
+                  , ISNULL(CustomerName, '') -- CustomerName - nvarchar(300)
+                  , ISNULL(SaleCode, '') -- SaleCode - nvarchar(100)
+                  , ISNULL(CONVERT(NVARCHAR(20), Time1, 103), '') -- Time1 - nvarchar(20)
+                  , ISNULL(FORMAT(Quantity, '0'), '') -- Quantity - nvarchar(50)
+                  , ISNULL(Property1, '') -- Property1 - nvarchar(50)
+                  , ISNULL(Property2, '') -- Property1 - nvarchar(50)
+                  , ISNULL(Note, '') -- Note - nvarchar(500)
+                  , ISNULL(FORMAT(Money1, '#,0'), '') -- Money1 - nvarchar(20)
+                  , ISNULL(FORMAT(Money2, '#,0'), '') -- Money2 - nvarchar(20)
+                  , ISNULL(   CASE Approved
+                                  WHEN 1 THEN N'Duyệt'
+                                  WHEN 0 THEN N'Không duyệt'
+                                  ELSE N'Chưa duyệt'
+                              END
+                            , ''
+                          ) -- Approved - nvarchar(20)
+                  , ISNULL(ShopCode, '') -- ShopCode - nvarchar(40)
+                  , CASE
+                        WHEN ( Quantity >= 7 ) THEN 1 --	1-Công nợ ưu tiên phải giải trình ( >= 7 day )
+                        WHEN ( Quantity >= 4 ) THEN 2 --	2-Công nợ shop cần giải trình ( 4-7 day )
+                        ELSE 3 --	3-Công nợ quá hạn ( <= 3 day )
+                    END AS UuTien_CongNo -- INT
+                FROM
+                    dbo.RequestDetails ( NOLOCK )
+                WHERE
+                    RequestId = @RequestId
+                    AND Status = 1;
+
+                ----SELECT * FROM @Tmp_RequestDetails
+
+                --------------------------------------------------
+                --	===Tạo biến bảng chứa DL Conversations theo RequestDetails===
+                DECLARE @Tmp_Conversations_ByRequestDetails AS TABLE
+                (
+                    STT INT IDENTITY(1, 1)
+                  , RequestId BIGINT
+                  , RequestDetailId BIGINT
+                  , Sender NVARCHAR(40)
+                  , Message NVARCHAR(MAX)
+                );
+                --	===Lấy DL Conversations theo RequestDetails=== 
+                INSERT INTO @Tmp_Conversations_ByRequestDetails ( RequestId, RequestDetailId, Sender, Message )
+                SELECT
+                    RD.RequestId -- RequestId - bigint
+                  , RD.RequestDetailId -- RequestDetailId - bigint
+                  , C.Sender -- Sender - nvarchar(40)
+                  , C.Message -- Message - nvarchar(max)
+                FROM
+                    @Tmp_RequestDetails AS RD
+                    INNER JOIN dbo.Conversations AS C ( NOLOCK )
+                        ON RD.RequestDetailId = C.RequestDetailId;
+
+                ----SELECT * FROM @Tmp_Conversations_ByRequestDetails
+
+                --------------------------------------------------
+                --	===Tạo biến bảng chứa DL Message Conversations===
+                DECLARE @Tmp_Conversations_Message AS TABLE
+                (
+                    STT INT IDENTITY(1, 1)
+                  , RequestId BIGINT
+                  , RequestDetailId BIGINT
+                  , Message NVARCHAR(MAX)
+                );
+                --	===Lấy DL Message Conversations===
+                INSERT INTO @Tmp_Conversations_Message ( RequestId, RequestDetailId, Message )
+                SELECT
+                    C.RequestId -- RequestId - bigint
+                  , C.RequestDetailId -- RequestDetailId - bigint
+                  , REPLACE(E.Email, '@fpt.com.vn', '') + ' : ' + C.Message -- Message - nvarchar(max)
+                FROM
+                    @Tmp_Conversations_ByRequestDetails AS C
+                    LEFT JOIN @Tmp_Employees AS E
+                        ON C.Sender = E.EmployeeCode;
+
+                ----SELECT * FROM @Tmp_Conversations_Message
+
+                --------------------------------------------------
+                --	===Lấy DL Nội dung Chi tiết===
+                DECLARE @Items NVARCHAR(MAX) = N'';
+                SELECT
+                    @Items += N'<tr>' + N'<td colspan=14><b style="color:black;background-color:#b4c6e7;width: 100%;display: block">Công nợ quá hạn > 7 day bắt buộc giải trình</b></td>' + N'</tr>';
+                SELECT
+                    @Items += N'<tr>' + N'<td><b style="color:blue">' + RD.ShopCode + N'</b></td>' + N'<td><b style="color:blue">' + ISNULL(W.WarehouseName, '') + N'</b></td>' + N'<td><b style="color:blue">' + RD.CustomerName + N'</b></td>' + N'<td><b style="color:blue">' + RD.SaleCode + N'</b></td>' + N'<td><b style="color:blue">' + RD.Time1 + N'</b></td>' + N'<td><b style="color:blue">' + RD.Quantity + N'</b></td>' + N'<td><b style="color:blue">' + RD.Note + N'</b></td>' + N'<td>' + RD.Money1 + N'</td>' + N'<td>' + RD.Money2 + N'</td>' + N'<td>' + RD.Property2 + N'</td>' + N'<td>' + RD.Property1 + N'</td>' + N'<td>' + ISNULL((
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               SELECT
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   STUFF((
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             SELECT
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 '</br>' + CM.Message
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             FROM
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 @Tmp_Conversations_Message AS CM
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             WHERE
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 CM.RequestDetailId = RD.RequestDetailId
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             FOR XML PATH(''), TYPE
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         ).value('.', 'NVARCHAR(MAX)')
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       , 1
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       , 5
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       , ''
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        )
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           )
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         , ''
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          ) + N'</td>' + N'</tr>'
+                FROM
+                    @Tmp_RequestDetails AS RD
+                    LEFT JOIN dbo.Warehouse ( NOLOCK ) AS W
+                        ON W.WarehouseCode = RD.ShopCode
+                WHERE
+                    RD.UuTien_CongNo = 1;
+
+                SELECT
+                    @Items += N'<tr>' + N'<td colspan=14><b style="color:black;background-color:#fff2cc;width: 100%;display: block">Công nợ quá hạn 3-7 day cần giải trình</b></td>' + N'</tr>';
+                SELECT
+                    @Items += N'<tr>' + N'<td><b style="color:#ff6600">' + RD.ShopCode + N'</b></td>' + N'<td><b style="color:#ff6600">' + ISNULL(W.WarehouseName, '') + N'</b></td>' + N'<td><b style="color:#ff6600">' + RD.CustomerName + N'</b></td>' + N'<td><b style="color:#ff6600">' + RD.SaleCode + N'</b></td>' + N'<td><b style="color:#ff6600">' + RD.Time1 + N'</b></td>' + N'<td><b style="color:#ff6600">' + RD.Quantity + N'</b></td>' + N'<td><b style="color:#ff6600">' + RD.Note + N'</b></td>' + N'<td>' + RD.Money1 + N'</td>' + N'<td>' + RD.Money2 + N'</td>' + N'<td>' + RD.Property2 + N'</td>' + N'<td>' + RD.Property1 + N'</td>' + N'<td>' + ISNULL((
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    SELECT
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        STUFF((
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  SELECT
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      '</br>' + CM.Message
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  FROM
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      @Tmp_Conversations_Message AS CM
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  WHERE
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      CM.RequestDetailId = RD.RequestDetailId
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  FOR XML PATH(''), TYPE
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              ).value('.', 'NVARCHAR(MAX)')
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            , 1
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            , 5
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            , ''
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             )
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                )
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              , ''
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               ) + N'</td>' + N'</tr>'
+                FROM
+                    @Tmp_RequestDetails AS RD
+                    LEFT JOIN dbo.Warehouse ( NOLOCK ) AS W
+                        ON W.WarehouseCode = RD.ShopCode
+                WHERE
+                    RD.UuTien_CongNo = 2;
+
+                SELECT
+                    @Items += N'<tr>' + N'<td colspan=14><b style="color:black;background-color:#c6e0b4;width: 100%;display: block">Công nợ quá hạn 1-3 day không cần giải trình</b></td>' + N'</tr>';
+                SELECT
+                    @Items += N'<tr>' + N'<td><b style="color:green">' + RD.ShopCode + N'</b></td>' + N'<td><b style="color:green">' + ISNULL(W.WarehouseName, '') + N'</b></td>' + N'<td><b style="color:green">' + RD.CustomerName + N'</b></td>' + N'<td><b style="color:green">' + RD.SaleCode + N'</b></td>' + N'<td><b style="color:green">' + RD.Time1 + N'</b></td>' + N'<td><b style="color:green">' + RD.Quantity + N'</b></td>' + N'<td><b style="color:green">' + RD.Note + N'</b></td>' + N'<td>' + RD.Money1 + N'</td>' + N'<td>' + RD.Money2 + N'</td>' + N'<td>' + RD.Property2 + N'</td>' + N'<td>' + RD.Property1 + N'</td>' + N'<td>' + ISNULL((
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      SELECT
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          STUFF((
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    SELECT
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        '</br>' + CM.Message
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    FROM
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @Tmp_Conversations_Message AS CM
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    WHERE
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        CM.RequestDetailId = RD.RequestDetailId
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    FOR XML PATH(''), TYPE
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                ).value('.', 'NVARCHAR(MAX)')
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              , 1
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              , 5
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              , ''
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               )
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  )
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                , ''
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 ) + N'</td>' + N'</tr>'
+                FROM
+                    @Tmp_RequestDetails AS RD
+                    LEFT JOIN dbo.Warehouse ( NOLOCK ) AS W
+                        ON W.WarehouseCode = RD.ShopCode
+                WHERE
+                    RD.UuTien_CongNo = 3;
+
+                SET @RequestDetails = N'<tr>' + N'<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left" colspan="5">' + N'Thông tin chi tiết : <br/>' + N'<table border="1">' + N'<thead>' + N'<tr>' + N'<th>Mã BP</th>' + N'<th>Tên BP</th>' + N'<th>Tên khách hàng</th>' + N'<th>Số hóa đơn</th>' + N'<th>Ngày hóa đơn</th>' + N'<th>Số ngày quá hạn</th>' + N'<th>Diễn giải</th>' + N'<th>Số tiền hóa đơn (VND)</th>' + N'<th>Số dư còn lại (VND)</th>' + N'<th>Nhóm công nợ</th>' + N'<th>Số ĐH POS</th>' + N'<th>Giải trình</th>' + N'</tr>' + N'</thead>' + N'<tbody>' + @Items + N'</tbody>' + N'</table>' + N'</td>' + N'</tr>';
+
+                GOTO GOTO__RequestSteps;
+            END;
+
+        IF ( @TypeId = 109 AND @StepNo = 2 ) -- Xác nhận công nợ
+            BEGIN
+                --------------------------------------------------
+                --	===Tạo biến bảng chứa DL RequestDetails===
+                DECLARE @Tmp_DSNhanVienBiTruyThu AS TABLE
+                (
+                    TenNVBiTruyThu NVARCHAR(300)
+                  , SoTienMatBiTruyThu NUMERIC
+                  , SoTienBiTruyThuLuong NUMERIC
+                  , SoTienTruyThu NUMERIC
+                  , SoThangBiTruyThu NVARCHAR(20)
+                );
+                --	===Lấy DL RequestDetails===
+                INSERT INTO @Tmp_DSNhanVienBiTruyThu
+                (
+                    TenNVBiTruyThu
+                  , SoTienMatBiTruyThu
+                  , SoTienBiTruyThuLuong
+                  , SoTienTruyThu
+                  , SoThangBiTruyThu
+                )
+                SELECT
+                    ISNULL(E.EmployeeCode + ' - ' + E.EmployeeName, '') AS TenNV
+                  , ISNULL(RD.Money3, 0) AS TienMat
+                  , ISNULL(RD.Money4, 0) AS TruyLuong
+                  , ISNULL(RD.Money1, 0) AS TongTruyThu
+                  , ISNULL(CONVERT(VARCHAR(10), RD.Quantity), 0) AS SoThang
+                FROM
+                    dbo.RequestDetails ( NOLOCK ) RD
+                    LEFT JOIN dbo.F03_Employees ( NOLOCK ) E
+                        ON E.EmployeeCode = RD.Property2
+                WHERE
+                    RD.RequestId = @RequestId
+                    AND RD.Quantity1 = 1
+                    AND RD.Status = 1;
+
+                DECLARE @TongTienMatTruyThu NUMERIC = 0;
+                SELECT
+                    @TongTienMatTruyThu += SoTienMatBiTruyThu
+                FROM
+                    @Tmp_DSNhanVienBiTruyThu;
+
+                --------------------------------------------------
+                --	===Lấy DL Nội dung Chi tiết===
+                DECLARE @ItemsChil NVARCHAR(MAX) = N'';
+                SELECT
+                    @ItemsChil += N'<tr>' + N'<td>' + RD.TenNVBiTruyThu + N'</td>' + N'<td>' + FORMAT(CONVERT(NUMERIC, RD.SoTienMatBiTruyThu), '#,##0') + N'</td>' + N'<td>' + FORMAT(CONVERT(NUMERIC, RD.SoTienBiTruyThuLuong), '#,##0') + N'</td>' + N'<td>' + FORMAT(CONVERT(NUMERIC, RD.SoTienTruyThu), '#,##0') + N'</td>' + N'<td>' + RD.SoThangBiTruyThu + N'</td>' + N'</tr>'
+                FROM
+                    @Tmp_DSNhanVienBiTruyThu AS RD;
+
+                SET @RequestDetails = N'<tr>' + N'<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left" colspan="5">' + N'Thông tin chi tiết : <br/> Tổng tiền mặt bị truy thu là: <span style="font-weight:bold">' + CONVERT(VARCHAR(50), FORMAT(@TongTienMatTruyThu, '#,##0')) + N'</span>' + N'<table border="1" style="border-collapse: collapse;">' + N'<thead>' + N'<tr>' + N'<th>Tên nhân viên bị truy thu</th>' + N'<th>Tiền mặt bị truy thu</th>' + N'<th>Số tiền bị truy thu lương</th>' + N'<th>Số tiền truy thu</th>' + N'<th>Số tháng bị truy thu</th>' + N'</tr>' + N'</thead>' + N'<tbody>' + @ItemsChil + N'</tbody>' + N'</table>' + N'</td>' + N'</tr>';
+
+                GOTO GOTO__RequestSteps;
+            END;
+
+        IF ( @TypeId = 137 )
+            --	137:Kiểm kê chi tiết máy
+            BEGIN
+                DECLARE @Tmp__TypeId_137__ReqDet AS TABLE
+                (
+                    STT INT IDENTITY(1, 1)
+                  , ReqDetId INT
+                  , SoPhieu NVARCHAR(MAX)
+                  , ImeiMay NVARCHAR(50)
+                  , TinhTrangPhatSinh NVARCHAR(MAX)
+                  , DienGiaiChiTiet NVARCHAR(MAX)
+                  , ImeiDung NVARCHAR(MAX)
+                  , ThoiGianXuLy NVARCHAR(50)
+                  , GiaiTrinh NVARCHAR(MAX)
+                );
+                INSERT INTO @Tmp__TypeId_137__ReqDet
+                (
+                    ReqDetId
+                  , SoPhieu
+                  , ImeiMay -- NVARCHAR(50)
+                  , TinhTrangPhatSinh
+                  , DienGiaiChiTiet
+                  , ImeiDung
+                  , ThoiGianXuLy
+                  , GiaiTrinh
+                )
+                SELECT
+                    D.Id AS ReqDetId
+                  , D.Property3 AS SoPhieu -- nvarchar(max)
+                  , D.Imei AS ImeiMay -- NVARCHAR(50)
+                  , D.Property4 AS TinhTrangPhatSinh -- nvarchar(max)
+                  , D.Note AS DienGiaiChiTiet -- nvarchar(max)
+                  , D.Property6 AS ImeiDung -- nvarchar(max)
+                  , ISNULL(FORMAT(ISNULL(D.Time2, D.Time1), 'dd/MM/yyyy'), '') AS ThoiGianXuLy -- nvarchar(50)
+                  , NULL AS GiaiTrinh
+                FROM
+                    dbo.RequestDetails AS D ( NOLOCK )
+                WHERE
+                    D.RequestId = @RequestId
+                    AND D.Status = 1
+                ORDER BY
+                    D.Id;
+
+                IF ( EXISTS ( SELECT 1 FROM @Tmp__TypeId_137__ReqDet ))
+                    BEGIN
+                        DECLARE @Tmp__TypeId_137__Conv AS TABLE
+                        (
+                            ReqDetId INT
+                          , Sender NVARCHAR(50)
+                          , Message NVARCHAR(MAX)
+                          , TimeCreate DATETIME
+                          , GiaiTrinh NVARCHAR(MAX)
+                          , UuTien_Last INT
+                        );
+                        INSERT INTO @Tmp__TypeId_137__Conv ( ReqDetId, Sender, Message, TimeCreate, GiaiTrinh, UuTien_Last )
+                        SELECT
+                            C.RequestDetailId AS ReqDetId
+                          , C.Sender AS Sender
+                          , C.Message AS Message
+                          , C.TimeCreate AS TimeCreate
+                          , NULL AS GiaiTrinh
+                          , ROW_NUMBER() OVER ( PARTITION BY C.RequestDetailId
+ORDER BY C.TimeCreate DESC
+                                              ) AS UuTien_Last
+                        FROM
+                            dbo.Conversations AS C ( NOLOCK )
+                        WHERE
+                            C.RequestId = @RequestId
+                            AND C.RequestDetailId IN ( SELECT D.ReqDetId FROM @Tmp__TypeId_137__ReqDet AS D )
+                            AND C.Status = 1
+                            AND C.TimeCreate > CONVERT(DATE, GETDATE());
+
+                        DELETE FROM @Tmp__TypeId_137__Conv WHERE UuTien_Last > 1;
+
+                        UPDATE
+                            D
+                        SET
+                            D.GiaiTrinh = N'<b>' + ISNULL((
+                                                              SELECT TOP 1
+                                                                     REPLACE(E.Email, '@fpt.com.vn', '')
+                                                              FROM
+                                                                  @Tmp_Employees AS E
+                                                              WHERE
+                                                                  E.EmployeeCode = C.Sender
+                                                          )
+                                                        , ''
+                                                         ) + N' - ' + ISNULL(( FORMAT(C.TimeCreate, 'dd/MM/yyyy HH:mm:ss')), '') + N':</b></br>' + ISNULL(C.Message, '')
+                        FROM
+                            @Tmp__TypeId_137__ReqDet AS D
+                            INNER JOIN @Tmp__TypeId_137__Conv AS C
+                                ON D.ReqDetId = C.ReqDetId;
+                    END;
+
+                DECLARE @p__TypeId_137__Body NVARCHAR(MAX) = N'';
+                SELECT
+                    @p__TypeId_137__Body += N'<tr style="height: 40px">' + N'<td>' + ISNULL(D.SoPhieu, '') + N'</td>' + N'<td>' + ISNULL(D.ImeiMay, '') + N'</td>' + N'<td>' + ISNULL(D.TinhTrangPhatSinh, '') + N'</td>' + N'<td>' + ISNULL(D.DienGiaiChiTiet, '') + N'</td>' + N'<td>' + ISNULL(D.ImeiDung, '') + N'</td>' + N'<td>' + ISNULL(D.ThoiGianXuLy, '') + N'</td>' + N'<td>' + ISNULL(D.GiaiTrinh, '') + N'</td>' + N'</tr>'
+                FROM
+                    @Tmp__TypeId_137__ReqDet AS D;
+
+                SET @RequestDetails = N'<tr>' + N'<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left" colspan="5">' + N'<table border="1" style="border-collapse: collapse;width: 100%;height: 100%">' + N'<thead>' + N'<tr style="height: 40px">' + N'<th>Số phiếu</th>' + N'<th>Imei máy</th>' + N'<th>Tình trạng phát sinh</th>' + N'<th>Diễn giải chi tiết</th>' + N'<th>Imei đúng</th>' + N'<th>Thời hạn xử lý</th>' + N'<th>Giải trình</th>' + N'</tr>' + N'</thead>' + N'<tbody>' + @p__TypeId_137__Body + N'</tbody>' + N'</table>' + N'</td>' + N'</tr>';
+
+                GOTO GOTO__RequestSteps;
+            END;
+
+        --------------------------------------------------
+        --	===Tạo biến bảng chứa DL RequestSteps===
+        GOTO__RequestSteps:
+        DECLARE @Tmp_RequestSteps AS TABLE
+        (
+            STT INT IDENTITY(1, 1)
+          , RequestId BIGINT
+          , StepNo INT
+          , Assigner VARCHAR(40)
+          , TimeStart DATETIME
+        );
+        --	===Lấy DL RequestSteps===
+        INSERT INTO @Tmp_RequestSteps ( RequestId, StepNo, Assigner, TimeStart )
+        SELECT
+            RequestId -- RequestId - bigint
+          , StepNo -- StepNo - int
+          , Assigner -- Assigner - varchar(40)
+          , TimeStart -- TimeStart - datetime
+        FROM
+            dbo.RequestSteps ( NOLOCK )
+        WHERE
+            RequestId = @RequestId
+            AND StepNo IN ( 1, 2, 3 );
+
+        ----SELECT * FROM @Tmp_RequestSteps
+
+        --------------------------------------------------
+        --	===Lấy DL Người xử lý các bước===
+        SELECT
+            @Assigner1 = EM.EmployeeCode + N' - ' + EM.EmployeeName
+          , @Date1 = RS.TimeStart
+        FROM
+            @Tmp_RequestSteps AS RS
+            LEFT JOIN @Tmp_Employees AS EM
+                ON EM.EmployeeCode = RS.Assigner
+        WHERE
+            RS.StepNo = 1;
+
+        SELECT
+            @Assigner2 = EM.EmployeeCode + N' - ' + EM.EmployeeName
+          , @Date2 = RS.TimeStart
+        FROM
+            @Tmp_RequestSteps AS RS
+            LEFT JOIN @Tmp_Employees AS EM
+                ON EM.EmployeeCode = RS.Assigner
+        WHERE
+            RS.StepNo = 2;
+
+        SELECT
+            @Assigner3 = EM.EmployeeCode + N' - ' + EM.EmployeeName
+          , @Date3 = RS.TimeStart
+        FROM
+            @Tmp_RequestSteps AS RS
+            LEFT JOIN @Tmp_Employees AS EM
+                ON EM.EmployeeCode = RS.Assigner
+        WHERE
+            RS.StepNo = 3;
+
+        --------------------------------------------------
+        --	===Lấy Nội dung email===
+        DECLARE @ResultVar NVARCHAR(MAX);
+
+        -- Edit - TuanNA89 - 25/05/2020 - Thay đổi nội dung mail loại 19, 157
+        IF ( @TypeId = 19 OR @TypeId = 157 )
+            BEGIN
+                DECLARE
+                    @TenKH NVARCHAR(200) = N''
+                  , @SDT VARCHAR(50) = ''
+                  , @NoiDungPhanAnh NVARCHAR(MAX) = N''
+                  , @NoiDungHXLKH NVARCHAR(MAX) = N''
+                  , @LichSuCallLog NVARCHAR(MAX) = N'';
+
+                DECLARE @Convers_19_157 AS TABLE
+                (
+                    Sender VARCHAR(50)
+                  , Message NVARCHAR(MAX)
+                  , StepNo INT
+                  , Type INT
+                  , TimeCreate VARCHAR(50)
+                );
+
+                SELECT TOP 1
+                       @TenKH = RD.Property17
+                     , @SDT = RD.Property15
+                FROM
+                    dbo.RequestDetails AS RD ( NOLOCK )
+                WHERE
+                    RD.RequestId = @RequestId;
+
+                INSERT INTO @Convers_19_157 ( Sender, Message, StepNo, Type, TimeCreate )
+                SELECT
+                    C.Sender
+                  , C.Message
+                  , C.StepNo
+                  , C.Type
+                  , CONVERT(VARCHAR(10), GETDATE(), 103) + ' ' + CONVERT(VARCHAR(10), GETDATE(), 108)
+                FROM
+                    dbo.Conversations AS C ( NOLOCK )
+                WHERE
+                    C.RequestId = @RequestId
+                    AND C.Status = 1
+                ORDER BY
+                    C.Id DESC;
+
+                SELECT TOP 1
+                       @NoiDungPhanAnh = C.Message --SUBSTRING(C.Message, CHARINDEX(': ', C.Message,0) +1, LEN(C.Message))
+                FROM
+                    @Convers_19_157 AS C
+                WHERE
+                    C.Type = 1
+                    AND C.StepNo = 0;
+                SELECT TOP 1
+                       @NoiDungHXLKH = C.Message
+                FROM
+                    @Convers_19_157 AS C
+                WHERE
+                    C.Type = 4;
+                SELECT
+                    @LichSuCallLog += N'<br/><b style="color:#8A2BE2">- ' + ISNULL(E.EmployeeName, N'Hệ thống') + N'</b> (' + C.TimeCreate + N'): ' + dbo.fn_RemoveTags(C.Message)
+                FROM
+                    @Convers_19_157 AS C
+                    LEFT JOIN @Tmp_Employees AS E
+                        ON C.Sender = E.EmployeeCode
+                WHERE
+                    C.Type NOT IN ( 1, 4, 6, 16 );
+
+                SET @ResultVar = N'' --
+                                 + N'<style>' -- 
+                                 + N'	.parentContent { border-style: solid; border-width: 1.5px; border-color: cornflowerblue; padding: 10px; }' -- 
+                                 + N'	.content1 { border-style: solid; border-width: 0.2px; border-color: lightgray; padding: 5px; }' -- 
+                                 + N'	span.symbol1:after { content:"\25CF"; padding: 15px; }' + N'	div.content2 { padding: 10px; }' -- 
+                                 + N'	table { border: 1px solid lightgray; }' -- 
+                                 + N'	span.text1 { font-weight: bold; color: dodgerblue; }' -- 
+                                 + N'</style>' + N'<div class="parentContent">' -- 
+                                 + N'    <div style="margin-bottom: 10px;">Dear SM, CSKH vừa tiếp thông tin Khách hàng phản ánh cụ thể như sau:</div>' -- 
+                                 + N'    <div class="content1">' -- 
+                                 + N'        <b>1/Khách hàng phản ánh:</b>' -- 
+                                 + N'        <div class="content2">' -- 
+                                 + N'            <div><span class="symbol1"></span>Tên Khách hàng: {KH}</div>' -- 
+                                 + N'            <div><span class="symbol1"></span>Số điện thoại: {SDT}</div>' -- 
+                                 + N'            <div><span class="symbol1"></span><span class="text1">Nội dung:</span><div>{NoiDungPhanAnh}</div></div>' -- 
+                                 + N'        </div>' -- 
+                                 + N'    </div>' -- 
+                                 + N'    <div class="content1">' -- 
+                                 + N'        <b>2/Hướng xử lý:</b>' -- 
+                                 + N'        <div class="content2">{NoiDungHXLKH}</div>' -- 
+                                 + N'    </div>' -- 
+                                 + N'    <div class="content1"><b>3/Lịch sử CallLog:</b>' + N'	 <div style="padding-top: 10px;"><b>Mã yêu cầu: <a href="https://calllogbeta.fptshop.com.vn/Requests/Details/{MaCallLog}" target="_blank"><span style="color:orange; text-decoration: underline;">{MaCallLog}</span></b></a></div>' --
+                                 + N'	 <div>{Conversations}</div></div>' -- 
+                                 + N'    <div style="padding-top: 20px;">' + N'	 Chân thành cảm ơn sự hợp tác của các Anh Chị SM/ASM trong việc phục vụ KH ngày càng tốt hơn.' -- 
+                                 + N'	 </div>' --
+                                 + N'</div>' -- 
+                                 + N'*Vui lòng không trả lời hoặc khiếu nại vào mail này'; -- 
+                IF ISNULL(@TenKH, '') = ''
+                    SET @TenKH = N'Khách lẻ';
+
+                SET @ResultVar = REPLACE(@ResultVar, '{KH}', @TenKH);
+                SET @ResultVar = REPLACE(@ResultVar, '{SDT}', ISNULL(@SDT, ''));
+                SET @ResultVar = REPLACE(@ResultVar, '{NoiDungHXLKH}', ISNULL(@NoiDungHXLKH, ''));
+                SET @ResultVar = REPLACE(@ResultVar, '{NoiDungPhanAnh}', ISNULL(@NoiDungPhanAnh, ''));
+                SET @ResultVar = REPLACE(@ResultVar, '{MaCallLog}', ISNULL(@RequestId, ''));
+                SET @ResultVar = REPLACE(@ResultVar, '{Sender}', ISNULL(@SenderName, ''));
+                SET @ResultVar = REPLACE(@ResultVar, '{Conversations}', ISNULL(@LichSuCallLog, ''));
+
+                GOTO GOTO__RETURN;
+            END;
+
+        IF ( @TypeId = 51 )
+            BEGIN
+                DECLARE @TT_Duyet NVARCHAR(200) = N'';
+                IF ( @Status < 4 )
+                    BEGIN
+                        SET @TT_Duyet = N'Chờ duyệt';
+                    END;
+                ELSE IF ( @Status = 4 )
+                         BEGIN
+                             IF ( EXISTS (
+                                             SELECT
+                                                 1
+                                             FROM
+                                                 dbo.RequestDetails ( NOLOCK )
+                                             WHERE
+                                                 RequestId = @RequestId
+                                                 AND Quantity3 = 1
+                                         )
+                                )
+                                 BEGIN
+                                     SET @TT_Duyet = N'Đã duyệt';
+                                 END;
+                             ELSE IF ( EXISTS (
+                                                  SELECT
+                                                      1
+                                                  FROM
+                                                      dbo.RequestDetails ( NOLOCK )
+                                                  WHERE
+                                                      RequestId = @RequestId
+                                                      AND Quantity3 = 2
+                                              )
+                                     )
+                                      BEGIN
+                                          SET @TT_Duyet = N'Không duyệt';
+                                      END;
+                             ELSE IF ( EXISTS (
+                                                  SELECT
+                                                      1
+                                                  FROM
+                                                      dbo.RequestDetails ( NOLOCK )
+                                                  WHERE
+                                                      RequestId = @RequestId
+                                                      AND Quantity3 = 3
+                                              )
+                                     )
+                                      BEGIN
+                                          SET @TT_Duyet = N'Từ chối duyệt';
+                                      END;
+                         END;
+                SET @ResultVar = N'<div style="padding: 20px;font-family: ''''trebuchet MS'''', ''''Lucida sans'''', Arial;font-size: 14px;color: #444;">' + N'<strong>Dear anh/chị!</strong><br/><br/>' + N'[Inside-Auto] gửi đến anh/chị cập nhật mới nhất về yêu cầu của anh chị theo chi tiết như bên dưới.' + N'<br/>Mọi thắc mắc và hỗ trợ anh chị liên hệ: <a>FRTSupport@fpt.com.vn</a> hay tạo hỗ trợ từ Hệ thống Call Log.<br/>' + N'<div style="background-color: #dce9f9;padding:10px;-moz-border-radius: 6px;-webkit-border-radius: 6px;border-radius: 6px;-webkit-box-shadow: 0 1px 1px #ccc; -moz-box-shadow: 0 1px 1px #ccc; box-shadow: 0 1px 1px #ccc;">' + N'Trong các trường hợp khẩn cấp, vui lòng gọi về số hotline của đội Support: <strong>0977.209.435 - 0938.209.435</strong> hoặc IP Phone: <strong>87333</strong>' + N'</div>' + N'<br/><i>*Vui lòng không trả lời hoặc khiếu nại vào mail này.</i><br/><br/>' + N'<table style="border: solid #ccc 1px;-moz-border-radius: 6px;-webkit-border-radius: 6px;border-radius: 6px;-webkit-box-shadow: 0 1px 1px #ccc; -moz-box-shadow: 0 1px 1px #ccc; box-shadow: 0 1px 1px #ccc; padding:5px;">' + N'<colgroup><col span="5" /></colgroup>' + N'<tbody>' + N'<tr>' + N'<td style="padding: 10px;text-align: left">Mã yêu cầu: <a href="https://calllogbeta.fptshop.com.vn/Requests/Details/' + CONVERT(VARCHAR(10), @RequestId) + N'" target="_blank"> <b style="color:orange">' + CONVERT(VARCHAR(10), @RequestId) + N'</b></a></td>' + N'<td style="border-left: 1px solid #ccc;  padding: 10px;text-align: left">Trạng thái: <b style="color:black">' + @StatusName + N'</b></td>' + N'<td style="border-left: 1px solid #ccc;  padding: 10px;text-align: left" colspan="3">Hệ thống: <b style="color:blue"></b></td>' + N'</tr>' + N'<tr>' + N'<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left">Người gửi yêu cầu: <br/> <b style="color:black">' + @SenderName + N'</b></td>' + N'<td style="border-left: 1px solid #ccc;  border-top: 1px solid #ccc;padding: 10px;text-align: left">Người nhận mặc định: <br/> <b style="color:black">' + ISNULL(@Assigners, '') + N'</b></td>' + N'<td style="border-left: 1px solid #ccc;  border-top: 1px solid #ccc;padding: 10px;text-align: left" colspan="3">To/CC: <br/> <b style="color:black">- <br/></b></td>' + N'</tr>' + N'<tr>' + N'<td style=" border-top: 1px solid #ccc;padding: 10px;text-align: left">Nhóm yêu cầu: <b style="color:black">' + @RequestGroup + N'</b></td>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left">Loại yêu cầu: <b style="color:black">' + @RequestType + N'</b></td>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left" colspan="3">Trạng thái duyệt: <b style="color:black">' + @TT_Duyet + N'</b></td>' + N'</tr>' + N'<tr>' + N'<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left" colspan="5">Tiêu đề: <br/><b style="color:orange">' + @Title + N'</b></td>' + N'</tr>' + N'<tr>' + N'<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left" colspan="5">Lịch sử CallLog: <br/>' + ISNULL(@Conversations, '') + N'</td>' + N'</tr>' + ISNULL(@RequestDetails, '') + N'<tr>' + N'<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left" rowspan="4">Ngày dự kiến hoàn thành: <b style="color:black">' + ISNULL(CONVERT(VARCHAR(10), @TimeFuture, 103), '') + N'</b><br/> </td>' + N'<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left" rowspan="4">Hiện đang ở bước: <b style="color:black">' + CONVERT(VARCHAR(3), @StepNo) + N'</b></td>' + N'<td style="border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left">&nbsp;</td>' + N'<td style="border-left: 1px solid #ccc;  border-top: 1px solid #ccc;padding: 10px;text-align: left">Người xử lý  </td>' + N'<td style="border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left">Ngày xử lý  </td>' + N'</tr>' + N'<tr>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left">Bước 1</td>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left"><b style="color:black">' + ISNULL(@Assigner1, '') + N'</b></td>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left"><b style="color:black">' + ISNULL(CONVERT(VARCHAR(10), @Date1, 103), '') + N'</b></td>' + N'</tr>' + N'<tr>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left">Bước 2</td>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left"><b style="color:black">' + ISNULL(@Assigner2, '') + N'</b></td>' + N'<td style="border-left: 1px solid #ccc;  border-top: 1px solid #ccc;padding: 10px;text-align: left"><b style="color:black">' + ISNULL(CONVERT(VARCHAR(10), @Date2, 103), '') + N'</b></td>' + N'</tr>' + N'<tr>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left">Bước 3</td>' + N'<td style="border-left: 1px solid #ccc;  border-top: 1px solid #ccc;padding: 10px;text-align: left"><b style="color:black">' + ISNULL(@Assigner3, '') + N'</b></td>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left"><b style="color:black">' + ISNULL(CONVERT(VARCHAR(10), @Date3, 103), '') + N'</b></td>' + N'</tr>' + N'</tbody>' + N'</table>' + N'</div>';
+
+                GOTO GOTO__RETURN;
+            END;
+
+        IF ( @TypeId = 164 AND @StepNo = 2 )
+            BEGIN
+                SET @ResultVar = N'<div style="padding: 20px;font-family: ''''trebuchet MS'''', ''''Lucida sans'''', Arial;font-size: 14px;color: #444;">' + N'<strong>Dear anh/chị!</strong><br/><br/>' + N'[Inside-Auto] gửi đến anh/chị cập nhật mới nhất về yêu cầu của anh chị theo chi tiết như bên dưới.' + N'<br/>Mọi thắc mắc và hỗ trợ anh chị liên hệ: <a>FRTSupport@fpt.com.vn</a> hay tạo hỗ trợ từ Hệ thống Call Log.<br/>' + N'<div style="background-color: #dce9f9;padding:10px;-moz-border-radius: 6px;-webkit-border-radius: 6px;border-radius: 6px;-webkit-box-shadow: 0 1px 1px #ccc; -moz-box-shadow: 0 1px 1px #ccc; box-shadow: 0 1px 1px #ccc;">' + N'Trong các trường hợp khẩn cấp, vui lòng gọi về số hotline của đội Support: <strong>0977.209.435 - 0938.209.435</strong> hoặc IP Phone: <strong>87333</strong>' + N'</div>' + N'<br/><i>*Vui lòng không trả lời hoặc khiếu nại vào mail này.</i><br/><br/>' + N'<table style="border: solid #ccc 1px;-moz-border-radius: 6px;-webkit-border-radius: 6px;border-radius: 6px;-webkit-box-shadow: 0 1px 1px #ccc; -moz-box-shadow: 0 1px 1px #ccc; box-shadow: 0 1px 1px #ccc; padding:5px;">' + N'<colgroup><col span="5" /></colgroup>' + N'<tbody>' + N'<tr>' + N'<td style="padding: 10px;text-align: left">Mã yêu cầu: <a href="https://calllogbeta.fptshop.com.vn/Requests/Details/' + CONVERT(VARCHAR(10), @RequestId) + N'" target="_blank"> <b style="color:orange">' + CONVERT(VARCHAR(10), @RequestId) + N'</b></a></td>' + N'<td style="border-left: 1px solid #ccc;  padding: 10px;text-align: left">Trạng thái: <b style="color:black">' + @StatusName + N'</b></td>' + N'<td style="border-left: 1px solid #ccc;  padding: 10px;text-align: left" colspan="3">Hệ thống: <b style="color:blue"></b></td>' + N'</tr>' + N'<tr>' + N'<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left">Người gửi yêu cầu: <br/> <b style="color:black">' + @SenderName + N'</b></td>' + N'<td style="border-left: 1px solid #ccc;  border-top: 1px solid #ccc;padding: 10px;text-align: left">Người nhận mặc định: <br/> <b style="color:black">' + ISNULL(@Assigners, '') + N'</b></td>' + N'<td style="border-left: 1px solid #ccc;  border-top: 1px solid #ccc;padding: 10px;text-align: left" colspan="3">To/CC: <br/> <b style="color:black">- <br/></b></td>' + N'</tr>' + N'<tr>' + N'<td style=" border-top: 1px solid #ccc;padding: 10px;text-align: left">Nhóm yêu cầu: <b style="color:black">' + @RequestGroup + N'</b></td>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left">Loại yêu cầu: <b style="color:black">' + @RequestType + N'</b></td>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left" colspan="3">Chức năng: <b style="color:blue"></b></td>' + N'</tr>' + N'<tr>' + N'<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left" colspan="5">Tiêu đề: <br/><b style="color:orange">' + @Title + N'</b></td>' + N'</tr>' + N'<tr>' + N'<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left" colspan="5">Lịch sử CallLog: <br/>' + N'<span style="font-weight: bold;font-size: x-large;color:red">[Remind] - Shop có calllog bảo hành bóng đèn <a href="https://calllogbeta.fptshop.com.vn/Requests/Details/' + CONVERT(VARCHAR(10), @RequestId) + N'" target="_blank">' + N'<b style="color:orange">' + CONVERT(VARCHAR(10), @RequestId) + N'</b></a>' + N' đang phát sinh số tiền truy thu, shop có 48h để vào điều chỉnh lại thông tin về đối tương bị truy thu và số tháng truy thu, sau 48h hệ thống tự động hoàn tất calllog và đẩy callog truy thu về cho HR.</span><br/>' + ISNULL(@Conversations, '') + N'</td>' + N'</tr>' + ISNULL(@RequestDetails, '') + N'<tr>' + N'<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left" rowspan="4">Ngày dự kiến hoàn thành: <b style="color:black">' + ISNULL(CONVERT(VARCHAR(10), @TimeFuture, 103), '') + N'</b><br/> </td>' + N'<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left" rowspan="4">Hiện đang ở bước: <b style="color:black">' + CONVERT(VARCHAR(3), @StepNo) + N'</b></td>' + N'<td style="border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left">&nbsp;</td>' + N'<td style="border-left: 1px solid #ccc;  border-top: 1px solid #ccc;padding: 10px;text-align: left">Người xử lý  </td>' + N'<td style="border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left">Ngày xử lý  </td>' + N'</tr>' + N'<tr>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left">Bước 1</td>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left"><b style="color:black">' + ISNULL(@Assigner1, '') + N'</b></td>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left"><b style="color:black">' + ISNULL(CONVERT(VARCHAR(10), @Date1, 103), '') + N'</b></td>' + N'</tr>' + N'<tr>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left">Bước 2</td>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left"><b style="color:black">' + ISNULL(@Assigner2, '') + N'</b></td>' + N'<td style="border-left: 1px solid #ccc;  border-top: 1px solid #ccc;padding: 10px;text-align: left"><b style="color:black">' + ISNULL(CONVERT(VARCHAR(10), @Date2, 103), '') + N'</b></td>' + N'</tr>' + N'<tr>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left">Bước 3</td>' + N'<td style="border-left: 1px solid #ccc;  border-top: 1px solid #ccc;padding: 10px;text-align: left"><b style="color:black">' + ISNULL(@Assigner3, '') + N'</b></td>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left"><b style="color:black">' + ISNULL(CONVERT(VARCHAR(10), @Date3, 103), '') + N'</b></td>' + N'</tr>' + N'</tbody>' + N'</table>' + N'</div>';
+
+                GOTO GOTO__RETURN;
+            END;
+
+        IF ( @TypeId = 185 AND @StepNo = 1 )
+            BEGIN
+                SET @ResultVar = N'<div style="padding: 20px;font-family: ''''trebuchet MS'''', ''''Lucida sans'''', Arial;font-size: 14px;color: #444;">' + N'<strong>Dear anh/chị!</strong><br/><br/>' + N'[Inside-Auto] gửi đến anh/chị cập nhật mới nhất về yêu cầu của anh chị theo chi tiết như bên dưới.' + N'<br/>Mọi thắc mắc và hỗ trợ anh chị liên hệ: <a>FRTSupport@fpt.com.vn</a> hay tạo hỗ trợ từ Hệ thống Call Log.<br/>' + N'<div style="background-color: #dce9f9;padding:10px;-moz-border-radius: 6px;-webkit-border-radius: 6px;border-radius: 6px;-webkit-box-shadow: 0 1px 1px #ccc; -moz-box-shadow: 0 1px 1px #ccc; box-shadow: 0 1px 1px #ccc;">' + N'Trong các trường hợp khẩn cấp, vui lòng gọi về số hotline của đội Support: <strong>0977.209.435 - 0938.209.435</strong> hoặc IP Phone: <strong>87333</strong>' + N'</div>' + N'<br/><i>*Vui lòng không trả lời hoặc khiếu nại vào mail này.</i><br/><br/>' + N'<table style="border: solid #ccc 1px;-moz-border-radius: 6px;-webkit-border-radius: 6px;border-radius: 6px;-webkit-box-shadow: 0 1px 1px #ccc; -moz-box-shadow: 0 1px 1px #ccc; box-shadow: 0 1px 1px #ccc; padding:5px;">' + N'<colgroup><col span="5" /></colgroup>' + N'<tbody>' + N'<tr>' + N'<td style="padding: 10px;text-align: left">Mã yêu cầu: <a href="https://calllogbeta.fptshop.com.vn/Requests/Details/' + CONVERT(VARCHAR(10), @RequestId) + N'" target="_blank"> <b style="color:orange">' + CONVERT(VARCHAR(10), @RequestId) + N'</b></a></td>' + N'<td style="border-left: 1px solid #ccc;  padding: 10px;text-align: left">Trạng thái: <b style="color:black">' + @StatusName + N'</b></td>' + N'<td style="border-left: 1px solid #ccc;  padding: 10px;text-align: left" colspan="3">Hệ thống: <b style="color:blue"></b></td>' + N'</tr>' + N'<tr>' + N'<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left">Người gửi yêu cầu: <br/> <b style="color:black">' + @SenderName + N'</b></td>' + N'<td style="border-left: 1px solid #ccc;  border-top: 1px solid #ccc;padding: 10px;text-align: left">Người nhận mặc định: <br/> <b style="color:black">' + ISNULL(@Assigners, '') + N'</b></td>' + N'<td style="border-left: 1px solid #ccc;  border-top: 1px solid #ccc;padding: 10px;text-align: left" colspan="3">To/CC: <br/> <b style="color:black">- <br/></b></td>' + N'</tr>' + N'<tr>' + N'<td style=" border-top: 1px solid #ccc;padding: 10px;text-align: left">Nhóm yêu cầu: <b style="color:black">' + @RequestGroup + N'</b></td>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left">Loại yêu cầu: <b style="color:black">' + @RequestType + N'</b></td>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left" colspan="3">Chức năng: <b style="color:blue"></b></td>' + N'</tr>' + N'<tr>' + N'<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left" colspan="5">Tiêu đề: <br/><b style="color:orange">' + @Title + N'</b></td>' + N'</tr>' + N'<tr>' + N'<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left" colspan="5">Lịch sử CallLog: <br/>' + N'<span style="font-weight: bold;font-size: x-large;color:red">[Remind] - Sau 5 ngày kể từ ngày nhận calllog này nếu anh/chị không phản hồi lại trên calllog, mặc định anh/chị đồng ý với mức truy thu, phòng HC sẽ hoàn tất calllog đồng thời chi phí truy thusẽ được up tự động lên Inside, Phòng HC sẽ không có trách nhiệm giải quyết bất cứ khiếu nại nào liên quan</span><br/>' + ISNULL(@Conversations, '') + N'</td>' + N'</tr>' + ISNULL(@RequestDetails, '') + N'<tr>' + N'<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left" rowspan="4">Ngày dự kiến hoàn thành: <b style="color:black">' + ISNULL(CONVERT(VARCHAR(10), @TimeFuture, 103), '') + N'</b><br/> </td>' + N'<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left" rowspan="4">Hiện đang ở bước: <b style="color:black">' + CONVERT(VARCHAR(3), @StepNo) + N'</b></td>' + N'<td style="border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left">&nbsp;</td>' + N'<td style="border-left: 1px solid #ccc;  border-top: 1px solid #ccc;padding: 10px;text-align: left">Người xử lý  </td>' + N'<td style="border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left">Ngày xử lý  </td>' + N'</tr>' + N'<tr>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left">Bước 1</td>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left"><b style="color:black">' + ISNULL(@Assigner1, '') + N'</b></td>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left"><b style="color:black">' + ISNULL(CONVERT(VARCHAR(10), @Date1, 103), '') + N'</b></td>' + N'</tr>' + N'<tr>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left">Bước 2</td>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left"><b style="color:black">' + ISNULL(@Assigner2, '') + N'</b></td>' + N'<td style="border-left: 1px solid #ccc;  border-top: 1px solid #ccc;padding: 10px;text-align: left"><b style="color:black">' + ISNULL(CONVERT(VARCHAR(10), @Date2, 103), '') + N'</b></td>' + N'</tr>' + N'<tr>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left">Bước 3</td>' + N'<td style="border-left: 1px solid #ccc;  border-top: 1px solid #ccc;padding: 10px;text-align: left"><b style="color:black">' + ISNULL(@Assigner3, '') + N'</b></td>' + N'<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left"><b style="color:black">' + ISNULL(CONVERT(VARCHAR(10), @Date3, 103), '') + N'</b></td>' + N'</tr>' + N'</tbody>' + N'</table>' + N'</div>';
+
+                GOTO GOTO__RETURN;
+            END;
+
+        IF ( @TypeId = 208 )
+            BEGIN
+                DECLARE
+                    @CMND VARCHAR(50) = ''
+                  , @Duyet INT = 0
+                  , @LyDo NVARCHAR(MAX) = N''
+                  , @NoiDung NVARCHAR(MAX) = N'';
+
+                SELECT TOP 1
+                       @NoiDung = Property1
+                     , @CMND = Property2
+                     , @Duyet = Quantity
+                     , @LyDo = Property3
+                FROM
+                    dbo.RequestDetails ( NOLOCK )
+                WHERE
+                    RequestId = @RequestId;
+
+                DECLARE @p__Type_208__Check_DuDieuKien NVARCHAR(50) = CASE WHEN @Duyet = 1 THEN 'checked' ELSE '' END;
+                DECLARE @p__Type_208__Check_KhongDuDieuKien NVARCHAR(50) = CASE WHEN @Duyet = 0 THEN 'checked' ELSE '' END;
+
+                SET @ResultVar = N'' --
+                                 + N'<style>' --
+                                 + N'	table {' --
+                                 + N'		border-collapse: collapse;' --
+                                 + N'		width: 100%;' --
+                                 + N'	}' --
+                                 + N'	table, th, tr,td {' --
+                                 + N'		border: 2px solid black;' --
+                                 + N'		text-align: center;' --
+                                 + N'	}' --
+                                 + N'	tr .header {' --
+                                 + N'	}' --
+                                 + N'	.separate-cell {' --
+                                 + N'		border-top: 1px solid grey;' --
+                                 + N'	}' --
+                                 + N'</style>' --
+                                 + N'<div>' + ISNULL(@NoiDung, '') + N'</div>' --
+                                 + N'<div>' --
+                                 + N'	<table>' --
+                                 + N'		<tr class="header">' --
+                                 + N'			<th>STT</th>' --
+                                 + N'			<th style="width:150px;">Số CMND</th>' --
+                                 + N'			<th colspan="2">' --
+                                 + N'				<div>Kết quả duyệt</div>' --
+                                 + N'				<div class="separate-cell">Bắt buộc tick chọn 1 trong 2</div>' --
+                                 + N'			</th>' --
+                                 + N'			<th>Ghi chú lý do</th>' --
+                                 + N'		</tr>' --
+                                 + N'		<tr>' --
+                                 + N'			<td>1</td>' --
+                                 + N'			<td>' + ISNULL(@CMND, '') + N'</td>' --
+                                 + N'			<td>' --
+                                 + N'				<label class="col-sm-3" style="width: 100%">' --
+                                 + N'					<input type="radio" class="radio-inline" ' + @p__Type_208__Check_DuDieuKien + N' />Đủ điều kiện' --
+                                 + N'				</label>' --
+                                 + N'			</td>' --
+                                 + N'			<td>' --
+                                 + N'				<label class="col-sm-3" style="width:100%">' --
+                                 + N'					<input type="radio" class="radio-inline" ' + @p__Type_208__Check_KhongDuDieuKien + N' />Không đủ điều kiện' --
+                                 + N'				</label>' --
+                                 + N'			</td>' --
+                                 + N'			<td><textarea rows="4" style="border:0px; width:90%">' + ISNULL(@LyDo, '') + N'</textarea></td>' --
+                                 + N'		</tr>' --
+                                 + N'	</table>' --
+                                 + N'</div>';
+
+                GOTO GOTO__RETURN;
+            END;
+
+        --	===Cho các loại ELSE===
+        IF ( 1 = 1 )
+            BEGIN
+                SET @ResultVar = N'' --
+                                 + N'<div style="padding: 20px;font-family: ''''trebuchet MS'''', ''''Lucida sans'''', Arial;font-size: 14px;color: #444;">' --
+                                 + N'	<strong>Dear anh/chị!</strong><br/><br/>' --
+                                 + N'	[Inside-Auto] gửi đến anh/chị cập nhật mới nhất về yêu cầu của anh chị theo chi tiết như bên dưới.' --
+                                 + N'	<br/>Mọi thắc mắc và hỗ trợ anh chị liên hệ: <a>FRTSupport@fpt.com.vn</a> hay tạo hỗ trợ từ Hệ thống Call Log.<br/>' --
+                                 + N'	<div style="background-color: #dce9f9;padding:10px;-moz-border-radius: 6px;-webkit-border-radius: 6px;border-radius: 6px;-webkit-box-shadow: 0 1px 1px #ccc; -moz-box-shadow: 0 1px 1px #ccc; box-shadow: 0 1px 1px #ccc;">' --
+                                 + N'		Trong các trường hợp khẩn cấp, vui lòng gọi về số hotline của đội Support: <strong>0977.209.435 - 0938.209.435</strong> hoặc IP Phone: <strong>87333</strong>' --
+                                 + N'	</div>' --
+                                 + N'	<br/><i>*Vui lòng không trả lời hoặc khiếu nại vào mail này.</i><br/><br/>' --
+                                 + N'	<table style="border: solid #ccc 1px;-moz-border-radius: 6px;-webkit-border-radius: 6px;border-radius: 6px;-webkit-box-shadow: 0 1px 1px #ccc; -moz-box-shadow: 0 1px 1px #ccc; box-shadow: 0 1px 1px #ccc; padding:5px;">' --
+                                 + N'		<colgroup><col span="5" /></colgroup>' --
+                                 + N'		<tbody>' --
+                                 + N'			<tr>' --
+                                 + N'				<td style="padding: 10px;text-align: left">Mã yêu cầu: <a href="https://calllogbeta.fptshop.com.vn/Requests/Details/' + CONVERT(VARCHAR(10), @RequestId) + N'" target="_blank"> <b style="color:orange">' + CONVERT(VARCHAR(10), @RequestId) + N'</b></a></td>' --
+                                 + N'				<td style="border-left: 1px solid #ccc;  padding: 10px;text-align: left">Trạng thái: <b style="color:black">' + @StatusName + N'</b></td>' --
+                                 + N'				<td style="border-left: 1px solid #ccc;  padding: 10px;text-align: left" colspan="3">Hệ thống: <b style="color:blue"></b></td>' --
+                                 + N'			</tr>' --
+                                 + N'			<tr>' --
+                                 + N'				<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left">Người gửi yêu cầu: <br/> <b style="color:black">' + @SenderName + N'</b></td>' --
+                                 + N'				<td style="border-left: 1px solid #ccc;  border-top: 1px solid #ccc;padding: 10px;text-align: left">Người nhận mặc định: <br/> <b style="color:black">' + ISNULL(@Assigners, '') + N'</b></td>' --
+                                 + N'				<td style="border-left: 1px solid #ccc;  border-top: 1px solid #ccc;padding: 10px;text-align: left" colspan="3">To/CC: <br/> <b style="color:black">- <br/></b></td>' --
+                                 + N'			</tr>' --
+                                 + N'			<tr>' --
+                                 + N'				<td style=" border-top: 1px solid #ccc;padding: 10px;text-align: left">Nhóm yêu cầu: <b style="color:black">' + @RequestGroup + N'</b></td>' --
+                                 + N'				<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left">Loại yêu cầu: <b style="color:black">' + @RequestType + N'</b></td>' --
+                                 + N'				<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left" colspan="3">Chức năng: <b style="color:blue"></b></td>' --
+                                 + N'			</tr>' --
+                                 + N'			<tr>' --
+                                 + N'				<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left" colspan="5">Tiêu đề: <br/><b style="color:orange">' + @Title + N'</b></td>' --
+                                 + N'			</tr>' --
+                                 + N'			<tr>' --
+                                 + N'				<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left" colspan="5">Lịch sử CallLog: <br/>' + ISNULL(@Conversations, '') + N'</td>' --
+                                 + N'			</tr>' --
+                                 + N'			' + ISNULL(@RequestDetails, '') + N'' --
+                                 + N'			<tr>' --
+                                 + N'				<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left" rowspan="4">Ngày dự kiến hoàn thành: <b style="color:black">' + ISNULL(CONVERT(VARCHAR(10), @TimeFuture, 103), '') + N'</b><br/> </td>' --
+                                 + N'				<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left" rowspan="4">Hiện đang ở bước: <b style="color:black">' + CONVERT(VARCHAR(3), @StepNo) + N'</b></td>' --
+                                 + N'				<td style="border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left">&nbsp;</td>' --
+                                 + N'				<td style="border-left: 1px solid #ccc;  border-top: 1px solid #ccc;padding: 10px;text-align: left">Người xử lý  </td>' --
+                                 + N'				<td style="border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left">Ngày xử lý  </td>' --
+                                 + N'			</tr>' --
+                                 + N'			<tr>' --
+                                 + N'				<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left">Bước 1</td>' --
+                                 + N'				<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left"><b style="color:black">' + ISNULL(@Assigner1, '') + N'</b></td>' --
+                                 + N'				<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left"><b style="color:black">' + ISNULL(CONVERT(VARCHAR(10), @Date1, 103), '') + N'</b></td>' --
+                                 + N'			</tr>' --
+                                 + N'			<tr>' --
+                                 + N'				<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left">Bước 2</td>' --
+                                 + N'				<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left"><b style="color:black">' + ISNULL(@Assigner2, '') + N'</b></td>' --
+                                 + N'				<td style="border-left: 1px solid #ccc;  border-top: 1px solid #ccc;padding: 10px;text-align: left"><b style="color:black">' + ISNULL(CONVERT(VARCHAR(10), @Date2, 103), '') + N'</b></td>' --
+                                 + N'			</tr>' --
+                                 + N'			<tr>' --
+                                 + N'				<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left">Bước 3</td>' --
+                                 + N'				<td style="border-left: 1px solid #ccc;  border-top: 1px solid #ccc;padding: 10px;text-align: left"><b style="color:black">' + ISNULL(@Assigner3, '') + N'</b></td>' --
+                                 + N'				<td style=" border-left: 1px solid #ccc; border-top: 1px solid #ccc;padding: 10px;text-align: left"><b style="color:black">' + ISNULL(CONVERT(VARCHAR(10), @Date3, 103), '') + N'</b></td>' --
+                                 + N'			</tr>' --
+                                 + N'		</tbody>' --
+                                 + N'	</table>' --
+                                 + N'</div>';
+
+                GOTO GOTO__RETURN;
+            END;
+
+        --------------------------------------------------
+        --	===Trả về Kết quả===
+        GOTO__RETURN:
+        RETURN @ResultVar;
+    END;
+GO
+

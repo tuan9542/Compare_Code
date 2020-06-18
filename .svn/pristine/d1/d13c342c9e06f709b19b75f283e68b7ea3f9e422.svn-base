@@ -1,0 +1,132 @@
+﻿SET QUOTED_IDENTIFIER ON
+SET ANSI_NULLS ON
+GO
+ALTER PROCEDURE CallLogTripi_Type162_Complete
+    @RequestId BIGINT = 0
+  , @User VARCHAR(50) = ''
+AS
+    BEGIN
+        BEGIN TRY
+            DECLARE
+                @BookingId BIGINT = 0
+              , @BookingId_New BIGINT = 0
+              , @LoaiXuLy INT = 0
+              , @DocEntry_Tripi INT = 0
+              , @ShopCode VARCHAR(50) = ''
+              , @XacNhanHuy INT = 0
+              , @LoaiXuLyCon_Id INT = 0
+              , @LoaiXuLyCon_Ten NVARCHAR(500) = N'';
+
+            SELECT TOP 1
+                   @BookingId = TRY_PARSE(ISNULL(RD.Property1, '0')AS BIGINT)
+                 , @BookingId_New = TRY_PARSE(ISNULL(RD.Property8, '0')AS BIGINT)
+                 , @LoaiXuLy = RD.Quantity
+                 , @DocEntry_Tripi = RD.Quantity1
+                 , @XacNhanHuy = RD.Quantity2
+                 , @LoaiXuLyCon_Id = RD.Quantity3
+            FROM
+                dbo.RequestDetails AS RD ( NOLOCK )
+            WHERE
+                RD.RequestId = @RequestId
+                AND RD.Status = 1;
+
+            SELECT TOP 1
+                   @ShopCode = R.FromShop
+            FROM
+                dbo.Requests AS R ( NOLOCK )
+            WHERE
+                R.Id = @RequestId;
+
+            INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+            VALUES (
+                       OBJECT_NAME(@@PROCID) -- Title - nvarchar(300)
+                     , CONCAT('RequestId:', @RequestId, N', LoaiXuLy:', @LoaiXuLy, N', BookingId:', @BookingId, N', DocEntry_Tripi:', @DocEntry_Tripi, N', ShopCode:', @ShopCode, N', BookingId_New:', @BookingId_New, ', User:', @User) -- Error - nvarchar(max)
+                     , 0 -- Status - tinyint
+                     , GETDATE() -- TimeCreate - datetime
+                   );
+
+            DECLARE
+                @Notify NVARCHAR(500) = N''
+              , @CreateBy VARCHAR(50) = ''
+              , @FromShop NVARCHAR(50) = N''
+              , @ParenId INT = 0;
+
+            SELECT
+                @CreateBy = R.Sender
+              , @FromShop = R.FromShop
+              , @ParenId = R.GroupId
+            FROM
+                dbo.Requests AS R ( NOLOCK )
+            WHERE
+                R.Id = @RequestId;
+
+            IF ( @ParenId > 0 AND @LoaiXuLyCon_Id > 0 )
+                BEGIN
+                    SELECT TOP 1
+                           @LoaiXuLyCon_Ten = I.Name
+                    FROM
+                        dbo.Items AS I ( NOLOCK )
+                    WHERE
+                        I.TypeId = 162
+                        AND I.Id = @LoaiXuLyCon_Id
+                        AND I.Status = 1;
+                END;
+
+            IF ( @LoaiXuLy NOT IN ( 1, 5, 6 ) OR ( @LoaiXuLy IN ( 1, 5 ) AND @XacNhanHuy = 1 ))
+                BEGIN
+                    EXEC [10.96.254.34].MPOS.dbo.FRT_Flight_Tripi_UpdateStatusFromCallLog
+                        @DocEntry = @DocEntry_Tripi -- bigint
+                      , @Type = @LoaiXuLy -- int
+                      , @RequestID = @RequestId -- bigint
+                      , @Createby = @CreateBy -- nvarchar(50)
+                      , @ShopCode = @FromShop; -- nvarchar(50)
+
+                END;
+
+            IF ( @LoaiXuLy IN ( 1, 5 ))
+                BEGIN
+                    IF ( @XacNhanHuy = 1 )
+                        SET @Notify = CONCAT(N'Tripi đã huỷ Booking ID ', @BookingId, N', callLog xác nhận huỷ ', @RequestId);
+                    IF ( @XacNhanHuy = 2 )
+                        SET @Notify = CONCAT(N'Tripi đã từ chối huỷ Booking ID ', @BookingId, N', callLog xác nhận huỷ ', @RequestId);
+                END;
+            IF ( @LoaiXuLy = 2 )
+                SET @Notify = CONCAT(N'Tripi đã xác nhận đổi chặng trên calllog ', @RequestId, N'. Booking ID mới ', @BookingId_New);
+            IF ( @LoaiXuLy = 3 )
+                SET @Notify = CONCAT(N'Tripi đã xác nhận đổi chuyến trên calllog ', @RequestId, N'. Booking ID mới ', @BookingId_New);
+            IF ( @LoaiXuLy = 4 )
+                SET @Notify = CONCAT(N'Tripi đã xác nhận tách code vé trên calllog ', @RequestId, N'. Booking ID mới ', @BookingId_New);
+            IF ( @LoaiXuLy = 6 )
+                BEGIN
+                    SET @Notify = CONCAT(N'NCC đã xử lý hoàn tất dịch vụ mua thêm ', @LoaiXuLyCon_Ten, N' - BookingId: ', @BookingId, N'. Bạn vui lòng vào màn hình thu tiền Tripi trên POS và nhập SĐT KH hoặc mã calllog yêu cầu dịch vụ: ', @RequestId, N' để xuất phiếu thu cho KH.');
+                END;
+
+
+            EXEC [10.96.254.34].MPOS.dbo.FRT_SP_InsertNotify_oneapp
+                @UserID = @CreateBy
+              , @Title = N'Hệ thống'
+              , @NoiDung = @Notify
+              , @sys_name = N'MPOS'
+              , @is_level = 1
+              , @type = 0
+              , @URL = N''
+              , @CallLog_ReqId = @RequestId
+              , @CallLog_TypeId = 162
+              , @url_picture = N'';
+        END TRY
+        BEGIN CATCH
+            DECLARE @ErrorMessage NVARCHAR(MAX) = N'Lỗi ';
+
+            --	===Ghi Log===
+            INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+            VALUES (
+                       OBJECT_NAME(@@PROCID) -- Title - nvarchar(300)
+                     , ERROR_MESSAGE() -- Error - nvarchar(max)
+                     , 1 -- Status - tinyint
+                     , GETDATE() -- TimeCreate - datetime
+                   );
+
+        END CATCH;
+    END;
+GO
+

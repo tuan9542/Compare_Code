@@ -1,0 +1,339 @@
+﻿SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;
+GO
+-- =============================================
+-- Author:		<TuanNA89>
+-- Create date: <10/01/2019>
+-- Description:	<Sinh phiếu Xử lý vi phạm hàng demo theo rule mới>
+-- Note change: 
+/*
+- <11/05/2020> - Code lại store, loại bỏ code cũ, store backup sp_XuLyViPhamHangDemo_BAK20200511
+- <11/05/2020> - ghi thêm phiếu vi phạm sinh ra vào bảng Log_CallLog_InsertViolationVoteRecord
+*/
+/*
+Rule đang áp dụng hiện tại:
+- Rule sinh phiếu phạt các calllog xuất – bỏ mẫu shop xử lý không đúng thời gian quy định
+	+ D là ngày user nhận calllog, từ D+2 calllog chưa được xử lý (trạng thái bước chờ xử lý) hệ thống auto sinh phiếu vi phạm cho thủ kho shop, nếu shop không có thủ kho sẽ phạt SM/PSM, trưởng ca bán hàng shop (mã chức danh 00004, 00005, 00671).
+	+ Hình thức phạt:
+	+ Vi phạm lần đầu cảnh cáo miệng
+	+ Vi phạm từ lần thứ 2, mỗi ngày trễ sẽ phạt 100k/lần. (Ví dụ: trễ ngày 1 phạt 100k, trễ ngày 2 phạt 100k, trễ ngày 3 phạt 100k, ..v..v)
+*/
+ALTER PROCEDURE dbo.sp_XuLyViPhamHangDemo @RequestId BIGINT = 0
+AS
+    BEGIN
+        BEGIN TRY
+            --  ===Lấy DL Requests
+            CREATE TABLE #Temp_Requests ( STT INT IDENTITY(1, 1), Id INT, TimeCreate DATE, Shop VARCHAR(40));
+
+            DECLARE
+                @NgayBatDauXet DATETIME = CONVERT(DATE, GETDATE() - 2)
+              , @NgayHienTai DATETIME = GETDATE();
+
+            IF @RequestId IS NULL
+                SET @RequestId = 0;
+
+            INSERT INTO #Temp_Requests ( Id, TimeCreate, Shop )
+            SELECT
+                Id
+              , TimeCreate
+              , FromShop
+            FROM
+                dbo.Requests ( NOLOCK )
+            WHERE
+                ( @RequestId = 0 OR Id = @RequestId )
+                AND TypeId = 210
+                AND Status = 1
+                AND CONVERT(DATE, TimeCreate) <= @NgayBatDauXet;
+
+            IF ( EXISTS ( SELECT TOP 1 1 FROM #Temp_Requests ))
+                BEGIN
+                    SELECT
+                        RequestId AS RequestId
+                      , EmployeeCode AS EmployeeCode
+                    INTO
+                        #tmp_Assigners
+                    FROM
+                        dbo.Assigners ( NOLOCK )
+                    WHERE
+                        RequestId IN ( SELECT Id FROM #Temp_Requests )
+                        AND StepNo = 1
+                        AND Type = 1
+                        AND Status = 1;
+
+                    IF EXISTS ( SELECT TOP 1 1 FROM #tmp_Assigners )
+                        BEGIN
+                            SELECT
+                                A.RequestId AS RequestId
+                              , J.EmployeeCode AS EmployeeCode
+                              , J.JobTitle AS JobTitle
+                            INTO
+                                #Tmp_EmpJobTit
+                            FROM
+                                #tmp_Assigners AS A
+                                INNER JOIN dbo.F03_Employees AS J ( NOLOCK )
+                                    ON J.EmployeeCode = A.EmployeeCode
+                            WHERE
+                                J.Status = 'A'
+                                AND J.JobTitle IN (   '00007' --Thủ kho chính
+                                                    --, '00008' --Thủ kho quầy
+                                                    --, '00253' --Nhân Viên Thủ Kho
+                                                    --, '00449' --Thủ kho chính_APR
+                                                    --, '00669' --NV bán hàng kiêm thủ kho
+                                                    , '00004' --SM
+                                                    , '00005' -- PSM
+                                                    , '00671' -- Trưởng ca bán hàng
+                                                  );
+
+                            /*
+							- auto sinh phiếu vi phạm cho thủ kho shop(00007)
+							- nếu shop không có thủ kho sẽ phạt SM/PSM, trưởng ca bán hàng shop (mã chức danh 00004, 00005, 00671
+							*/
+                            DELETE FROM
+                            #Tmp_EmpJobTit
+                            WHERE
+                                RequestId IN ( SELECT J.RequestId FROM #Tmp_EmpJobTit AS J WHERE J.JobTitle = '00007' )
+                                AND JobTitle <> '00007';
+
+                            IF EXISTS ( SELECT TOP 1 1 FROM #Tmp_EmpJobTit )
+                                BEGIN
+                                    CREATE TABLE #DSNV_Inside
+                                    (
+                                        EmployeeCode NVARCHAR(200)
+                                      , EmployeeName NVARCHAR(200)
+                                      , StatusWorking NVARCHAR(200)
+                                      , TimeBeginWorking DATE
+                                    );
+
+                                    INSERT INTO #DSNV_Inside ( EmployeeCode, EmployeeName, StatusWorking, TimeBeginWorking )
+                                    EXEC [10.96.254.143].FRTInsideV2.dbo.Calllog_GetEmployeeStatusWorking
+                                        @EmployeeCode = '' -- varchar(20)
+                                      , @Ngay = @NgayHienTai; -- date
+
+                                    SELECT DISTINCT
+                                           E.RequestId AS RequestId
+                                         , E.EmployeeCode AS EmployeeCode
+                                         , I.TimeBeginWorking AS TimeBeginWorking
+                                    INTO
+                                        #Tmp_EmpJobTit_Working
+                                    FROM
+                                        #Tmp_EmpJobTit E
+                                        INNER JOIN #DSNV_Inside I
+                                            ON I.EmployeeCode = E.EmployeeCode
+                                    WHERE
+                                        I.StatusWorking = N'Đang làm';
+
+                                    DROP TABLE #DSNV_Inside;
+
+                                    SELECT
+                                        WarehouseCode AS WarehouseCode
+                                      , CONVERT(DATE, CreatedDateTime) AS CreatedDateTime
+                                    INTO
+                                        #tmp_Warehouse
+                                    FROM
+                                        dbo.Warehouse ( NOLOCK );
+
+                                    CREATE TABLE #Tmp_AssignerStep
+                                    (
+                                        STT INT IDENTITY(1, 1)
+                                      , EmployeeCode NVARCHAR(40)
+                                      , TimeBeginWorking DATETIME
+                                    );
+
+                                    DECLARE
+                                        ---@RequestID INT = 0
+                                        @Remark NVARCHAR(300) = 0
+                                      , @Date DATE
+                                      , @AssignerStep NVARCHAR(40) = N''
+                                      , @NgayBatDauLamViec DATETIME
+                                      , @Month INT = MONTH(GETDATE())
+                                      , @Year INT = YEAR(GETDATE())
+                                      , @HeSoPhat FLOAT = 1
+                                      , @Count_Ass INT = 0
+                                      , @Shop VARCHAR(40) = ''
+                                      , @SoNgayTre INT = 0
+                                      , @Date_2_Month DATE = DATEADD(MONTH, -2, GETDATE())
+                                      , @STT_Request INT = 1
+                                      , @STT_MAX_Request INT = ISNULL(( SELECT MAX(R.STT)FROM #Temp_Requests AS R ), 0)
+                                      , @STT_Assigner INT = 1
+                                      , @STT_MAX_Assigner INT = 0
+                                      , @out_SoPhieu NVARCHAR(40) = N''
+                                      , @id_Log BIGINT = 0;
+                                    DECLARE @p__ViolationContentID INT = 992; -- NOTE: BETA 992 ; GOLIVE 640
+                                    DECLARE @p__NguoiGhiNhan NVARCHAR(50) = N'17096'; -- HongNTT9
+
+                                    WHILE ( @STT_Request <= @STT_MAX_Request )
+                                        BEGIN
+                                            SELECT
+                                                @RequestId = 0
+                                              , @Remark = N''
+                                              , @Date = NULL
+                                              --, @HeSoPhat = 1
+                                              , @Count_Ass = 0
+                                              , @Shop = ''
+                                              , @SoNgayTre = 0;
+
+                                            PRINT 2;
+                                            SELECT TOP 1
+                                                   @RequestId = R.Id
+                                                 , @Date = R.TimeCreate
+                                                 , @Shop = R.Shop
+                                            FROM
+                                                #Temp_Requests AS R
+                                            WHERE
+                                                R.STT = @STT_Request;
+
+                                            ----SELECT @RequestId, @Date, @Shop;
+
+                                            IF ( @RequestId > 0 )
+                                                BEGIN
+                                                    PRINT 3;
+                                                    SET @SoNgayTre = CONVERT(INT, ( DATEDIFF(DAY, @Date, GETDATE())) - 2);
+
+                                                    SET @Remark = N'Anh chị thao tác trễ call log xuất bỏ mẫu demo ' + CONVERT(NVARCHAR(40), @RequestId) + N', số ngày trễ: ' + CONVERT(NVARCHAR(40), @SoNgayTre) + N', ngày ghi nhận: ' + FORMAT(GETDATE(), 'yyyy-MM-dd');
+
+                                                    INSERT INTO #Tmp_AssignerStep ( EmployeeCode, TimeBeginWorking )
+                                                    SELECT
+                                                        E.EmployeeCode
+                                                      , E.TimeBeginWorking
+                                                    FROM
+                                                        #Tmp_EmpJobTit_Working AS E
+                                                    WHERE
+                                                        E.RequestId = @RequestId;
+
+                                                    SET @Count_Ass = ISNULL(( SELECT COUNT(1)FROM #Tmp_AssignerStep ), 0);
+
+                                                    IF ( @Count_Ass > 0 )
+                                                        BEGIN
+                                                            PRINT 4;
+                                                            SELECT
+                                                                @STT_Assigner = 1
+                                                              , @STT_MAX_Assigner = ISNULL(( SELECT MAX(A.STT)FROM #Tmp_AssignerStep AS A ), 0);
+
+                                                            WHILE ( @STT_Assigner <= @STT_MAX_Assigner )
+                                                                BEGIN
+                                                                    SELECT @AssignerStep = N'', @HeSoPhat = 1, @id_Log = 0, @out_SoPhieu = N'';
+
+                                                                    SELECT
+                                                                        @AssignerStep = EmployeeCode
+                                                                    FROM
+                                                                        #Tmp_AssignerStep
+                                                                    WHERE
+                                                                        STT = @STT_Assigner;
+
+                                                                    INSERT dbo.Log_CallLog_InsertViolationVoteRecord
+                                                                    (
+                                                                        CreateDateTime
+                                                                      , StoreName
+                                                                      , TypeId
+                                                                      , CallLogID
+                                                                      , EmpViolation
+                                                                      , ViolationContentID
+                                                                      , HeSoPhat
+                                                                      , Remark
+                                                                      , SoTienPhatThem
+                                                                      , SoTienBoiThuong
+                                                                      , MonthRecord
+                                                                      , YearRecord
+                                                                      , NguoiGhiNhan
+                                                                    )
+                                                                    VALUES (
+                                                                               GETDATE() -- CreateDateTime - datetime
+                                                                             , N'sp_XuLyViPhamHangDemo' -- StoreName - nvarchar(50)
+                                                                             , 210 -- TypeId - int
+                                                                             , @RequestId -- CallLogID - int
+                                                                             , @AssignerStep -- EmpViolation - nvarchar(50)
+                                                                             , @p__ViolationContentID -- ViolationContentID - int
+                                                                             , @HeSoPhat -- HeSoPhat - float
+                                                                             , @Remark -- Remark - nvarchar(500)
+                                                                             , 0.0 -- SoTienPhatThem - float
+                                                                             , 0.0 -- SoTienBoiThuong - float
+                                                                             , @Month
+                                                                             , @Year -- YearRecord - int
+                                                                             , @p__NguoiGhiNhan -- NguoiGhiNhan
+                                                                           );
+                                                                    SET @id_Log = @@IDENTITY;
+
+                                                                    INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+                                                                    VALUES (
+                                                                               N'sp_XuLyViPhamHangDemo'
+                                                                             , N'@Month ' + CONVERT(NVARCHAR(40), ISNULL(@Month, 0)) + ' , ' + N'@Year ' + CONVERT(NVARCHAR(40), ISNULL(@Year, 0)) + ' , ' + N'@Assigner ' + ISNULL(@AssignerStep, 'NULL') + ' , ' + N'@RequestID ' + CONVERT(NVARCHAR(40), ISNULL(@RequestId, 0)) + ' , ' + N'@Remark ' + ISNULL(@Remark, 'NULL') + ' , ' + N'@HeSoPhat ' + CONVERT(NVARCHAR(40), ISNULL(@HeSoPhat, 'NULL')) + ' , '
+                                                                             , 0
+                                                                             , GETDATE()
+                                                                           );
+
+                                                                    ----SELECT
+                                                                    ----    @Month AS 'Month'
+                                                                    ----  , @Year AS 'Year'
+                                                                    ----  , @Shop AS 'Shop'
+                                                                    ----  , @AssignerStep AS 'AssignerStep'
+                                                                    ----  , @RequestId AS 'RequestID'
+                                                                    ----  , @Remark AS 'Remark'
+                                                                    ----  , @Date AS 'TimeCreate'
+                                                                    ----  , @SoNgayTre AS 'SoNgayTre'
+                                                                    ----  , @HeSoPhat AS 'HeSoPhat';
+
+
+                                                                    EXEC [10.96.254.143].FRTInsideV2.dbo.CallLog_InsertViolationVoteRecord
+                                                                        @MonthRecord = @Month -- int
+                                                                      , @YearRecord = @Year -- int
+                                                                      , @EmpViolation = @AssignerStep -- varchar(40)
+                                                                      , @ViolationContentID = @p__ViolationContentID -- int
+                                                                      , @CallLogID = @RequestId -- bigint
+                                                                      , @Remark = @Remark -- nvarchar(500)
+                                                                      , @HeSoPhat = @HeSoPhat -- float
+                                                                      , @SoTienPhatThem = 0.0 -- float
+                                                                      , @SoTienBoiThuong = 0.0 -- float
+                                                                      , @NguoiGhiNhan = @p__NguoiGhiNhan -- varchar(50)
+                                                                      , @HDQuyDinh = N'' -- nvarchar(1000)
+                                                                      , @HDTaiLieu = N'' -- nvarchar(1000)
+                                                                      , @SoPhieu = @out_SoPhieu OUTPUT; -- varchar(40)
+
+                                                                    IF ( @id_Log > 0 AND @out_SoPhieu <> '' )
+                                                                        BEGIN
+                                                                            UPDATE
+                                                                                dbo.Log_CallLog_InsertViolationVoteRecord
+                                                                            SET
+                                                                                OUTPUT_SoPhieu = @out_SoPhieu
+                                                                            WHERE
+                                                                                ID = @id_Log;
+                                                                        END;
+
+                                                                    SET @STT_Assigner += 1;
+                                                                END;
+                                                        END;
+
+                                                    TRUNCATE TABLE #Tmp_AssignerStep;
+                                                END;
+
+                                            SET @STT_Request += 1;
+                                        END;
+
+                                    DROP TABLE
+                                        #Tmp_AssignerStep
+                                      , #Tmp_EmpJobTit_Working
+                                      , #tmp_Warehouse;
+                                END;
+                            DROP TABLE #Tmp_EmpJobTit;
+                        END;
+                    DROP TABLE #tmp_Assigners;
+                END;
+
+            DROP TABLE #Temp_Requests;
+        END TRY
+        BEGIN CATCH
+            DECLARE @ErrorMessage NVARCHAR(2000);
+            SELECT
+                @ErrorMessage = N'Lỗi: ' + N'sp_XuLyViPhamHangDemo' + N': ' + ERROR_MESSAGE();
+
+            --	===Ghi Log===
+            INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+            VALUES (
+                       N'sp_XuLyViPhamHangDemo' -- Title - nvarchar(300)
+                     , @ErrorMessage -- Error - nvarchar(max)
+                     , 1 -- Status - tinyint
+                     , GETDATE() -- TimeCreate - datetime
+                   );
+        END CATCH;
+    END;
+GO
+

@@ -1,0 +1,353 @@
+﻿SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;
+GO
+/*
+==================================================
+Author			:	NgoanHT
+Create date		:	20/12/2017 - 20/12/2017 10:00
+Description		:	Lấy nội dung email 65 - 141 Hàng Demo và Nhập Demo vào kho máy cũ
+Note			:	Link Server:	FRTInsideV2
+==================================================
+Test:
+*/
+ALTER FUNCTION dbo.fn_Email_GetContent_65_114 ( @RequestId NVARCHAR(MAX))
+RETURNS NVARCHAR(MAX)
+AS
+    BEGIN
+
+        --------------------------------------------------
+        --	===Tạo biến cần dùng===
+        DECLARE
+            @Title NVARCHAR(300)
+          , @Status TINYINT
+          , @StatusName NVARCHAR(50) = N''
+          , @RequestGroup NVARCHAR(300) = N''
+          , @RequestType NVARCHAR(300) = N''
+          , @Conversations NVARCHAR(MAX) = N''
+          , @StepNo INT
+          , @TimeFuture DATETIME
+          , @TimeCreate DATETIME
+          , @Sender NVARCHAR(40)
+          , @SenderName NVARCHAR(500) = N''
+          , @Assigners NVARCHAR(MAX) = N''
+          , @Cc NVARCHAR(MAX)
+          , @Assigner1 NVARCHAR(500)
+          , @Date1 DATETIME
+          , @Assigner2 NVARCHAR(500)
+          , @Date2 DATETIME
+          , @Assigner3 NVARCHAR(500)
+          , @Date3 DATETIME
+          , @RequestDetails NVARCHAR(MAX)
+          , @TypeId INT
+          , @ParentId INT
+          , @JobTitle VARCHAR(50) = '';
+
+        --------------------------------------------------
+        --	===Tạo biến bảng chứa DL Nhân viên===
+        DECLARE @Tmp_Employees AS TABLE
+        (
+            EmployeeCode VARCHAR(40)
+          , EmployeeName NVARCHAR(255)
+          , Email NVARCHAR(255)
+          , JobTitle VARCHAR(50)
+        );
+        --	===Lấy DL Nhân viên===
+        INSERT INTO @Tmp_Employees ( EmployeeCode, EmployeeName, Email, JobTitle )
+        SELECT
+            EmployeeCode -- EmployeeCode - varchar(40)
+          , EmployeeName -- EmployeeName - nvarchar(255)
+          , Email -- Email - nvarchar(255)
+          , JobTitle -- JobTitle - varchar(50)
+        FROM
+            dbo.F03_Employees WITH ( NOLOCK );
+
+        --------------------------------------------------
+        --	===Tạo biến bảng chứa DL Chức danh===
+        DECLARE @Tmp_JobTitles AS TABLE ( JobTitleCode VARCHAR(40), JobTitleName NVARCHAR(400));
+        --	===Lấy DL Chức danh===
+        INSERT INTO @Tmp_JobTitles ( JobTitleCode, JobTitleName )
+        SELECT
+            JobTitleCode -- JobTitleCode - varchar(40)
+          , JobTitleName -- JobTitleName - nvarchar(400)
+        FROM
+            dbo.F03_JobTitles WITH ( NOLOCK )
+        WHERE
+            Status = 'A';
+
+        --------------------------------------------------
+        -- ===Tạo biến bảng chứa DL Requests===
+        DECLARE @Tmp_Requests AS TABLE
+        (
+            RequestId BIGINT
+          , Title NVARCHAR(300)
+          , TypeId INT
+          , StepNo INT
+          , TimeCreate DATETIME
+          , TimeFutureFinish DATETIME
+          , Status TINYINT
+          , Sender NVARCHAR(40)
+        );
+        --	===Lấy Requests===
+        INSERT INTO @Tmp_Requests
+        (
+            RequestId
+          , Title
+          , TypeId
+          , StepNo
+          , TimeCreate
+          , TimeFutureFinish
+          , Status
+          , Sender
+        )
+        SELECT
+            Id -- RequestId - bigint
+          , Title -- Title - nvarchar(300)
+          , TypeId -- TypeId - int
+          , StepNo -- StepNo - int
+          , TimeCreate -- TimeCreate - datetime
+          , TimeFutureFinish -- TimeFutureFinish - datetime
+          , Status -- Status - tinyint
+          , Sender -- Sender - nvarchar(40)
+        FROM
+            dbo.Requests ( NOLOCK )
+        WHERE
+            Id IN ( SELECT Value FROM dbo.fnSplitString(@RequestId, ',') );
+
+        --------------------------------------------------
+        -- ===Lấy dữ liệu===
+        SELECT
+            @Title = R.Title
+          , @TypeId = R.TypeId
+          , @StepNo = R.StepNo
+          , @TimeCreate = R.TimeCreate
+          , @TimeFuture = R.TimeFutureFinish
+          , @Sender = R.Sender
+          , @Status = R.Status
+        FROM
+            @Tmp_Requests AS R;
+
+        SELECT
+            @StatusName = ISNULL(Name, '')
+        FROM
+            dbo.MasterDatas ( NOLOCK )
+        WHERE
+            Code = @Status
+            AND [Group] = 'RequestStatus'
+            AND Status = 1;
+
+        SELECT
+            @SenderName = ISNULL(EmployeeName, '')
+          , @JobTitle = ISNULL(JobTitle, '')
+        FROM
+            @Tmp_Employees
+        WHERE
+            EmployeeCode = @Sender;
+
+        SELECT
+            @SenderName += N' - ' + ISNULL(JobTitleName, '')
+        FROM
+            @Tmp_JobTitles
+        WHERE
+            JobTitleCode = @JobTitle;
+
+        SELECT
+            @RequestType = ISNULL(Description, '')
+          , @ParentId = ParentId
+        FROM
+            dbo.Categories ( NOLOCK )
+        WHERE
+            Id = @TypeId;
+
+        SELECT
+            @RequestGroup = ISNULL(Description, '')
+        FROM
+            dbo.Categories ( NOLOCK )
+        WHERE
+            Id = @ParentId;
+
+        --------------------------------------------------
+        --	===Tạo biến bảng chứa DL Conversations theo Requests===
+        DECLARE @Tmp_Conversations_ByRequests AS TABLE
+        (
+            STT INT IDENTITY(1, 1)
+          , RequestId BIGINT
+          , ConversationId BIGINT
+          , Sender NVARCHAR(40)
+          , TimeCreate VARCHAR(20)
+          , Message NVARCHAR(MAX)
+        );
+        --	===Lấy DL Conversations theo Requests===
+        INSERT INTO @Tmp_Conversations_ByRequests ( RequestId, ConversationId, Sender, TimeCreate, Message )
+        SELECT
+            RequestId -- RequestId - bigint
+          , Id -- ConversationId - bigint
+          , Sender -- Sender - nvarchar(40)
+          , CONVERT(VARCHAR(10), TimeCreate, 103) + ' ' + CONVERT(VARCHAR(10), TimeCreate, 108) -- TimeCreate - varchar(20)
+          , dbo.fn_RemoveTags(Message) -- Message - nvarchar(max)
+        FROM
+            dbo.Conversations ( NOLOCK )
+        WHERE
+            RequestId IN ( SELECT Value FROM dbo.fnSplitString(@RequestId, ',') )
+            AND RequestDetailId IS NULL
+            AND Type <> 4
+        ORDER BY
+            Id DESC;
+
+        ----SELECT * FROM @Tmp_Conversations_ByRequests
+
+        SELECT
+            @Conversations += N'<br/><b style="color:#8A2BE2">- ' + ISNULL(E.EmployeeName, N'Hệ thống') + N'</b> (' + C_R.TimeCreate + N'): ' + C_R.Message
+        FROM
+            @Tmp_Conversations_ByRequests AS C_R
+            LEFT JOIN @Tmp_Employees AS E
+                ON C_R.Sender = E.EmployeeCode;
+
+        --------------------------------------------------
+        --	===Tạo biến bảng chứa DL Assigners theo Requests===
+        DECLARE @Tmp_Assigners_ByRequests AS TABLE ( STT INT IDENTITY(1, 1), RequestId BIGINT, EmployeeCode NVARCHAR(40));
+        --	===Lấy DL Assigners theo Requests===
+        INSERT INTO @Tmp_Assigners_ByRequests ( RequestId, EmployeeCode )
+        SELECT DISTINCT
+               RequestId -- RequestId - bigint
+             , EmployeeCode -- EmployeeCode - nvarchar(40)
+        FROM
+            dbo.Assigners ( NOLOCK )
+        WHERE
+            RequestId IN ( SELECT Value FROM dbo.fnSplitString(@RequestId, ',') )
+            AND Type = 1
+            AND Status = 1
+            AND GroupMail IS NULL;
+
+        ----SELECT * FROM @Tmp_Assigners_ByRequests
+
+        SELECT
+            @Assigners += ISNULL(( ' - ' + T.EmployeeName + '<br/>' ), '')
+        FROM (
+                 SELECT DISTINCT
+                        E.EmployeeName
+                 FROM
+                     @Tmp_Assigners_ByRequests AS A_R
+                     LEFT JOIN @Tmp_Employees AS E
+                         ON A_R.EmployeeCode = E.EmployeeCode
+             ) AS T;
+
+        SELECT
+            @Assigners += ISNULL(( ' - ' + T.GroupMail + '<br/>' ), '')
+        FROM (
+                 SELECT DISTINCT
+                        A.GroupMail
+                 FROM
+                     Assigners AS A ( NOLOCK )
+                 WHERE
+                     A.RequestId IN ( SELECT Value FROM dbo.fnSplitString(@RequestId, ',') )
+                     AND A.GroupMail IS NOT NULL
+                     AND A.Status = 1
+             ) AS T;
+
+        ----SELECT @Assigners AS '@Assigners'
+
+        IF ( @TypeId IN ( 65, 114, 210 -- Add - TuanNA89 - 2019-05-21 - Thêm loại calllog mới 210
+)
+           ) -- Xác nhận công nợ
+            BEGIN
+
+                --------------------------------------------------
+                -- ======LẤY THÔNG TIN CHI TIẾT======
+
+                --	===Lấy DL Nội dung Chi tiết===
+                DECLARE @ItemsChil NVARCHAR(MAX) = N'';
+                SELECT
+                    @ItemsChil += N'<tr style="height: 40px;">' + N'<td><a href="' + N'http://calllogbeta.fptshop.com.vn/Requests/Details/' + CONVERT(NVARCHAR(40), R.RequestId) + N'" target="_blank">' + CONVERT(NVARCHAR(40), R.RequestId) + N'</a></td>' + N'<td style="text-align: left;">' + R.Title + N'</td>' + N'<td>' + CONVERT(NVARCHAR(40), R.StepNo) + N'</td>' + N'<td>' + CONVERT(NVARCHAR(40), R.TimeCreate, 103) + N'</td>' + N'</tr>'
+                FROM
+                    @Tmp_Requests AS R;
+
+                SET @RequestDetails = N'<tr>' + N'<td style="border-top: 1px solid #ccc;padding: 10px;text-align: left" colspan="5">' + N'<table border="1" style="border-collapse: collapse;width: 100%;text-align: center;">' + N'<thead>' + N'<tr style="height: 40px;">' + N'<th>Mã yêu cầu</th>' + N'<th style="text-align: left;">Tên yêu cầu</th>' + N'<th>Bước hiện tại</th>' + N'<th>Ngày tạo</th>' + N'</tr>' + N'</thead>' + N'<tbody>' + @ItemsChil + N'</tbody>' + N'</table>' + N'</td>' + N'</tr>';
+            END;
+
+        --------------------------------------------------
+        --	===Tạo biến bảng chứa DL RequestSteps===
+        DECLARE @Tmp_RequestSteps AS TABLE
+        (
+            STT INT IDENTITY(1, 1)
+          , RequestId BIGINT
+          , StepNo INT
+          , Assigner VARCHAR(40)
+          , TimeStart DATETIME
+        );
+        --	===Lấy DL RequestSteps===
+        INSERT INTO @Tmp_RequestSteps ( RequestId, StepNo, Assigner, TimeStart )
+        SELECT
+            RequestId -- RequestId - bigint
+          , StepNo -- StepNo - int
+          , Assigner -- Assigner - varchar(40)
+          , TimeStart -- TimeStart - datetime
+        FROM
+            dbo.RequestSteps ( NOLOCK )
+        WHERE
+            RequestId IN ( SELECT Value FROM dbo.fnSplitString(@RequestId, ',') )
+            AND StepNo IN ( 1, 2, 3 );
+
+        ----SELECT * FROM @Tmp_RequestSteps
+
+        --------------------------------------------------
+        --	===Lấy DL Người xử lý các bước===
+        SELECT
+            @Assigner1 = EM.EmployeeCode + N' - ' + EM.EmployeeName
+          , @Date1 = RS.TimeStart
+        FROM
+            @Tmp_RequestSteps AS RS
+            LEFT JOIN @Tmp_Employees AS EM
+                ON EM.EmployeeCode = RS.Assigner
+        WHERE
+            RS.StepNo = 1;
+
+        SELECT
+            @Assigner2 = EM.EmployeeCode + N' - ' + EM.EmployeeName
+          , @Date2 = RS.TimeStart
+        FROM
+            @Tmp_RequestSteps AS RS
+            LEFT JOIN @Tmp_Employees AS EM
+                ON EM.EmployeeCode = RS.Assigner
+        WHERE
+            RS.StepNo = 2;
+
+        SELECT
+            @Assigner3 = EM.EmployeeCode + N' - ' + EM.EmployeeName
+          , @Date3 = RS.TimeStart
+        FROM
+            @Tmp_RequestSteps AS RS
+            LEFT JOIN @Tmp_Employees AS EM
+                ON EM.EmployeeCode = RS.Assigner
+        WHERE
+            RS.StepNo = 3;
+
+        DECLARE @ListName NVARCHAR(MAX) = NULL;
+
+        SELECT
+            @ListName = CASE
+                            WHEN StepNo = 1 THEN N'Danh sách các call log còn pending bước thủ kho</p>'
+                            WHEN StepNo = 2 THEN N'Danh sách các call log còn pending bước SM/PSM</p>'
+                            ELSE N'Danh sách các call log còn pending bước KTHO</p>'
+                        END
+        FROM
+            dbo.Requests
+        WHERE
+            Id IN ( SELECT TOP 1 Value FROM dbo.fnSplitString(@RequestId, ',') );
+        --------------------------------------------------
+        --	===Lấy Nội dung email===
+        DECLARE @ResultVar NVARCHAR(MAX);
+        IF ( @TypeId IN ( 65, 114, 210 -- Add - TuanNA89 - 2019-05-21 - Thêm loại calllog mới 210
+)
+           )
+            --	--	181-Sửa chữa Lighbox/Bàn Demo
+            BEGIN
+                SET @ResultVar = N'<div style="padding: 20px;font-family: Time new roman;font-size: 14px;color: #444;">' + N'<strong style="color: #000;">Dear anh/chị!</strong><br/><br/>' + N'<div style="color: #000;">' + N'<p style="font-weight: bold;font-family: Time new roman;">Chúng tôi nhắc nhở Anh Chị về việc chưa hoàn tất chuyển bước call log xuất/bỏ mẫu demo.<br>' + @ListName + ISNULL(@RequestDetails, '') + N'<strong style="margin-top: 50px;display: block;">Anh Chị tiến hành hoàn tất xử lí call log ngay khi nhận được thông tin</strong><br>' + N'<p style="">Mọi yêu cầu giải đáp thắc mắc Anh/Chị vui lòng phản hồi cho nhân sự phụ trách nhãn hàng của chúng tôi</p>' + N'<p style="font-size: 20px;color: red;font-weight: bold;">*Vui lòng không trả lời hoặc khiếu nại vào mail này*</p>' + N'<p style="font-size: 18px;font-weight: bold;">Thanks and Best Regards!</p>' + N'<div>';
+            END;
+
+        --------------------------------------------------
+        --	===Trả về Kết quả===
+        RETURN @ResultVar;
+    END;
+
+GO
+

@@ -2,676 +2,126 @@
 SET ANSI_NULLS ON;
 GO
 /*
-EXEC dbo.sp_ReportDebtConfirm_CalllogDoDungHC_23
-    @TypeId = 23
-  , @StepNo = -1
-  , @RequestId = 0
-  , @Status = N''
-  , @Office = N''
-  , @Shops = N''
-  , @Senders = N''
-  , @TimeCreateStart = '2018-06-01'
-  , @TimeCreateEnd = '2018-06-30'
+==================================================
+Author			:	TuanNA89
+Create date		:	17/04/2020
+Description		:	Tạo Header CL Hợp đồng FEC lỗi
+Note			:	
+==================================================
 */
-ALTER PROCEDURE dbo.sp_ReportDebtConfirm_CalllogDoDungHC_23
-(
-    @TypeId INT = 0
-  , @StepNo INT = -1
-  , @RequestId BIGINT = 0
-  , @Status NVARCHAR(40) = ''
-  , @Office NVARCHAR(40) = ''
-  , @Shops NVARCHAR(3000) = ''
-  , @Senders NVARCHAR(3000) = ''
-  , @TimeCreateStart DATETIME
-  , @TimeCreateEnd DATETIME
-)
+ALTER PROCEDURE CLHopDongFECLoi_Type227_Insert_Header
+    @RequestId_Out BIGINT = 0 OUT
+  , @Result_Out INT = 0 OUT
+  , @Msg_Out NVARCHAR(500) = '' OUT
+  , @Users_XuLy NVARCHAR(500) = '' -- 2222,1111
+  , @MaShop VARCHAR(50) = ''
+  , @NhaTraGop VARCHAR(20) = ''
 AS
     BEGIN
-        -- bản người dùng 
-        SELECT
-            EM.EmployeeCode
-          , EM.EmployeeName
-          , EM.WarehouseCode
-          , EM.RegionHierachyCode
-          , EM.OrganizationHierachyCode
-        INTO
-            #Tmp_F03_Employees
-        FROM
-            dbo.F03_Employees ( NOLOCK ) AS EM;
-        --WHERE
-        --    Status = 'A';
+        DECLARE
+            @StoreName VARCHAR(50) = OBJECT_NAME(@@PROCID)
+          , @ErrorMessage NVARCHAR(MAX) = N'';
+        BEGIN TRY
+            SET @ErrorMessage = N'[' + @StoreName + N']';
+            SET @ErrorMessage = CONCAT(@ErrorMessage, N' @Users_XuLy=N''', ISNULL(@Users_XuLy, NULL), '''');
+            SET @ErrorMessage = CONCAT(@ErrorMessage, N', @MaShop=N''', ISNULL(@MaShop, NULL), '''');
+            SET @ErrorMessage = CONCAT(@ErrorMessage, N', @NhaTraGop=N''', ISNULL(@NhaTraGop, NULL), '''');
 
-        -- lấy shop 
-        SELECT
-            W.WarehouseCode
-          , W.WarehouseName
-          , W.RegionL2
-          , W.RegionL3
-        INTO
-            #Tmp_FRTWarehouse
-        FROM
-            dbo.Warehouse AS W ( NOLOCK )
-        WHERE
-            Status = 'A';
-        -- lấy vùng miền 
-        SELECT
-            RH.RegionHierachyCode
-          , RH.RegionHierachyName
-        INTO
-            #Tmp_FRTF03_RegionHierachies
-        FROM
-            dbo.F03_RegionHierachies AS RH ( NOLOCK )
-        WHERE
-            Status = 'A';
+            INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+            VALUES (
+                       @StoreName -- Title - nvarchar(300)
+                     , @ErrorMessage -- Error - nvarchar(max)
+                     , 0 -- Status - tinyint
+                     , GETDATE() -- TimeCreate - datetime
+                   );
 
-        SELECT
-            O.OrganizationHierachyCode
-          , O.OrganizationHierachyName
-        INTO
-            #Tmp_FRTF03_OrganizationHierachies
-        FROM
-            dbo.F03_OrganizationHierachies AS O ( NOLOCK )
-        WHERE
-            Status = 'A';
+            DECLARE
+                @Title NVARCHAR(2000) = N''
+              , @Content NVARCHAR(MAX) = N''
+              , @TenShop NVARCHAR(255) = N''
+              , @MaShop_Inside VARCHAR(50) = ''
+              , @MaKhuVuc INT = 0
+              , @TenKhuVuc NVARCHAR(500) = N''
+              , @TimeCreate DATETIME = GETDATE()
+              , @DiaChiShop NVARCHAR(500) = N''
+              , @TenNhaTraGop NVARCHAR(500) = N'';
 
-        SELECT
-            EM.EmployeeCode
-          , EM.EmployeeName
-          , R1.RegionHierachyName 'RegionEr'
-          , W.WarehouseCode
-          , W.WarehouseName
-          , O.OrganizationHierachyCode
-          , O.OrganizationHierachyName
-          , R2.RegionHierachyName 'Region'
-          , R3.RegionHierachyName 'ProvineLv3'
-        INTO
-            #Emp
-        FROM
-            #Tmp_F03_Employees ( NOLOCK ) EM
-            LEFT JOIN #Tmp_FRTWarehouse W
-                ON EM.WarehouseCode = W.WarehouseCode
-            LEFT JOIN #Tmp_FRTF03_RegionHierachies R3
-                ON W.RegionL3 = R3.RegionHierachyCode
-            LEFT JOIN #Tmp_FRTF03_RegionHierachies R2
-                ON W.RegionL2 = R2.RegionHierachyCode
-            LEFT JOIN #Tmp_FRTF03_RegionHierachies R1
-                ON EM.RegionHierachyCode = R1.RegionHierachyCode
-            LEFT JOIN #Tmp_FRTF03_OrganizationHierachies O
-                ON EM.OrganizationHierachyCode = O.OrganizationHierachyCode;
+            SELECT TOP 1
+                   @TenShop = WarehouseName
+                 , @MaShop_Inside = WarehouseCode
+                 , @MaKhuVuc = RegionL4
+                 , @DiaChiShop = Address
+            FROM
+                dbo.Warehouse ( NOLOCK )
+            WHERE
+                WarehouseCodeB1 = @MaShop;
 
-        SELECT
-            Id
-          , Description
-          , ParentId
-        INTO
-            #Category
-        FROM
-            dbo.Categories ( NOLOCK );
+            SELECT TOP 1
+                   @TenKhuVuc = RegionHierachyName
+            FROM
+                dbo.F03_RegionHierachies ( NOLOCK )
+            WHERE
+                RegionHierachyCode = @MaKhuVuc;
 
-        SELECT
-            Code
-          , Name
-        INTO
-            #Tmp_MasterDatas
-        FROM
-            dbo.MasterDatas ( NOLOCK )
-        WHERE
-            [Group] = 'RequestStatus';
+            IF @NhaTraGop IN ( '', 'FEC' )
+                BEGIN
+                    SET @TenNhaTraGop = N'FEC';
+                END;
 
-        SELECT
-            GiaTri AS Status
-        INTO
-            #Tmp_Filter_Status
-        FROM
-            dbo.ufn_SplitStringToTable(@Status, ',', 0);
+            SET @Title = CONCAT(N'Hợp đông trả góp ', @TenNhaTraGop, N' lỗi - ', @TenKhuVuc, N' - ', @TenShop, N' - ', FORMAT(@TimeCreate, 'dd/MM/yyyy'));
+            SET @Content += N'Hợp đông số <span style="color:red">{SoHopDong}</span> của nhân viên {MaNVLamHS} - {TenNVLamHS} phát sinh <span style="color:red">{ChiTietLoi}</span>. Mời Anh/Chị bổ sung đầy đủ chứng từ theo như quy trình đã ban hành .<br>';
+            SET @Content += CONCAT(N'Thời hạn cuối cùng để cập nhập là <span style="color:red">', FORMAT(DATEADD(DAY, 1, @TimeCreate), 'dd/MM/yyyy hh:mm:ss'), N'</span>. Sau thời gian này nếu hợp đồng chưa được giải ngân, QA sẽ truy thu nhân viên vi phạm.<br>');
+            SET @Content += N'<span style="color:red">Hệ thống sẽ auto hoàn tất calllog khi hợp đồng được giải ngân</span>';
 
-        SELECT
-            GiaTri AS Shop
-        INTO
-            #Tmp_Filter_Shop
-        FROM
-            dbo.ufn_SplitStringToTable(@Shops, ',', 0);
+            DECLARE @RequestId BIGINT = 0;
+            EXEC dbo.Request_InsertNoSelect
+                @RequestID = @RequestId OUTPUT -- bigint
+              , @Sender = '-1' -- varchar(40)
+              , @Assigner = @Users_XuLy -- varchar(3000)
+              , @Title = @Title -- nvarchar(300)
+              , @Content = @Content -- nvarchar(max)
+              , @TypeId = 227 -- int
+              , @StepNo = 1 -- int
+              , @ToShop = @MaShop_Inside -- varchar(40)
+              , @Status = 1 -- tinyint
+              , @CreateBy = '-1' -- varchar(10)
+              , @SaleCode = @NhaTraGop;
 
-        SELECT
-            GiaTri AS Sender
-        INTO
-            #Tmp_Filter_Sender
-        FROM
-            dbo.ufn_SplitStringToTable(@Senders, ',', 0);
+            IF ( @RequestId > 0 )
+                BEGIN
+                    UPDATE
+                        dbo.Requests
+                    SET
+                        Remark += CONCAT(@StoreName, N' Create! ')
+                    WHERE
+                        Id = @RequestId;
 
-        IF ( CONVERT(DATE, @TimeCreateEnd) >= CONVERT(DATE, GETDATE()))
-            BEGIN
-                SET @TimeCreateEnd = DATEADD(DAY, -1, GETDATE());
-            END;
-        SELECT
-            R.Id
-          , R.Title
-          , R.StepNo
-          , R.Status
-          , R.TimeCreate
-          , R.TimeFutureFinish
-          , R.StepStatus
-          , R.Sender
-          , R.Assigner
-          , R.FromOffice
-          , R.FromShop
-          , R.TypeId
-          , R.GroupId
-          , R.RequestIdRefer
-          , CASE
-                WHEN DAY(R.TimeCreate) < 9 THEN DATEFROMPARTS(YEAR(TimeCreate), MONTH(TimeCreate), '09')
-                ELSE R.TimeCreate
-            END NgayHCBDXuLy_Date --Ngày HC bắt đầu xử lý calllog
-        INTO
-            #Tmp_Request
-        FROM
-            dbo.Requests ( NOLOCK ) R
-        WHERE
-            CONVERT(DATE, R.TimeCreate) BETWEEN CONVERT(DATE, @TimeCreateStart) AND CONVERT(DATE, @TimeCreateEnd)
-            AND R.TypeId = @TypeId
-            AND ( @StepNo = -1 OR ( @StepNo > 0 AND R.StepNo = @StepNo ))
-            AND ( @RequestId = 0 OR ( @RequestId > 0 AND R.Id = @RequestId ))
-            AND (
-                    (
-                        @Status <> ''
-                        AND R.Status IN ( SELECT St.Status FROM #Tmp_Filter_Status AS St )
-                    )
-                    OR ( @Status = '' AND R.Status < 5 )
-                )
-            AND ( @Office = '' OR ( @Office <> '' AND R.FromOffice = @Office ))
-            AND (
-                    @Shops = ''
-                    OR (
-                           @Shops <> ''
-                           AND R.FromShop IN ( SELECT Sh.Shop FROM #Tmp_Filter_Shop AS Sh )
-                       )
-                    OR ( @Shops <> '' AND R.ToShop IN ( SELECT Sh.Shop FROM #Tmp_Filter_Shop AS Sh ))
-                )
-            AND (
-                    @Senders = ''
-                    OR (
-                           @Senders <> ''
-                           AND R.Sender IN ( SELECT Se.Sender FROM #Tmp_Filter_Sender AS Se )
-                       )
-                );
-
-        -- tạo mới bảng item
-        CREATE TABLE #Item
-        (
-            MaNhom INT
-          , TenNhom NVARCHAR(500)
-          , MaThietBi INT
-          , TenThietBi NVARCHAR(500)
-          , GiaThietBi FLOAT
-          , DonVi NVARCHAR(100)
-          , HinhThucXuat NVARCHAR(100)
-          , Loai INT
-          , ItemCode NVARCHAR(50)
-          , MaNhomSP NVARCHAR(50)
-          , TenNhomSP NVARCHAR(200)
-          , TrongLuong NVARCHAR(500)
-        );
-        -- insert bảng item 
-
-        INSERT INTO #Item
-        (
-            MaNhom
-          , TenNhom
-          , MaThietBi
-          , TenThietBi
-          , GiaThietBi
-          , DonVi
-          , HinhThucXuat
-          , Loai
-          , ItemCode
-          , MaNhomSP
-          , TenNhomSP
-          , TrongLuong
-        )
-        EXEC FRT_BW.dbo.FRT_Callog_DSThietBi @tyle = 1;
-
-        --lấy detail
-        CREATE TABLE #tmp_HC -- tạo mới bảng detail
-        (
-            ID BIGINT
-          , RequestID BIGINT
-          , ProductGroup NVARCHAR(MAX)
-          , ItemCode INT
-        --mã thiết bị
-          , Item NVARCHAR(MAX)
-          , Quantity INT
-          , Quantity3 INT
-          , [Sum] INT
-          , Price FLOAT
-        -- giá thiết bị
-          , Note NVARCHAR(MAX)
-          , Unit NVARCHAR(MAX)
-        -- đơn vị
-          , QuantityAvaiable INT
-          , Quantity1 INT
-          , GroupId INT
-        -- mã nhóm
-          , Property10 NVARCHAR(MAX)
-          , Quantity2 INT
-          , Property9 NVARCHAR(MAX)
-          , ShopCode NVARCHAR(MAX)
-          , Approved BIT
-          , HinhThucXuat NVARCHAR(MAX)
-          , Property2 NVARCHAR(MAX)
-          , HTX NVARCHAR(MAX)
-          , is_Condition INT
-          , D13 NVARCHAR(MAX)
-          , Property12 NVARCHAR(MAX)
-          , TimeConfirm NVARCHAR(MAX)
-          , Bienbangbangiao NVARCHAR(MAX)
-        );
+                    EXEC dbo.Email_MakeByProcess
+                        @RequestId = @RequestId -- bigint
+                      , @Title = N'' -- nvarchar(300)
+                      , @TypeProcess = 1; -- int
 
 
+                    SELECT
+                        @RequestId_Out = @RequestId
+                      , @Result_Out = 1
+                      , @Msg_Out = N'Tạo CallLog thành công!';
+                END;
+        END TRY
+        BEGIN CATCH
+            SET @ErrorMessage += CONCAT(N' - ERROR_MESSAGE: ', ERROR_MESSAGE(), ' - ERROR_LINE: ', ERROR_LINE());
 
-        --insert bảng detail
-        INSERT INTO #tmp_HC
-        (
-            ID
-          , RequestID
-          , ProductGroup
-          , ItemCode
-          , Item
-          , Quantity
-          , Quantity3
-          , Sum
-          , Price
-          , Note
-          , Unit
-          , QuantityAvaiable
-          , Quantity1
-          , GroupId
-          , Property10
-          , Quantity2
-          , Property9
-          , ShopCode
-          , Approved
-          , HinhThucXuat
-          , Property2
-          , HTX
-          , is_Condition
-          , D13
-          , Property12
-          , TimeConfirm
-        )
-        SELECT
-            RD.Id
-          , RD.RequestId
-          , T.MaNhomSP + ' - ' + T.TenNhomSP AS ProductGroup
-          , T.MaThietBi 'ItemCode'
-        -- Add TrungNC3  - 20.10.2016
-          , CONVERT(NVARCHAR(50), T.MaThietBi) + ' - ' + CONVERT(NVARCHAR(3000), T.TenThietBi) 'Item'
-          , RD.Quantity
-          , RD.Quantity3
-          -- Add TrungNC3  - 29.10.2016
-          --ISNULL(RD.QuantityAvaiable, RD.Quantity) * T.GiaThietBi 'Sum'
-          , RD.[Sum] -- Add -ThuongNM2 - 06.06.2018
-          , T.GiaThietBi 'Price'
-          , RD.Note
-          , T.DonVi 'Unit'
-          -- Edit - ThuongNM2 - 20180531 - Thay đổi QuantityAvaiable
-          --, 'QuantityAvaiable' = CASE WHEN RD.QuantityAvaiable IS NULL THEN RD.Quantity
-          --                            ELSE RD.QuantityAvaiable
-          --                       END
-          -- Edit - ThuongNM2 - 20180531 - Thay đổi QuantityAvaiable
-          , RD.QuantityAvaiable
-          , 'Quantity1' = CASE WHEN RD.Quantity1 IS NULL THEN RD.Quantity ELSE RD.Quantity1 END
-          , T.MaNhom 'GroupId'
-          , RD.Property10
-          , RD.Quantity2
-          , RD.Property9
-          , RD.ShopCode
-        -- Add TrungNC3 TypeId = 155  - 20.10.2016
-          , RD.Approved -- Add TrungNC3 TypeId = 23  - 20.2.2016
-          , HinhThucXuat = CASE
-                               WHEN ISNULL(RD.Property1, '') = '' THEN T.HinhThucXuat
-                               ELSE RD.Property1
-                           END
-          , RD.Property2
-          , T.HinhThucXuat AS HTX
-          , CASE
-                WHEN ( DATEDIFF(DAY, RD.Time4, GETDATE()) < 13 AND RD.Property12 = N'NCC' ) THEN 1
-                ELSE 0
-            END 'is_Condition'
-          , CONVERT(NVARCHAR(30), RD.Time4 + 13, 103) AS D13
-          , Property12
-          , CONVERT(NVARCHAR(30), RD.Time3, 103) AS TimeConfirm
-        FROM
-            #Tmp_Request R
-            INNER JOIN dbo.RequestDetails ( NOLOCK ) RD
-                ON RD.RequestId = R.Id
-            LEFT JOIN #Item T
-                ON ISNULL(RD.Quantity6, RD.ItemId) = T.MaThietBi
-        WHERE
-            RD.Status = 1;
+            --	===Ghi Log===
+            INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+            VALUES (
+                       @StoreName -- Title - nvarchar(300)
+                     , CONCAT(N'Lỗi ', @ErrorMessage) -- Error - nvarchar(max)
+                     , 1 -- Status - tinyint
+                     , GETDATE() -- TimeCreate - datetime
+                   );
 
-        -- lấy hình
-        SELECT
-            F.RequestId
-          , F.RequestDetailId
-          , F.Uri AS Uri
-          , F.TimeCreate
-          , F.Domain AS Domain
-        INTO
-            #Temp_FileAttachs_23
-        FROM
-            dbo.FileAttachs AS F ( NOLOCK )
-            INNER JOIN #Tmp_Request R
-                ON R.Id = F.RequestId
-        WHERE
-            F.Status = 1
-            AND F.Uri <> '';
-
-        --lấy hình đính kèm
-
-        UPDATE
-            TRD
-        SET
-            TRD.Bienbangbangiao = STUFF((
-                                            SELECT ( ',' + TF.Uri )
-                                            FROM
-                                                dbo.#Temp_FileAttachs_23 TF
-                                            WHERE
-                                                TF.RequestId = TRD.RequestId
-                                            FOR XML PATH('')
-                                        )
-                                      , 1
-                                      , 1
-                                      , ''
-                                       )
-        FROM
-            #tmp_HC AS TRD
-            LEFT JOIN #Temp_FileAttachs_23 AS TF
-                ON TF.RequestId = TRD.RequestID;
-
-        --SELECT * FROM #Tmp_Request
-        --SELECT * FROM #tmp_HC
-        --------------------------------ThuongNM2 Thêm KPI CallLog--------------------------------------
-        -- lấy callog bill vận chuyển sinh ra từ callLog Đồ dùng HC
-        SELECT
-            R.Id AS RequestId
-          , C.Message
-        INTO
-            #Temp_CreateBillFromDDHC
-        FROM
-            #Tmp_Request R
-            INNER JOIN dbo.Conversations C ( NOLOCK )
-                ON R.Id = C.RequestId
-        WHERE
-            C.Message LIKE N'%Hệ thống đã auto sinh ra số calllog bill vận chuyển:%';
-        SELECT
-            T.RequestId
-          , CONVERT(BIGINT, SUBSTRING(T.Message, ( CHARINDEX('>', T.Message, 105) + 1 ), ( CHARINDEX('<', T.Message, 105) - CHARINDEX('>', T.Message, 105) - 1 ))) AS RequestIdBill
-        INTO
-            #Temp_CreateBillFromDDHC_Final
-        FROM
-            #Temp_CreateBillFromDDHC AS T;
-        --Lấy thông tin callLog Bill vận chuyển
-        SELECT
-            T.RequestId
-          , T.RequestIdBill
-          , R.TimeCreate AS TimeCreateBill
-          , RD.ProductCode AS SoVanDon
-        INTO
-            #Temp_BillFinal
-        FROM
-            #Temp_CreateBillFromDDHC_Final T
-            INNER JOIN dbo.Requests R ( NOLOCK )
-                ON T.RequestIdBill = R.Id
-            LEFT JOIN dbo.RequestDetails RD ( NOLOCK )
-                ON T.RequestIdBill = RD.RequestId;
-        --SELECT * FROM #Temp_BillFinal
-        CREATE TABLE #Temp_DinhNgiaShop
-        (
-            ShopCodeInside NVARCHAR(40)
-          , WarehouseName NVARCHAR(1000)
-          , KhuVuc NVARCHAR(500)
-          , MaKhuVuc NVARCHAR(40)
-          , Tinh NVARCHAR(200)
-          , MaTinh NVARCHAR(40)
-          , VungMien NVARCHAR(500)
-          , MaVungMien NVARCHAR(40)
-          , CayPhanCap NVARCHAR(100)
-          , MaCayPC NVARCHAR(40)
-          , WarehouseType BIT
-          , ShopNoi BIT
-          , ShopNgoai BIT
-          , EmployeeName NVARCHAR(1000)
-          , UpdateDate DATETIME
-        );
-        INSERT #Temp_DinhNgiaShop
-        (
-            ShopCodeInside
-          , WarehouseName
-          , KhuVuc
-          , MaKhuVuc
-          , Tinh
-          , MaTinh
-          , VungMien
-          , MaVungMien
-          , CayPhanCap
-          , MaCayPC
-          , WarehouseType
-          , ShopNoi
-          , ShopNgoai
-          , EmployeeName
-          , UpdateDate
-        )
-        EXEC sp_LoadDinhNghiaShopNgoaiThanhNoiThanhInslide;
-        SELECT
-            R.Id AS RequestId
-          , RS.TimeEnd
-        INTO
-            #Temp_CompletedStep2
-        FROM
-            #Tmp_Request R
-            LEFT JOIN dbo.RequestSteps RS ( NOLOCK )
-                ON R.Id = RS.RequestId
-        WHERE
-            RS.StepNo = 2;
-        ------------------------------------------------------------------------------------------------
-        -- xuất detail
-        SELECT
-            R.Id
-          , RD.ID AS RDID
-          , RG.Description 'RequestGroup'
-        -- Nhóm yc
-          , RC.Description 'RequestType'
-        -- Loại yc
-          , '' 'Subject'
-        -- Chủ đề
-          , R.Title 'RequestName'
-        --Tên yc
-          , ISNULL(ES.Region, ES.RegionEr) 'RegionSender'
-        --Vùng miền (lv 2 shop tạo yc)
-          , ISNULL(ES.Region, ES.RegionEr) AS 'ProvineSender' -- theo shop/BO
-        --Tỉnh(Vùng miền level 3 của shop tạo yêu cầu)         
-          , CASE
-                WHEN ISNULL(ES.WarehouseCode, '') <> '' THEN ISNULL(ES.WarehouseCode + '-' + ES.WarehouseName, '')
-                ELSE ES.OrganizationHierachyCode + '-' + ES.OrganizationHierachyName
-            END AS 'ShopNameSend'
-        --Shop yêu cầu
-          , R.Sender + '-' + ES.EmployeeName 'Sender'
-        --Người yêu cầu
-          , ISNULL(EA.Region, EA.RegionEr) 'RegionAssigner'
-        --Vùng miền (Vùng miền level 2 của shop/ phòng ban xử lý)
-          , ISNULL(EA.ProvineLv3, EA.RegionEr) 'ProvineAssigner'
-        --Tỉnh (Vùng miền level 3 của shop/ phòng ban xử lý)
-          , ISNULL(ISNULL(EA.WarehouseName, EA.OrganizationHierachyName), '') 'ShopOrOfficeAssigner'
-        --Shop - phòng xử lý yc
-          , ISNULL(R.Assigner + '-' + EA.EmployeeName, '') 'Assigner'
-        --Người duyệt
-          , ISNULL(CONVERT(VARCHAR(10), R.TimeCreate, 103), '') 'TimeCreateRequest'
-        --Ngày yc
-          , ISNULL(CONVERT(VARCHAR(10), R.TimeFutureFinish, 103), '') 'TimeExpect'
-        -- Ngày dự kiến hoàn thành
-          , M1.Name 'Status'
-        --Trạng thái
-          , R.StepNo
-        --Bước	
-          , M2.Name 'StepStatus'
-        --Trạng thái bước        
-          , RD.ProductGroup
-        --nhóm sản phẩm
-          , RD.Item
-        --mặt hàng
-          , RD.HinhThucXuat
-        -- hình thức xuất
-          , RD.Property2
-        --chi tiết thay đổi kho xuất sp
-          , RD.Quantity3
-        -- số lượng tồn kho
-          , RD.Quantity
-        -- số lượng đặt
-          , RD.Quantity1
-        -- số lượng confirm
-          , RD.QuantityAvaiable
-        -- số lượng xác nhận của shop/Bo
-          , RD.TimeConfirm
-        --ngày thực thế nhận hàng
-          , RD.Price
-        -- đơn giá
-          , RD.Sum
-        --thành tiền
-          , RD.Unit
-        --đơn vị tính
-          , RD.Note
-        --ghi chú
-          , RD.Property10
-        -- số giao dịch
-          , RD.Quantity2
-        -- số lượng xuất hóa đơn
-          , RD.Property9
-        -- số hóa đơn
-          , RD.Bienbangbangiao -- biên bản bàn giao
-          , BL.SoVanDon -- số vận đơn
-          , CONVERT(NVARCHAR(50), R.NgayHCBDXuLy_Date, 103) AS NgayHCBDXuLy --Ngày HC bắt đầu xử lý calllog
-          , ISNULL(CONVERT(VARCHAR(50), CP.TimeEnd, 103), '') AS NgayXuatHangKhoHC --Ngày xuất hàng từ kho NCC/ kho HC (shop nội thành)
-          , ISNULL(CONVERT(VARCHAR(10), BL.TimeCreateBill, 103), '') AS NgayNVCNhanHang --Ngày NVC nhận hàng từ HC
-          , SoNgayHCXL = CASE
-                             WHEN (
-                                      LOWER(RD.HinhThucXuat) = N'xuất từ kho hc' COLLATE Latin1_General_CI_AI
-                                      AND DN.ShopNgoai = 1
-                                      AND DN.ShopNoi = 0
-                                      AND BL.TimeCreateBill IS NOT NULL
-                                  ) THEN CASE
-                                             WHEN R.NgayHCBDXuLy_Date <= BL.TimeCreateBill THEN dbo.fn_Get_DATEDIFF(R.NgayHCBDXuLy_Date, BL.TimeCreateBill, 0, 0, 0)
-                                             ELSE dbo.fn_Get_DATEDIFF(BL.TimeCreateBill, R.NgayHCBDXuLy_Date, 0, 0, 0) * -1
-                                         END
-                             WHEN (
-                                      CP.TimeEnd IS NOT NULL
-                                      AND ISNULL(RD.HinhThucXuat, '') = N'Xuất từ NCC' COLLATE Latin1_General_CI_AI
-                                      AND ( DN.ShopNoi = 1 OR DN.ShopNgoai = 1 )
-                                  ) THEN CASE
-                                             WHEN R.NgayHCBDXuLy_Date <= CP.TimeEnd THEN dbo.fn_Get_DATEDIFF(R.NgayHCBDXuLy_Date, CP.TimeEnd, 0, 0, 0)
-                                             ELSE dbo.fn_Get_DATEDIFF(CP.TimeEnd, R.NgayHCBDXuLy_Date, 0, 0, 0) * -1
-                                         END
-                             WHEN (
-                                      CP.TimeEnd IS NOT NULL
-                                      AND LOWER(RD.HinhThucXuat) = N'xuất từ kho hc' COLLATE Latin1_General_CI_AI
-                                      AND DN.ShopNoi = 1
-                                      AND DN.ShopNgoai = 0
-                                  ) THEN CASE
-                                             WHEN R.NgayHCBDXuLy_Date <= CP.TimeEnd THEN dbo.fn_Get_DATEDIFF(R.NgayHCBDXuLy_Date, CP.TimeEnd, 0, 0, 0)
-                                             ELSE dbo.fn_Get_DATEDIFF(CP.TimeEnd, R.NgayHCBDXuLy_Date, 0, 0, 0) * -1
-                                         END
-                             WHEN (
-                                      CP.TimeEnd IS NOT NULL
-                                      --AND ISNULL(RD.HinhThucXuat, '') = N'Xuất từ NCC' COLLATE Latin1_General_CI_AI
-                                      AND ISNULL(R.FromShop, '') = ''
-                                  ) THEN CASE
-                                             WHEN R.NgayHCBDXuLy_Date <= CP.TimeEnd THEN dbo.fn_Get_DATEDIFF(R.NgayHCBDXuLy_Date, CP.TimeEnd, 0, 0, 0)
-                                             ELSE dbo.fn_Get_DATEDIFF(CP.TimeEnd, R.NgayHCBDXuLy_Date, 0, 0, 0) * -1
-                                         END
-                             ELSE NULL
-                         END --Số ngày HC xử lý
-          , CONVERT(NVARCHAR(100), '') AS KPI --KPI
-          , CASE
-                WHEN DN.VungMien = N'Miền Trung' THEN N'Miền Trung'
-                WHEN DN.VungMien IN ( N'Miền Bắc 1', N'Hà Nội', N'Miền Bắc 2' ) THEN N'Miền Bắc'
-                WHEN DN.VungMien IN ( N'Miền Đông Nam Bộ', N'Miền Tây Nam Bộ', N'Hồ Chí Minh' ) THEN N'Miền Nam'
-                ELSE DN.VungMien
-            END AS MienTinhKPI --Miền tính KPI
-          , CASE
-                WHEN DN.ShopNoi = 1
-                     AND DN.ShopNgoai = 0 THEN N'Nội Thành'
-                WHEN DN.ShopNgoai = 1
-                     AND DN.ShopNoi = 0 THEN N'Ngoại Thành'
-                WHEN ISNULL(R.FromShop, '') = ''
-                     AND ISNULL(R.FromOffice, '') <> '' THEN N'Khối BO'
-                ELSE N'Chưa Định Nghĩa'
-            END AS NoiNgoaiThanh -- Nội/Ngoại thành
-        INTO
-            #Temp_RequestDetail_Final
-        FROM
-            #Tmp_Request R
-            INNER JOIN #tmp_HC RD
-                ON RD.RequestID = R.Id
-            LEFT JOIN #Category AS RC
-                ON R.TypeId = RC.Id
-            LEFT JOIN #Category AS RG
-                ON RC.ParentId = RG.Id
-            LEFT JOIN #Emp AS ES
-                ON ES.EmployeeCode = R.Sender
-            LEFT JOIN #Emp AS EA
-                ON EA.EmployeeCode = R.Assigner
-            LEFT JOIN #Tmp_MasterDatas AS M1
-                ON CONVERT(NVARCHAR(1), R.Status) = M1.Code
-            LEFT JOIN #Tmp_MasterDatas AS M2
-                ON CONVERT(NVARCHAR(1), R.StepStatus) = M2.Code
-            -------------------------------------------------------
-            LEFT JOIN #Temp_BillFinal BL
-                ON BL.RequestId = R.Id
-            LEFT JOIN #Temp_CompletedStep2 CP
-                ON R.Id = CP.RequestId
-            LEFT JOIN #Temp_DinhNgiaShop DN
-                ON ISNULL(R.FromShop, ES.WarehouseCode) = DN.ShopCodeInside;
-        --LEFT JOIN #Tmp_FRTF03_OrganizationHierachies O2 ON R.FromOffice=O2.OrganizationHierachyCode
-        -------------------------------------------------------
-        UPDATE
-            #Temp_RequestDetail_Final
-        SET --KPI = ( CASE WHEN SoNgayHCXL <= 5
-            --                  AND Status <> N'Hủy' THEN N'Đạt'
-            --             WHEN SoNgayHCXL > 5
-            --                  AND Status <> N'Hủy' THEN N'Không đạt'
-            --             ELSE N'Không tính'
-            --        END )
-            KPI = CASE
-                      WHEN [Status] = N'Đã hủy' THEN N'Không tính'
-                      WHEN SoNgayHCXL <= 5 THEN N'Đạt'
-                      WHEN SoNgayHCXL > 5 THEN N'Không đạt'
-                      ELSE NULL
-                  END
-        WHERE
-            SoNgayHCXL IS NOT NULL;
-
-        SELECT * FROM #Temp_RequestDetail_Final R ORDER BY R.Id ASC;
-
-        DROP TABLE
-            #Emp
-          , #Tmp_Filter_Sender
-          , #Tmp_Filter_Shop
-          , #Tmp_Filter_Status
-          , #Category
-          , #Tmp_MasterDatas
-          , #Tmp_Request
-          , #Tmp_F03_Employees
-          , #Tmp_FRTWarehouse
-          , #Tmp_FRTF03_OrganizationHierachies
-          , #Tmp_FRTF03_RegionHierachies
-          , #tmp_HC
-          , #Item
-          , #Temp_FileAttachs_23
-          , #Temp_CreateBillFromDDHC
-          , #Temp_CreateBillFromDDHC_Final
-          , #Temp_DinhNgiaShop
-          , #Temp_BillFinal
-          , #Temp_CompletedStep2
-          , #Temp_RequestDetail_Final;
+            SELECT @Msg_Out = ERROR_MESSAGE();
+        END CATCH;
     END;
-
 GO
+

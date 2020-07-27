@@ -1,127 +1,121 @@
-﻿SET QUOTED_IDENTIFIER ON;
-SET ANSI_NULLS ON;
-GO
-/*
-==================================================
-Author			:	TuanNA89
-Create date		:	17/04/2020
-Description		:	Tạo Header CL Hợp đồng FEC lỗi
-Note			:	
-==================================================
-*/
-ALTER PROCEDURE CLHopDongFECLoi_Type227_Insert_Header
-    @RequestId_Out BIGINT = 0 OUT
-  , @Result_Out INT = 0 OUT
-  , @Msg_Out NVARCHAR(500) = '' OUT
-  , @Users_XuLy NVARCHAR(500) = '' -- 2222,1111
-  , @MaShop VARCHAR(50) = ''
-  , @NhaTraGop VARCHAR(20) = ''
-AS
-    BEGIN
-        DECLARE
-            @StoreName VARCHAR(50) = OBJECT_NAME(@@PROCID)
-          , @ErrorMessage NVARCHAR(MAX) = N'';
-        BEGIN TRY
-            SET @ErrorMessage = N'[' + @StoreName + N']';
-            SET @ErrorMessage = CONCAT(@ErrorMessage, N' @Users_XuLy=N''', ISNULL(@Users_XuLy, NULL), '''');
-            SET @ErrorMessage = CONCAT(@ErrorMessage, N', @MaShop=N''', ISNULL(@MaShop, NULL), '''');
-            SET @ErrorMessage = CONCAT(@ErrorMessage, N', @NhaTraGop=N''', ISNULL(@NhaTraGop, NULL), '''');
+﻿function contruct_227() {
+        $.get('/Requests/GetAllRequestDetails', { id: CL.Id }, function (respone) {
+            var dataHandsontable = [];
 
-            INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
-            VALUES (
-                       @StoreName -- Title - nvarchar(300)
-                     , @ErrorMessage -- Error - nvarchar(max)
-                     , 0 -- Status - tinyint
-                     , GETDATE() -- TimeCreate - datetime
-                   );
+            dataHandsontable = respone;
+            var strChiTietLoi = [];
+            $.each(dataHandsontable, function(index, item){
+                strChiTietLoi.push(item.ChiTietLoi);
+                item.ChiTietLoi.replace(/\n|\r/g, '<br />')
+            });
+            
+            var content = $('.message-content p')[0].outerHTML;
+            content = content.replace('{ChiTietLoi}', strChiTietLoi.join(','));
+            $('.message-content p')[0].outerHTML = content;
 
-            DECLARE
-                @Title NVARCHAR(2000) = N''
-              , @Content NVARCHAR(MAX) = N''
-              , @TenShop NVARCHAR(255) = N''
-              , @MaShop_Inside VARCHAR(50) = ''
-              , @MaKhuVuc INT = 0
-              , @TenKhuVuc NVARCHAR(500) = N''
-              , @TimeCreate DATETIME = GETDATE()
-              , @DiaChiShop NVARCHAR(500) = N''
-              , @TenNhaTraGop NVARCHAR(500) = N'';
+            var setting = function () {
+                return {
+                    data: dataHandsontable,
+                    allowInsertColumn: false,
+                    allowRemoveColumn: false,
+                    autoColumnSize: true,
+                    autoWrapCol: true,
+                    columnSorting: false,
+                    //colWidths: 'undefined',
+                    currentColClassName: 'currentCol',
+                    fixedColumnsLeft: 0,
+                    manualColumnMove: false,
+                    manualColumnResize: true,
+                    viewportColumnRenderingOffset: 8,
+                    sortIndicator: true,
+                    //================================Rows=======
+                    autoWrapRow: true,
+                    copyRowsLimit: 1000,
+                    currentRowClassName: 'currentRow',
+                    fixedRowsTop: 0,
+                    manualRowMove: false,
+                    manualRowResize: true,
+                    rowHeaders: true,
+                    minRows: 1,
+                    allowInvalid: false,
+                    stretchH: 'all',
+                    commentedCellClassName: 'htCommentCell',
+                    comments: true,
+                    contextMenu: true,
+                    copyable: true,
+                    customBorders: false,
+                    debug: false,
+                    disableVisualSelection: true,
+                    enterBeginsEditingBoolean: true,
+                    fillHandle: true,
+                    outsideClickDeselects: true,
+                    fragmentSelection: false,
+                    groups: false,
+                    invalidCellClassName: 'htInvalid',
+                    mergeCells: false,
+                    multiSelect: true,
+                    noWordWrapClassName: 'htNoWrap',
+                    placeholder: false,
+                    placeholderCellClassName: 'htPlaceholder',
+                    readOnlyCellClassName: 'htDimmed',
+                    search: false,
+                    trimWhitespace: true,
+                    undo: true,
+                    formulas: true,
+                    wordWrap: true,
+                    colHeaders:
+                        [
+                            'STT',
+                            'Tên Shop',
+                            'Nhân viên làm hồ sơ',
+                            'Số hợp đồng',
+                            'Số SO',
+                            'Ngày xuất SO',
+                            'Họ tên KH',
+                            'Tên sản phẩm',
+                            'Số tiền SO',    
+                            //'Số lần',
+                            'Thông tin cần bổ sung',
+                            'Ngày ghi nhận lỗi'
+                        ],
+                    columns: [
+                        { data: "STT", type: 'text', width: 50, readOnly: true },
+                        { data: "DiaChiShop", type: 'text', width: 250, readOnly: true },
+                        { data: "NhanVienLamHoSo", type: 'text', width: 200, readOnly: true },
+                        { data: "SoHopDong", type: 'text', width: 150, readOnly: true },
+                        { data: "SoDonHang", type: 'text', width: 100, readOnly: true },
+                        { data: "NgayXuatHoaDon", type: 'text', width: 100, readOnly: true },
+                        { data: "HoTenKH", type: 'text', width: 180, readOnly: true },
+                        { data: "TenSanPham", type: 'text', width: 250, readOnly: true },
+                        { data: "SoTienSO", type: 'text', width: 100, readOnly: true },
+                        //{ data: "SoLan", type: 'text', width: 100, readOnly: true },
+                        { data: "ChiTietLoi", type: 'text', width: 250, readOnly: true },
+                        { data: "NgayGhiNhanLoi", type: 'text', width: 120, readOnly: true },
+                    ],
+                };
+            }
 
-            SELECT TOP 1
-                   @TenShop = WarehouseName
-                 , @MaShop_Inside = WarehouseCode
-                 , @MaKhuVuc = RegionL4
-                 , @DiaChiShop = Address
-            FROM
-                dbo.Warehouse ( NOLOCK )
-            WHERE
-                WarehouseCodeB1 = @MaShop;
+            hot = new Handsontable(container, setting());
+            hot.render();
 
-            SELECT TOP 1
-                   @TenKhuVuc = RegionHierachyName
-            FROM
-                dbo.F03_RegionHierachies ( NOLOCK )
-            WHERE
-                RegionHierachyCode = @MaKhuVuc;
+            //$btnComment.on('click', function () {
+            //    var myDataCc = hotCc == undefined ? "" : $.grep(hotCc.getSettings().data, function (item, index) {
+            //        return item.id != undefined && item.id != '' && item.id != null && item.id != 0 && (item.type == 'Cc' || item.type == 'GroupMail' || item.type == 'Group Mail Cc');
+            //    });
 
-            IF @NhaTraGop IN ( '', 'FEC' )
-                BEGIN
-                    SET @TenNhaTraGop = N'FEC';
-                END;
+            //    var message = $("#Message").val();
+            //    if (message.length == 0) {
+            //        XFunction.RenderMessage("error", "Trao đổi phải nhập tin nhắn :(");
+            //        return false;
+            //    } else {
+            //        $('#myModalWatting').modal('show');
+            //        $('#Details').val(JSON.stringify([]));
+            //        $('#DetailsCc').val(JSON.stringify(myDataCc));
+            //        var form = $("form#form-detail");
+            //        form.attr("action", "/Requests/Conversation");
+            //        form.submit();
+            //    }
+            //});
 
-            SET @Title = CONCAT(N'Hợp đông trả góp ', @TenNhaTraGop, N' lỗi - ', @TenKhuVuc, N' - ', @TenShop, N' - ', FORMAT(@TimeCreate, 'dd/MM/yyyy'));
-            SET @Content += N'Hợp đông số <span style="color:red">{SoHopDong}</span> của nhân viên {MaNVLamHS} - {TenNVLamHS} phát sinh <span style="color:red">{ChiTietLoi}</span>. Mời Anh/Chị bổ sung đầy đủ chứng từ theo như quy trình đã ban hành .<br>';
-            SET @Content += CONCAT(N'Thời hạn cuối cùng để cập nhập là <span style="color:red">', FORMAT(DATEADD(DAY, 1, @TimeCreate), 'dd/MM/yyyy hh:mm:ss'), N'</span>. Sau thời gian này nếu hợp đồng chưa được giải ngân, QA sẽ truy thu nhân viên vi phạm.<br>');
-            SET @Content += N'<span style="color:red">Hệ thống sẽ auto hoàn tất calllog khi hợp đồng được giải ngân</span>';
-
-            DECLARE @RequestId BIGINT = 0;
-            EXEC dbo.Request_InsertNoSelect
-                @RequestID = @RequestId OUTPUT -- bigint
-              , @Sender = '-1' -- varchar(40)
-              , @Assigner = @Users_XuLy -- varchar(3000)
-              , @Title = @Title -- nvarchar(300)
-              , @Content = @Content -- nvarchar(max)
-              , @TypeId = 227 -- int
-              , @StepNo = 1 -- int
-              , @ToShop = @MaShop_Inside -- varchar(40)
-              , @Status = 1 -- tinyint
-              , @CreateBy = '-1' -- varchar(10)
-              , @SaleCode = @NhaTraGop;
-
-            IF ( @RequestId > 0 )
-                BEGIN
-                    UPDATE
-                        dbo.Requests
-                    SET
-                        Remark += CONCAT(@StoreName, N' Create! ')
-                    WHERE
-                        Id = @RequestId;
-
-                    EXEC dbo.Email_MakeByProcess
-                        @RequestId = @RequestId -- bigint
-                      , @Title = N'' -- nvarchar(300)
-                      , @TypeProcess = 1; -- int
-
-
-                    SELECT
-                        @RequestId_Out = @RequestId
-                      , @Result_Out = 1
-                      , @Msg_Out = N'Tạo CallLog thành công!';
-                END;
-        END TRY
-        BEGIN CATCH
-            SET @ErrorMessage += CONCAT(N' - ERROR_MESSAGE: ', ERROR_MESSAGE(), ' - ERROR_LINE: ', ERROR_LINE());
-
-            --	===Ghi Log===
-            INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
-            VALUES (
-                       @StoreName -- Title - nvarchar(300)
-                     , CONCAT(N'Lỗi ', @ErrorMessage) -- Error - nvarchar(max)
-                     , 1 -- Status - tinyint
-                     , GETDATE() -- TimeCreate - datetime
-                   );
-
-            SELECT @Msg_Out = ERROR_MESSAGE();
-        END CATCH;
-    END;
-GO
-
+        });
+    };

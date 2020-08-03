@@ -4,26 +4,30 @@ GO
 /*
 ==================================================
 Author			:	TuanNA89
-Create date		:	26/12/2018
-Description		:	Calllog gọi store POS để check thông tin sản phẩm và Imei
+Create date		:	23/05/2019
+Description		:	Store mobile - xử lý calllog Xuất - Nhập hàng Demo (loại 210)
 Note			:	
+Đưa code lên thưc
+- POS_HNI đổi thành [SV_THUC_FRT_POS].FRT_POS
+- FRT_MDM đổi thành [SV_THUC_FRT_POS].FRT_MDM
 ==================================================
 Test:
-EXEC sp_CalllogHangDemo_CallPOS_CheckImei_New
+EXEC sp__mCallLog__DemoReq__XuLy
   @RequestId = 0
-, @TypeId = 0
-
+, @User = 0
+, @NoiDungTraoDoi = ''
 */
-ALTER PROCEDURE dbo.sp_CalllogHangDemo_CallPOS_CheckImei_New ( @RequestId BIGINT = 0, @TypeId INT = 0, @User VARCHAR(20) = '' )
+ALTER PROCEDURE dbo.sp__mCallLog__DemoReq__XuLy
+(
+    @RequestId BIGINT = 0
+  , @User VARCHAR(20) = ''
+  , @NoiDungTraoDoi NVARCHAR(MAX) = ''
+  , @Images NVARCHAR(MAX) = ''
+  , @FromDevice NVARCHAR(50) = ''
+)
 AS
     BEGIN
         SET XACT_ABORT ON;
-
-        -- SELECT
-        --     1 AS 'Result'
-        --   , 'Thành công' AS 'Msg'
-        --   , '123' AS 'SoYCDC';
-        --RETURN
 
         DECLARE
             @Log NVARCHAR(MAX) = N''
@@ -32,17 +36,19 @@ AS
           , @ycdcDocEntry INT = 0;
 
         SET @Log += N', @RequestId=''' + ISNULL(CONVERT(NVARCHAR(50), @RequestId), 'NULL') + N'''';
-        SET @Log += N', @TypeId=''' + ISNULL(CONVERT(NVARCHAR(50), @TypeId), 'NULL') + N'''';
-        SET @Log += N', @User=''' + ISNULL(CONVERT(NVARCHAR(50), @User), 'NULL') + N'''';
+        SET @Log += N', @User=''' + ISNULL(@User, 'NULL') + N'''';
+        SET @Log += N', @NoiDungTraoDoi=''' + ISNULL(@NoiDungTraoDoi, 'NULL') + N'''';
+        SET @Log += N', @Images=''' + ISNULL(@Images, 'NULL') + N'''';
+        SET @Log += N', @FromDevice=''' + ISNULL(@FromDevice, 'NULL') + N'''';
 
         BEGIN TRY
             DECLARE @ErrorMessage_Log NVARCHAR(MAX) = N'';
-            SET @ErrorMessage_Log = N'Log: [sp_CalllogHangDemo_CallPOS_CheckImei_New]' + @Log + N' ! ';
+            SET @ErrorMessage_Log = N'Log: [sp__mCallLog__DemoReq__XuLy]' + @Log + N' ! ';
 
             --	===Ghi Log===
             INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
             VALUES (
-                       N'sp_CalllogHangDemo_CallPOS_CheckImei_New' -- Title - nvarchar(300)
+                       N'sp__mCallLog__DemoReq__XuLy' -- Title - nvarchar(300)
                      , @ErrorMessage_Log -- Error - nvarchar(max)
                      , 0 -- Status - tinyint
                      , GETDATE() -- TimeCreate - datetime
@@ -50,15 +56,18 @@ AS
 
             DECLARE
                 @StatusRequest INT = 0
-              , @ResultPOS INT = 0;
+              , @ResultPOS INT = 0
+              , @StepNo INT = 0
+              , @TypeId INT = 0;
 
             SELECT TOP 1
                    @StatusRequest = Status
+                 , @StepNo = StepNo
+                 , @TypeId = TypeId
             FROM
                 dbo.Requests ( NOLOCK )
             WHERE
-                Id = @RequestId
-                AND TypeId = @TypeId;
+                Id = @RequestId;
 
             IF ( ISNULL(@StatusRequest, 0) = 0 )
                 BEGIN
@@ -67,6 +76,13 @@ AS
                       , @msgOut = N'Yêu cầu không tồn tại. Xin kiểm tra lại'
                       , @ycdcDocEntry = 0;
                 END;
+            ELSE IF ( @TypeId <> 210 )
+                     BEGIN
+                         SELECT
+                             @resultOut = 0
+                           , @msgOut = N'Loại yêu cầu không đúng. Xin kiểm tra lại'
+                           , @ycdcDocEntry = 0;
+                     END;
             ELSE IF @StatusRequest = 4
                      BEGIN
                          SELECT
@@ -83,6 +99,45 @@ AS
                      END;
             ELSE
                      BEGIN
+
+                         -- Lưu bước xử lý
+                         IF EXISTS (
+                                       SELECT TOP 1
+                                              1
+                                       FROM
+                                           dbo.RequestSteps ( NOLOCK )
+                                       WHERE
+                                           RequestId = @RequestId
+                                           AND StepNo = @StepNo
+                                           AND Status = 1
+                                   )
+                             BEGIN
+                                 UPDATE
+                                     dbo.RequestSteps
+                                 SET
+                                     TimeEnd = CASE WHEN TimeEnd IS NULL THEN GETDATE()ELSE TimeEnd END
+                                   , Assigner = @User
+                                 WHERE
+                                     RequestId = @RequestId
+                                     AND StepNo = @StepNo
+                                     AND Status = 1;
+                             END;
+                         ELSE
+                             BEGIN
+                                 INSERT INTO dbo.RequestSteps ( RequestId, StepNo, TimeStart, TimeEnd, Assigner, TimeCreate, Status )
+                                 VALUES (
+                                            @RequestId -- RequestId - bigint
+                                          , @StepNo -- StepNo - int
+                                          , GETDATE() -- TimeStart - datetime
+                                          , GETDATE() -- TimeEnd - datetime
+                                          , @User -- Assigner - varchar(40)
+                                          , GETDATE() -- TimeCreate - datetime
+                                          , 1 -- Status - tinyint
+                                        );
+
+                                 UPDATE dbo.Requests SET TimeAppear = GETDATE()WHERE Id = @RequestId;
+                             END;
+
                          UPDATE
                              dbo.RequestDetails
                          SET
@@ -113,7 +168,101 @@ AS
                              R.RequestId = @RequestId
                              AND R.ItemId <> 65
                              AND ISNULL(R.Quantity1, 0) <> 1
-                             AND R.Status = 1; --Add - TuanNA89 - 29/07/2019 - chỉ lấy line còn hiệu lực
+                             AND R.Status = 1;
+
+                         -- Lưu hình ảnh
+                         IF ( ISNULL(@Images, '') <> '' )
+                             BEGIN
+                                 SELECT
+                                     GiaTri
+                                 INTO
+                                     #tmp_Splits
+                                 FROM
+                                     dbo.ufn_SplitStringToTable(@Images, ';', 0);
+
+                                 CREATE TABLE #tmp_Detail_Images ( Id INT IDENTITY(1, 1), RequestDetailId BIGINT, LinkImage NVARCHAR(500));
+
+                                 IF EXISTS ( SELECT TOP 1 1 FROM #tmp_Splits )
+                                     BEGIN
+
+                                         INSERT INTO #tmp_Detail_Images ( RequestDetailId, LinkImage )
+                                         SELECT
+                                             LEFT(GiaTri, CHARINDEX('|', GiaTri) - 1)
+                                           , RIGHT(GiaTri, LEN(GiaTri) - CHARINDEX('|', GiaTri))
+                                         FROM
+                                             #tmp_Splits;
+
+                                         IF EXISTS ( SELECT TOP 1 1 FROM dbo.FileAttachs ( NOLOCK ) WHERE RequestId = @RequestId )
+                                             BEGIN
+                                                 UPDATE
+                                                     F
+                                                 SET
+                                                     F.Status = 0
+                                                 FROM
+                                                     dbo.FileAttachs F
+                                                     INNER JOIN #tmp_Detail_Images I
+                                                         ON I.RequestDetailId = F.RequestDetailId
+                                                            AND F.Uri <> I.LinkImage
+                                                 WHERE
+                                                     F.RequestId = @RequestId;
+                                             END;
+
+                                         INSERT INTO dbo.FileAttachs
+                                         (
+                                             RequestId
+                                           , RequestDetailId
+                                           , StepNo
+                                           , Uri
+                                           , TimeCreate
+                                           , CreateBy
+                                           , Status
+                                           , ApproveStatus
+                                           , Domain
+                                         )
+                                         SELECT
+                                             @RequestId
+                                           , RequestDetailId
+                                           , 1
+                                           , LinkImage
+                                           , GETDATE()
+                                           , @User
+                                           , 1
+                                           , 0
+                                           , NULL
+                                         FROM
+                                             #tmp_Detail_Images
+                                         WHERE
+                                             LinkImage <> '';
+
+
+                                     END;
+
+                                 DECLARE
+                                     @Count_RequestDetail INT = ( SELECT COUNT(1)FROM #tmp_RequestDetails WHERE Subject_ProductDemos = 65 )
+                                   , @Count_DetailImage INT = 0;
+
+                                 SELECT
+                                     @Count_DetailImage = COUNT(1)
+                                 FROM (
+                                          SELECT
+                                              RequestDetailId
+                                          FROM
+                                              #tmp_Detail_Images ( NOLOCK )
+                                          WHERE
+                                              ISNULL(RequestDetailId, '') <> ''
+                                      ) D;
+
+                                 IF ( @Count_DetailImage <> @Count_RequestDetail )
+                                     BEGIN
+                                         SELECT
+                                             @resultOut = 0
+                                           , @msgOut = N'Yêu cầu còn line loại Hàng demo chưa được up hình. Xin up hình đầy đủ!';
+                                         GOTO _ERROR;
+                                     END;
+
+                                 DROP TABLE #tmp_Splits;
+                                 DROP TABLE #tmp_Detail_Images;
+                             END;
 
                          SELECT
                              WarehouseCode
@@ -126,9 +275,9 @@ AS
                              WarehouseCode IN ( SELECT WarehouseCode FROM #tmp_RequestDetails );
 
                          SELECT
-                             WhsCode AS WhsCode
-                           , U_WHS_TYPE AS U_WHS_TYPE
-                           , U_Code_SH AS U_Code_SH
+                             WhsCode
+                           , U_WHS_TYPE
+                           , U_Code_SH
                          INTO
                              #tmp_OWHS
                          FROM
@@ -167,7 +316,10 @@ AS
                            , @Subject_ProductDemos BIGINT = 0
                            , @Imei NVARCHAR(MAX) = N''
                            , @MaSP NVARCHAR(40) = N''
-                           , @MsgPos NVARCHAR(MAX) = N'';
+                           , @MsgPos NVARCHAR(MAX) = N''
+                           , @MsgPos_Fail NVARCHAR(MAX) = N''
+                           , @Old_ResultPOS INT = 0;
+
 
                          WHILE ( @STT <= ( SELECT MAX(STT)FROM #tmp_CheckImei_POS ))
                              BEGIN
@@ -179,7 +331,8 @@ AS
                                    , @resultOut = 0
                                    , @Imei = N''
                                    , @MaSP = N''
-                                   , @ycdcDocEntry = 0;
+                                   , @ycdcDocEntry = 0
+                                   , @Old_ResultPOS = 0;
 
                                  SET @xml_DetailDemo = (
                                                            SELECT
@@ -206,37 +359,61 @@ AS
                                      #tmp_CheckImei_POS
                                  WHERE
                                      STT = @STT;
-
+                                 /*
+    <LineItem>
+     <ItemCode>123456</ItemCode>
+     <Itemname>test 1</Itemname>
+     <IMEI>1235</IMEI>
+     <Quantity>1</Quantity>
+     <WhsEx>30808010</WhsEx>
+     <WhsRec>30808020</WhsRec>
+    </LineItem>
+*/
                                  PRINT @xml_DetailDemo;
-                                 PRINT CONCAT('', @Subject_ProductDemos);
 
-                                 BEGIN
-                                     EXEC POS_HNI.dbo.sp_POS_CLG_Demo_ExIm
-                                         @CallLogID = @RequestId
-                                       -- int
-                                       , @DetailDemoXML = @xml_DetailDemo
-                                       -- nvarchar(max)  --- Cần Mã sản phẩm, Imei, Số lượng, Mã Shop, Mã kho, Người xử lý
-                                       , @TypeCallLog = @Subject_ProductDemos
-                                       -- int ---0 Xuất demo --- 1 Bỏ mẫu
-                                       , @ResultOut = @resultOut OUT
-                                       -- int  --- 0 Là Có lỗi, 1 là Thành công
-                                       , @MsgOut = @msgOut OUT
-                                       -- nvarchar(500) --- Mô tả
-                                       , @YCDCDocEntry = @ycdcDocEntry OUT; -- int -- Số chứng từ YCDC
+                                 EXEC POS_HNI.dbo.sp_POS_CLG_Demo_ExIm
+                                     @CallLogID = @RequestId
+                                   -- int
+                                   , @DetailDemoXML = @xml_DetailDemo
+                                   -- nvarchar(max)  --- Cần Mã sản phẩm, Imei, Số lượng, Mã Shop, Mã kho, Người xử lý
+                                   , @TypeCallLog = @Subject_ProductDemos
+                                   -- int ---0 Xuất demo --- 1 Bỏ mẫu
+                                   , @ResultOut = @resultOut OUT
+                                   -- int  --- 0 Là Có lỗi, 1 là Thành công
+                                   , @MsgOut = @msgOut OUT
+                                   -- nvarchar(500) --- Mô tả
+                                   , @YCDCDocEntry = @ycdcDocEntry OUT; -- int -- Số chứng từ YCDC
 
-                                     UPDATE
-                                         dbo.RequestDetails
-                                     SET
-                                         Quantity1 = @resultOut
-                                       , Property11 = @msgOut
-                                       , Property12 = @ycdcDocEntry
-                                       , Time1 = GETDATE()
-                                     WHERE
-                                         Id = @Id_RequestDetail
-                                         AND RequestId = @RequestId;
+                                 SELECT TOP 1
+                                        @Old_ResultPOS = Quantity1
+                                 FROM
+                                     dbo.RequestDetails ( NOLOCK )
+                                 WHERE
+                                     Id = @Id_RequestDetail
+                                     AND RequestId = @RequestId;
 
-                                     SET @MsgPos = @MsgPos + CASE WHEN ISNULL(@msgOut, '') = '' THEN '' ELSE '<br>' END + N'-Thông tin kiểm tra sản phẩm ' + @MaSP + N' và imei ' + @Imei + N' từ Hệ thống POS: ' + CONVERT(VARCHAR(10), @resultOut) + N'-' + @msgOut;
-                                 END;
+                                 UPDATE
+                                     dbo.RequestDetails
+                                 SET
+                                     Quantity1 = CASE WHEN @Old_ResultPOS = 1 THEN Quantity1 ELSE @resultOut END
+                                   , Property11 = CASE WHEN @Old_ResultPOS = 1 THEN Property11 ELSE @msgOut END
+                                   , Property12 = CASE WHEN @Old_ResultPOS = 1 THEN Property12 ELSE @ycdcDocEntry END
+                                   , Property13 = CASE WHEN @Old_ResultPOS = 1 THEN Property13 ELSE @FromDevice END
+                                   , Time1 = CASE WHEN @Old_ResultPOS = 1 THEN Time1 ELSE GETDATE()END
+                                 WHERE
+                                     Id = @Id_RequestDetail
+                                     AND RequestId = @RequestId;
+
+                                 IF ( @Old_ResultPOS = 1 )
+                                     BEGIN
+                                         SET @MsgPos = @MsgPos + CASE WHEN ISNULL(@msgOut, '') = '' THEN '' ELSE '<br>' END + N'-Thông tin kiểm tra sản phẩm ' + @MaSP + N' và imei ' + @Imei + N' từ Hệ thống POS: ' + CONVERT(VARCHAR(10), @resultOut) + N'-' + @msgOut;
+                                         IF @resultOut <> 1
+                                             BEGIN
+                                                 SET @MsgPos_Fail = @MsgPos_Fail + N'<p>-Thông tin kiểm tra sản phẩm ' + @MaSP + N' và imei ' + @Imei + N' từ Hệ thống POS: ' + CONVERT(VARCHAR(10), @resultOut) + N'-' + @msgOut + N'</p>';
+                                             END;
+
+                                         UPDATE dbo.Requests SET Status = 3 WHERE Id = @RequestId AND Status = 1;
+                                     END;
                                  SET @STT += 1;
                              END;
 
@@ -277,27 +454,20 @@ AS
                          WHERE
                              RequestId = @RequestId
                              AND ISNULL(Quantity1, 0) <> 1
-                             AND Status = 1; --Add - TuanNA89 - 29/07/2019 - chỉ lấy line còn hiệu lực
+                             AND Status = 1;
 
-                         IF ( EXISTS ( SELECT 1 FROM #tmp_Check_HoanTat ))
-                             BEGIN
-                                 SELECT
-                                     @resultOut = 0
-                                   , @msgOut = N'Yêu cầu còn sản phẩm chưa tạo được YCDC bên POS. Xin kiểm trả lại tồn kho';
-                             END;
-                         ELSE
+                         IF NOT EXISTS ( SELECT TOP 1 1 FROM #tmp_Check_HoanTat ) -- Toàn bộ line đã sinh YCDC POS
                              BEGIN
                                  UPDATE
                                      dbo.Requests
                                  SET
                                      Status = 4
+                                   , StepStatus = 3
                                    , TimeFinish = GETDATE()
                                    , TimeClose = GETDATE()
-                                   , Remark = CONCAT(Remark, N' - (', CONVERT(NVARCHAR(50), GETDATE(), 121), N'): ', N'sp_CalllogHangDemo_CallPOS_CheckImei_New-UPDATE-Auto hoàn tất do POS check Imei thành công!')
-                                   , TimeAppear = CASE WHEN TimeAppear IS NULL THEN GETDATE()ELSE TimeAppear END
+                                   , Remark = CONCAT(Remark, N' - (', CONVERT(NVARCHAR(50), GETDATE(), 121), N'): ', N'sp__mCallLog__DemoReq__XuLy-UPDATE-Auto hoàn tất do POS check Imei thành công!')
                                  WHERE
-                                     Id = @RequestId
-                                     AND TypeId = @TypeId;
+                                     Id = @RequestId;
 
                                  SELECT @resultOut = 1, @msgOut = N'Hoàn tất Calllog';
 
@@ -318,9 +488,42 @@ AS
                                    , @Title = @Title_Email
                                    , @TypeProcess = 4;
 
-                                 -- Add - TuanNA89 01/06/2019 -- Xóa Calllog trên bảng tạm của mobile
                                  EXEC dbo.sp_Requests_Temporary_Delete @RequestID = @RequestId; -- bigint
 
+                             END;
+                         ELSE
+                             BEGIN
+                                 SELECT @resultOut = 0, @msgOut = @MsgPos_Fail; --N'Yêu cầu còn sản phẩm chưa tạo được YCDC bên POS. Xin kiểm tra lại tồn kho';
+                             END;
+
+                         -- Lưu nội dung trao đổi
+                         IF ( ISNULL(@NoiDungTraoDoi, '') <> '' )
+                             BEGIN
+                                 INSERT INTO dbo.Conversations
+                                 (
+                                     RequestId
+                                   , StepNo
+                                   , Sender
+                                   , Message
+                                   , CreateBy
+                                   , Type
+                                   , Status
+                                   , RequestDetailId
+                                   , TimeCreate
+                                   , Requests_ARCH_Id
+                                 )
+                                 VALUES (
+                                            @RequestId -- RequestId - bigint
+                                          , @StepNo -- StepNo - int
+                                          , @User -- Sender - nvarchar(40)
+                                          , @NoiDungTraoDoi -- Message - nvarchar(max)
+                                          , @User -- CreateBy - nvarchar(max)
+                                          , 3 -- Type - tinyint
+                                          , 1 -- Status - tinyint
+                                          , NULL -- RequestDetailId - bigint
+                                          , GETDATE() -- TimeCreate - datetime
+                                          , NULL -- Requests_ARCH_Id - bigint
+                                        );
                              END;
 
                          IF @resultOut <> 1
@@ -336,22 +539,23 @@ AS
         END TRY
         BEGIN CATCH
             DECLARE @ErrorMessage NVARCHAR(MAX) = N'';
-            SET @ErrorMessage = N'Lỗi: [sp_CalllogHangDemo_CallPOS_CheckImei_New]' + @Log;
+            SET @ErrorMessage = N'Lỗi: [sp__mCallLog__DemoReq__XuLy]' + @Log;
             SET @ErrorMessage += N' - ERROR_MESSAGE: ' + ERROR_MESSAGE() + N' - ERROR_LINE: ' + CONVERT(NVARCHAR, ERROR_LINE());
 
             --	===Ghi Log===
             INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
             VALUES (
-                       N'sp_CalllogHangDemo_CallPOS_CheckImei_New' -- Title - nvarchar(300)
+                       N'sp__mCallLog__DemoReq__XuLy' -- Title - nvarchar(300)
                      , @ErrorMessage -- Error - nvarchar(max)
                      , 1 -- Status - tinyint
                      , GETDATE() -- TimeCreate - datetime
                    );
         END CATCH;
-
+        _ERROR:
         SELECT @resultOut AS 'Result', @msgOut AS 'Msg', @ycdcDocEntry AS 'SoYCDC';
     END;
 
-----SELECT * FROM dbo.Logs(NOLOCK) WHERE Title=N'sp_CalllogHangDemo_CallPOS_CheckImei_New' ORDER BY Id DESC
+----SELECT * FROM dbo.Logs(NOLOCK) WHERE Title=N'sp__mCallLog__DemoReq__XuLy' ORDER BY Id DESC
+
 GO
 

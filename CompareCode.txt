@@ -21,7 +21,6 @@ using System.Web.Script.Serialization;
 using System.Xml.Serialization;
 using WebCallLog.Helpers;
 using WebCallLog.Models;
-
 namespace WebCallLog.Controllers
 {
     #region ======ConfigController======
@@ -35,6 +34,10 @@ namespace WebCallLog.Controllers
         static DateTime g__TimeCreateToken_TPBank = DateTime.Now;
         static int g__TimeExpires__Second = 0;
         //▲	Add - TuanNA89 - 22/07/2019 - Lưu Token của TPBank
+        // TuanNA89 - 06/08/2020 - Tối ưu lại 1 số Code liên quan đến TPBank
+        static string g__isUseFwd = ConfigurationManager.AppSettings["TPB_IsFwd"].ToString();
+        static string g__UrlFwd = ConfigurationManager.AppSettings["TPFicoPwd_Url"].ToString();
+        static string g__Url = ConfigurationManager.AppSettings["TPFico_Url"].ToString();
 
         /// <summary>GET: /RegistrationForm/Manager</summary>
         public ActionResult Manager()
@@ -690,7 +693,9 @@ namespace WebCallLog.Controllers
                     {
                         if (l__Bank_KetQuaHoSo == null || l__Bank_KetQuaHoSo == "0")
                         {
-                            l__result = InstallmentTPBank_TPFico_SendCustInfo(l_DataTable.Rows[0]["Id_Final"].ToString());
+                            //TuanNA89 - 06/08/2020 - Tối ưu lại 1 số Code liên quan đến TPBank
+                            var apiResult = InstallmentTPBank_TPFico_SendCustInfo(l_DataTable.Rows[0]["Id_Final"].ToString());
+                            l__result = new JavaScriptSerializer().Deserialize<TPFico_Customer_Result>(apiResult);
                         }
                         else
                         {
@@ -919,7 +924,9 @@ namespace WebCallLog.Controllers
                     #region ===PUSH API TPFico===
                     if (l_DataTable.Rows[0]["Result"].ToString() == "1")
                     {
-                        l__result = InstallmentTPBank_TPFico_SendDocumentInfo(l__ID_Final.ToString());
+                        //TuanNA89 - 06/08/2020 - Tối ưu lại 1 số Code liên quan đến TPBank
+                        var apiResult = InstallmentTPBank_TPFico_SendDocumentInfo(l__ID_Final.ToString());
+                        l__result = JsonConvert.DeserializeObject<TPFico_Customer_Result>(apiResult.ToString());
                     }
                     #endregion
                 }
@@ -992,16 +999,19 @@ namespace WebCallLog.Controllers
                     };
 
                     DataTable l_DataTable = g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_UpdateData", System.Data.CommandType.StoredProcedure, new SqlParameter[]{
-                    new SqlParameter("@CustId", l__IDFinal),
-                    new SqlParameter("@strFieldUpdate", l__xmlErrors ),
-                    new SqlParameter("@User", UserManager.CurrentUser.InsideCode)
-                });
+                        new SqlParameter("@CustId", l__IDFinal),
+                        new SqlParameter("@strFieldUpdate", l__xmlErrors ),
+                        new SqlParameter("@User", UserManager.CurrentUser.InsideCode)
+                    });
                     if (l_DataTable != null && l_DataTable.Rows.Count > 0)
                     {
                         #region ===PUSH API TPFico===
                         if (l_DataTable.Rows[0]["Result"].ToString() == "1")
                         {
-                            l__result = InstallmentTPBank_TPFico_TPFico_SendDataUpdate(l__IDFinal.ToString(), l__ListUpdate.Screen);
+                            //TuanNA89 - 06/08/2020 - Tối ưu lại 1 số Code liên quan đến TPBank
+                            var apiResult = InstallmentTPBank_TPFico_TPFico_SendDataUpdate(l__IDFinal.ToString(), l__ListUpdate.Screen);
+                            l__result = JsonConvert.DeserializeObject<TPFico_Customer_Result>(apiResult.ToString());
+                            //l__result = InstallmentTPBank_TPFico_TPFico_SendDataUpdate(l__IDFinal.ToString(), l__ListUpdate.Screen);
                         }
                         else
                         {
@@ -1141,16 +1151,19 @@ namespace WebCallLog.Controllers
         /// <summary>GET: /RegistrationForm/InstallmentTPBank_MonitorProfile</summary>
         public ActionResult InstallmentTPBank_MonitorProfile(string p_Date)
         {
-            SqlParameter[] l_SqlParameter = new SqlParameter[] {
-                new SqlParameter("@User", UserManager.CurrentUser.InsideCode),
-                new SqlParameter("@DateTime", p_Date)
-            };
-            DataTable l_DataTable = g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_MonitorProfile", CommandType.StoredProcedure, l_SqlParameter);
-            if (l_DataTable != null && l_DataTable.Rows.Count > 0)
+            if (UserManager.CurrentUser != null)
             {
-                var l_JsonResult = Json(l_DataTable.EParseToObjects(), JsonRequestBehavior.AllowGet);
-                l_JsonResult.MaxJsonLength = int.MaxValue;
-                return l_JsonResult;
+                SqlParameter[] l_SqlParameter = new SqlParameter[] {
+                    new SqlParameter("@User", UserManager.CurrentUser.InsideCode),
+                    new SqlParameter("@DateTime", p_Date)
+                };
+                DataTable l_DataTable = g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_MonitorProfile", CommandType.StoredProcedure, l_SqlParameter);
+                if (l_DataTable != null && l_DataTable.Rows.Count > 0)
+                {
+                    var l_JsonResult = Json(l_DataTable.EParseToObjects(), JsonRequestBehavior.AllowGet);
+                    l_JsonResult.MaxJsonLength = int.MaxValue;
+                    return l_JsonResult;
+                }
             }
             return null;
         }
@@ -1178,8 +1191,1221 @@ namespace WebCallLog.Controllers
         #endregion
 
         #region ===Function gọi Api TPBank===
+        // TuanNA89 - 06/08/2020 - Tối ưu lại 1 số Code liên quan đến TPBank
+        #region === Code cũ ===
         //▼	Add - TuanNA89 - 22/07/2019 - Lưu Token của TPBank
-        public string InstallmentTPBank_TPFico_GetAuthorization()
+        //public string InstallmentTPBank_TPFico_GetAuthorization()
+        //{
+        //    /*
+        //     * Rule:
+        //        B1: gán dữ liệu từ biến token global -> token local
+        //        B2: nếu token có data -> lấy (time hiện tại - time lấy token)
+        //                - nếu kết quả > time hết hạn -> set token rỗng
+        //        B3: 
+        //            check nếu token rỗng -> gọi API lấy token -> set thời gian lấy token + thời gian hết hạn
+        //     */
+        //    string l_Authorization = "";
+        //    string l_Function = MethodBase.GetCurrentMethod().Name, l_Method = "POST", l_Url = "", l_jsData = "", l_Error = "";
+        //    try
+        //    {
+        //        l_Authorization = g__Token__TPBank;
+
+        //        if (l_Authorization != "")
+        //        {
+        //            var seconds = (DateTime.Now - DateTime.Parse(g__TimeCreateToken_TPBank.ToString())).TotalSeconds;
+        //            if (seconds >= g__TimeExpires__Second)
+        //            {
+        //                l_Authorization = "";
+        //            }
+        //        }
+
+        //        if (l_Authorization == "")
+        //        {
+        //            l_Url = ConfigurationManager.AppSettings["TPFico_Url"].ToString() + "/api/auth/oauth/token";
+        //            //▼ Add - TuanNA89 - 08/11/2019 - Fix lỗi mất kết nối API TPBank
+        //            ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
+        //            System.Net.ServicePointManager.ServerCertificateValidationCallback +=
+        //                delegate (object sender, System.Security.Cryptography.X509Certificates.X509Certificate certificate,
+        //                                        System.Security.Cryptography.X509Certificates.X509Chain chain,
+        //                                        System.Net.Security.SslPolicyErrors sslPolicyErrors)
+        //                {
+        //                    return true; // **** Always accept
+        //                };
+        //            System.Net.ServicePointManager.Expect100Continue = false;
+        //            //▲ Add - TuanNA89 - 08/11/2019 - Fix lỗi mất kết nối API TPBank
+        //            var l__HttpWebReq = (HttpWebRequest)WebRequest.Create(l_Url);
+        //            l__HttpWebReq.KeepAlive = false;
+        //            l__HttpWebReq.Method = l_Method;
+        //            l__HttpWebReq.ContentType = "application/x-www-form-urlencoded";
+
+        //            string Username = "3p-service-fpt";
+        //            string Password = "3p-service-fpt";
+
+        //            string svcCredentials = Convert.ToBase64String(ASCIIEncoding.ASCII.GetBytes(Username + ":" + Password));
+        //            l__HttpWebReq.Headers.Add("Authorization", "Basic " + svcCredentials);
+
+        //            string urlEncode = "grant_type=" + HttpUtility.UrlEncode("client_credentials");
+
+        //            using (StreamWriter stOut = new StreamWriter(l__HttpWebReq.GetRequestStream(), System.Text.Encoding.ASCII))
+        //            {
+        //                stOut.Write(urlEncode);
+        //                stOut.Close();
+        //            }
+
+        //            using (HttpWebResponse l__oResp = l__HttpWebReq.GetResponse() as HttpWebResponse)
+        //            {
+        //                using (StreamReader l__StreamReader = new StreamReader(l__oResp.GetResponseStream()))
+        //                {
+        //                    var l_ResponseFromServer = l__StreamReader.ReadToEnd();
+        //                    if (l__oResp.StatusCode == HttpStatusCode.OK)
+        //                    {
+        //                        var result = JObject.Parse(l_ResponseFromServer);
+        //                        l_Authorization = result["token_type"].ToString() + " " + result["access_token"].ToString();
+
+        //                        g__TimeExpires__Second = int.TryParse(result["expires_in"].ToString(), out g__TimeExpires__Second) ? g__TimeExpires__Second : 0;
+        //                        g__TimeCreateToken_TPBank = DateTime.Now;
+
+        //                        if (l_Authorization != g__Token__TPBank)
+        //                        {
+        //                            g__Token__TPBank = l_Authorization;
+        //                        }
+        //                    }
+        //                    else
+        //                    {
+        //                        WriteLog_TPBank(l_Function, l_Method, l_Url, l_jsData, "", l__oResp.StatusCode.ToString() + "-" + l_ResponseFromServer);
+        //                    }
+        //                }
+        //            }
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        Logger.WriteLogError("RegistrationForm - " + MethodBase.GetCurrentMethod().Name + "()", "Link API: " + l_Url + " - Error:" + ex.ToString());
+        //        WriteLog_TPBank(l_Function, l_Method, l_Url, l_jsData, "", ex.ToString());
+        //    }
+        //    return l_Authorization;
+        //}
+        ////▲	Add - TuanNA89 - 22/07/2019 - Lưu Token của TPBank
+        ////▼	Add - TuanNA89 - 21/10/2019 - Thêm code hỗ trợ việc gọi API TPBank
+        //public TPFico_Customer_Result InstallmentTPBank_TPFico_SendCustInfo(string p_IdFinal)
+        //{
+        //    TPFico_Customer_Result l__result = new TPFico_Customer_Result();
+        //    int l__IdLog = 0;
+        //    l__IdLog = WriteLog(0, 0, "InstallmentTPBank_TPFico_SendCustInfo", p_IdFinal, "");
+        //    string l__Step = "";
+        //    HttpWebResponse l__oResp = null;
+        //    try
+        //    {
+        //        SqlParameter[] l_SqlParameter = new SqlParameter[]{
+        //            new SqlParameter("@Id_Final", p_IdFinal)
+        //        };
+        //        l__Step = "Gọi store";
+        //        DataSet l_DataSet = g_SqlDBHelper.ExecuteCommandDataSet("sp_InstallmentTPBank_CustInfo_ForAPI", CommandType.StoredProcedure, l_SqlParameter);
+        //        if (l_DataSet != null && l_DataSet.Tables.Count > 0)
+        //        {
+        //            DataTable l_CustInfo = l_DataSet.Tables[0];
+        //            DataTable l_ProdDetails = l_DataSet.Tables[1];
+        //            DataTable l_Ref_Address = l_DataSet.Tables[3];
+        //            if (l_CustInfo != null && l_CustInfo.Rows.Count > 0)
+        //            {
+        //                l__Step = "Lấy token";
+        //                string l_Key = InstallmentTPBank_TPFico_GetAuthorization();
+
+        //                if (l_Key != null && l_Key != "")
+        //                {
+        //                    #region == Add data ==
+        //                    l__Step = "Add detail product";
+        //                    #region == Add Detail Products ==
+        //                    List<TPFico_CustInfo_ProductDetail> l_ListProducts = new List<TPFico_CustInfo_ProductDetail> { };
+        //                    if (l_ProdDetails != null && l_ProdDetails.Rows.Count > 0)
+        //                    {
+        //                        foreach (DataRow item in l_ProdDetails.Rows)
+        //                        {
+        //                            l_ListProducts.Add(new TPFico_CustInfo_ProductDetail
+        //                            {
+        //                                model = item["TenSanPham"].ToString(),//Model of the goods
+        //                                goodCode = item["MaSanPham"].ToString(),//Goods code of dealer
+        //                                goodType = item["LoaiHang"].ToString(),//Type of goods: Non portable/portable
+        //                                quantity = item["SoLuong"].ToString(),//Quantity
+        //                                goodPrice = item["GiaSanPham"].ToString()//Price of goods
+        //                            });
+
+        //                        }
+        //                    }
+        //                    #endregion
+        //                    l__Step = "Add Referenses";
+        //                    #region == Add References ==
+        //                    var l__ListReferences = new List<TPFico_CustInfo_Reference>();
+        //                    if (l_CustInfo.Rows[0]["NguoiThan1_HoTen"].ToString() != "")
+        //                    {
+        //                        l__ListReferences.Add(new TPFico_CustInfo_Reference()
+        //                        {
+        //                            fullName = l_CustInfo.Rows[0]["NguoiThan1_HoTen"].ToString(),//Reference person name
+        //                            phoneNumber = l_CustInfo.Rows[0]["NguoiThan1_SDT"].ToString(),//Reference person’ phone number
+        //                            relation = l_CustInfo.Rows[0]["NguoiThan1_QuanHe"].ToString(),//Relationship with owner. “husband, wife, workmate, relatives”
+        //                            personalId = l_CustInfo.Rows[0]["NguoiThan1_CMND"].ToString()//National ID of the reference                                    
+        //                        });
+        //                    }
+
+        //                    if (l_CustInfo.Rows[0]["NguoiThan2_HoTen"].ToString() != "")
+        //                    {
+        //                        l__ListReferences.Add(new TPFico_CustInfo_Reference()
+        //                        {
+        //                            fullName = l_CustInfo.Rows[0]["NguoiThan2_HoTen"].ToString(),//Reference person name
+        //                            phoneNumber = l_CustInfo.Rows[0]["NguoiThan2_SDT"].ToString(),//Reference person’ phone number
+        //                            relation = l_CustInfo.Rows[0]["NguoiThan2_QuanHe"].ToString(),//Relationship with owner. “husband, wife, workmate, relatives”
+        //                            personalId = l_CustInfo.Rows[0]["NguoiThan2_CMND"].ToString()//National ID of the reference                                    
+        //                        });
+        //                    }
+
+        //                    if (l_CustInfo.Rows[0]["NguoiHonPhoi_HoTen"].ToString() != "")
+        //                    {
+        //                        l__ListReferences.Add(new TPFico_CustInfo_Reference()
+        //                        {
+        //                            fullName = l_CustInfo.Rows[0]["NguoiHonPhoi_HoTen"].ToString(),//Reference person name
+        //                            phoneNumber = l_CustInfo.Rows[0]["NguoiHonPhoi_SDT"].ToString(),//Reference person’ phone number
+        //                            relation = l_CustInfo.Rows[0]["NguoiHonPhoi_QuanHe"].ToString(),
+        //                            personalId = l_CustInfo.Rows[0]["NguoiHonPhoi_CMND"].ToString()//National ID of the reference                                    
+        //                        });
+        //                    }
+        //                    #endregion
+        //                    l__Step = "Add Address";
+        //                    #region == Add Address ==
+        //                    var l__ListAddresses = new List<TPFico_CustInfo_Address>();
+        //                    l__ListAddresses.Add(new TPFico_CustInfo_Address
+        //                    {
+        //                        addressType = "Current Address",//Current, family book
+        //                        address1 = l_CustInfo.Rows[0]["TamTru_ToaNha"].ToString(),//Address number & Street
+        //                        address2 = l_CustInfo.Rows[0]["TamTru_DiaChi"].ToString(),
+        //                        ward = l_CustInfo.Rows[0]["TamTru_PhuongXa"].ToString(),//Ward
+        //                        district = l_CustInfo.Rows[0]["TamTru_QuanHuyen"].ToString(),//District
+        //                        province = l_CustInfo.Rows[0]["TamTru_TinhThanh"].ToString()//City
+        //                    });
+        //                    l__ListAddresses.Add(new TPFico_CustInfo_Address
+        //                    {
+        //                        addressType = "Family Book Address",//Current, family book
+        //                        address1 = l_CustInfo.Rows[0]["HoKhau_ToaNha"].ToString(),
+        //                        address2 = l_CustInfo.Rows[0]["HoKhau_DiaChi"].ToString(),
+        //                        ward = l_CustInfo.Rows[0]["HoKhau_PhuongXa"].ToString(),//Ward
+        //                        district = l_CustInfo.Rows[0]["HoKhau_QuanHuyen"].ToString(),//District
+        //                        province = l_CustInfo.Rows[0]["HoKhau_TinhThanh"].ToString()//City
+        //                    });
+
+        //                    l__ListAddresses.Add(new TPFico_CustInfo_Address
+        //                    {
+        //                        addressType = "Working Address",//Current, family book
+        //                        address1 = l_Ref_Address.Rows[0]["LamViec_ToaNha"].ToString(),
+        //                        address2 = l_Ref_Address.Rows[0]["LamViec_DiaChi"].ToString(),
+        //                        ward = l_Ref_Address.Rows[0]["LamViec_PhuongXa"].ToString(),//Ward
+        //                        district = l_Ref_Address.Rows[0]["LamViec_QuanHuyen"].ToString(),//District
+        //                        province = l_Ref_Address.Rows[0]["LamViec_TinhThanh"].ToString()//City
+        //                    });
+
+        //                    if (l_CustInfo.Rows[0]["NguoiHonPhoi_HoTen"].ToString() != "")
+        //                    {
+        //                        l__ListAddresses.Add(new TPFico_CustInfo_Address
+        //                        {
+        //                            addressType = "Spouse Address",//Current, family book
+        //                            address1 = l_CustInfo.Rows[0]["HonPhoi_ToaNha"].ToString(),
+        //                            address2 = l_CustInfo.Rows[0]["HonPhoi_DiaChi"].ToString(),
+        //                            ward = l_CustInfo.Rows[0]["HonPhoi_PhuongXa"].ToString(),//Ward
+        //                            district = l_CustInfo.Rows[0]["HonPhoi_QuanHuyen"].ToString(),//District
+        //                            province = l_CustInfo.Rows[0]["HonPhoi_TinhThanh"].ToString()//City
+        //                        });
+        //                    }
+
+
+        //                    #endregion
+        //                    l__Step = "Add Images";
+        //                    #region == Add Url Images ==
+        //                    var l__ListPhotos = new List<TPFico_CustInfo_Photo>();
+        //                    List<string> l__Files = new List<string> { };
+        //                    string l__Url__NewImage = "";
+        //                    l__ListPhotos.Add(new TPFico_CustInfo_Photo
+        //                    {
+        //                        link = (l_CustInfo.Rows[0]["Url_CRD_CD_DKMoThe"].ToString() == "") ? "" : (authority + l_CustInfo.Rows[0]["ImagePath"].ToString() + l_CustInfo.Rows[0]["Url_CRD_CD_DKMoThe"].ToString()),
+        //                        documentType = "selfie"
+        //                    });
+
+        //                    l__ListPhotos.Add(new TPFico_CustInfo_Photo
+        //                    {
+        //                        link = (l_CustInfo.Rows[0]["Url_CRD_KH_CMND"].ToString() == "") ? "" : (authority + l_CustInfo.Rows[0]["ImagePath"].ToString() + l_CustInfo.Rows[0]["Url_CRD_KH_CMND"].ToString()),
+        //                        documentType = "employeecard"
+        //                    });
+
+        //                    string date = DateTime.Now.ToString("yyyyMMdd");
+
+        //                    #region == Gộp CMND ==
+
+        //                    l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_MT_CMND"].ToString());
+        //                    l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_MS_CMND"].ToString());
+        //                    l__Url__NewImage = MergeImages(l__Files, "/TPBank/" + date + "/", "CMND");
+        //                    if (l__Url__NewImage != "")
+        //                    {
+        //                        l__ListPhotos.Add(new TPFico_CustInfo_Photo
+        //                        {
+        //                            link = (l__Url__NewImage == "") ? "" : authority + l_CustInfo.Rows[0]["ImagePath"].ToString() + l__Url__NewImage,
+        //                            documentType = "National_ID"
+        //                        });
+        //                        #endregion
+
+        //                        #region == Gộp Sổ Hộ Khẩu ==
+        //                        l__Files.Clear();
+        //                        if ((l_CustInfo.Rows[0]["Url_CRD_SHK_1"].ToString() != null) && (l_CustInfo.Rows[0]["Url_CRD_SHK_1"].ToString() != ""))
+        //                            l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_SHK_1"].ToString());
+
+        //                        if ((l_CustInfo.Rows[0]["Url_CRD_SHK_2"].ToString() != null) && (l_CustInfo.Rows[0]["Url_CRD_SHK_2"].ToString() != ""))
+        //                            l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_SHK_2"].ToString());
+
+        //                        if ((l_CustInfo.Rows[0]["Url_CRD_SHK_3"].ToString() != null) && (l_CustInfo.Rows[0]["Url_CRD_SHK_3"].ToString() != ""))
+        //                            l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_SHK_3"].ToString());
+
+        //                        if ((l_CustInfo.Rows[0]["Url_CRD_SHK_4"].ToString() != null) && (l_CustInfo.Rows[0]["Url_CRD_SHK_4"].ToString() != ""))
+        //                            l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_SHK_4"].ToString());
+
+        //                        if ((l_CustInfo.Rows[0]["Url_CRD_SHK_5"].ToString() != null) && (l_CustInfo.Rows[0]["Url_CRD_SHK_5"].ToString() != ""))
+        //                            l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_SHK_5"].ToString());
+
+        //                        if ((l_CustInfo.Rows[0]["Url_CRD_SHK_6"].ToString() != null) && (l_CustInfo.Rows[0]["Url_CRD_SHK_6"].ToString() != ""))
+        //                            l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_SHK_6"].ToString());
+
+        //                        if ((l_CustInfo.Rows[0]["Url_CRD_SHK_7"].ToString() != null) && (l_CustInfo.Rows[0]["Url_CRD_SHK_7"].ToString() != ""))
+        //                            l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_SHK_7"].ToString());
+
+        //                        if (l__Files.Count > 0)
+        //                        {
+        //                            l__Url__NewImage = MergeImages(l__Files, "/TPBank/" + date + "/", "SHK");
+        //                            l__ListPhotos.Add(new TPFico_CustInfo_Photo
+        //                            {
+        //                                link = (l__Url__NewImage == "") ? "" : authority + l_CustInfo.Rows[0]["ImagePath"].ToString() + l__Url__NewImage,
+        //                                documentType = "fb"
+        //                            });
+        //                        }
+        //                        #endregion
+
+        //                        #endregion
+        //                        l__Step = "Add Order Infor";
+        //                        var l_ObjectData = new TPFico_CustInfo()
+        //                        {
+        //                            custId = l_CustInfo.Rows[0]["CustId"].ToString(),//Loan id
+        //                            lastName = l_CustInfo.Rows[0]["LastName"].ToString(),//Last name of Customer
+        //                            firstName = l_CustInfo.Rows[0]["FirstName"].ToString(),//First name of Customer
+        //                            middleName = l_CustInfo.Rows[0]["MidName"].ToString(),//Middle name of Customer
+        //                            gender = l_CustInfo.Rows[0]["Gender"].ToString(),//Gender
+        //                            dateOfBirth = l_CustInfo.Rows[0]["Birthday"].ToString(),//Date of Birth
+        //                            nationalId = l_CustInfo.Rows[0]["CMND"].ToString(),//National ID of Customer
+        //                            issueDate = l_CustInfo.Rows[0]["NgayCapCMND"].ToString(),//Issued Date of ID
+        //                            issuePlace = l_CustInfo.Rows[0]["NoiCapCMND"].ToString(),
+        //                            employeeCard = l_CustInfo.Rows[0]["MaNV_KH"].ToString(),//Employee card number
+        //                            mobilePhone = l_CustInfo.Rows[0]["SDT"].ToString(),//Mobile Phone
+        //                            durationYear = l_CustInfo.Rows[0]["ThoiGianCuTru_Nam"].ToString(),//Duration of living at current address (Year)
+        //                            durationMonth = l_CustInfo.Rows[0]["ThoiGianCuTru_Thang"].ToString(),//Duration of living at current address (Month)
+        //                            map = l_CustInfo.Rows[0]["DiaChi_HuongDan"].ToString(),//Guideline to the address
+        //                            ownerNationalId = l_CustInfo.Rows[0]["CMND_ChuHo"].ToString(),//Owner National ID
+        //                            contactAddress = l_CustInfo.Rows[0]["DiaChiLienHe_TypeName"].ToString(),//Contact Address
+        //                            maritalStatus = l_CustInfo.Rows[0]["maritalStatus"].ToString(),
+        //                            dsaCode = l_CustInfo.Rows[0]["MaNVFPT"].ToString(),//Code of Sale
+        //                            companyName = l_CustInfo.Rows[0]["TenCongTyKHLamViec"].ToString(),
+        //                            taxCode = l_CustInfo.Rows[0]["MSTCtyKH"].ToString(),
+        //                            salary = l_CustInfo.Rows[0]["ThuNhapHangThang"].ToString(),// Add - TuanNA89 - 02/07/2019 - Thêm thu nhập hàng tháng
+        //                            loanDetail = new TPFico_CustInfo_LoanDetail
+        //                            {
+        //                                product = l_CustInfo.Rows[0]["SanPhamVay"].ToString(),//Product Applied
+        //                                loanAmount = l_CustInfo.Rows[0]["TienVay"].ToString(),//Loan amount requested
+        //                                downPayment = l_CustInfo.Rows[0]["TraTruoc"].ToString(),//Amount of down payment for total bill
+        //                                annualr = l_CustInfo.Rows[0]["LaiSuat"].ToString(),//Annual interest rate
+        //                                dueDate = l_CustInfo.Rows[0]["NgayThanhToanHangThang"].ToString(),
+        //                                tenor = l_CustInfo.Rows[0]["KyHan"].ToString(),//Tenor of the loan
+        //                            },
+        //                            addresses = l__ListAddresses,
+        //                            photos = l__ListPhotos,
+        //                            productDetails = l_ListProducts, //Product details
+        //                            references = l__ListReferences
+        //                        };
+        //                        #endregion
+        //                        l__Step = "Add xong data rồi";
+        //                        #region == Push data ==
+        //                        var l__jsData = new JavaScriptSerializer().Serialize(l_ObjectData);
+        //                        l__Step = "Mã hoá data";
+        //                        var l__encryptData = PGPEncrypt_SignAndEncrypt(l__jsData);
+
+        //                        string l__ReqUriStr = ConfigurationManager.AppSettings["TPFico_Url"].ToString() + Api_TPBank.GuiThongTinKH;
+        //                        l__Step = "Lấy link bước 1";
+        //                        //▼ Add - TuanNA89 - 08/11/2019 - Fix lỗi mất kết nối API TPBank
+        //                        ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
+        //                        System.Net.ServicePointManager.ServerCertificateValidationCallback +=
+        //                            delegate (object sender, System.Security.Cryptography.X509Certificates.X509Certificate certificate,
+        //                                                    System.Security.Cryptography.X509Certificates.X509Chain chain,
+        //                                                    System.Net.Security.SslPolicyErrors sslPolicyErrors)
+        //                            {
+        //                                return true; // **** Always accept
+        //                            };
+        //                        System.Net.ServicePointManager.Expect100Continue = false;
+        //                        //▲ Add - TuanNA89 - 08/11/2019 - Fix lỗi mất kết nối API TPBank
+        //                        WriteLog(0, 0, "InstallmentTPBank_TPFico_SendCustInfo", l__ReqUriStr, "");
+        //                        var l__HttpWebReq = (HttpWebRequest)WebRequest.Create(l__ReqUriStr);
+        //                        l__HttpWebReq.KeepAlive = false;
+        //                        l__HttpWebReq.Method = "POST";
+        //                        l__HttpWebReq.ContentType = "application/json";
+        //                        l__HttpWebReq.Headers.Add("Authorization", l_Key);
+        //                        l__Step = "Bắt đầu gọi API";
+
+        //                        using (Stream stm = l__HttpWebReq.GetRequestStream())
+        //                        {
+        //                            using (StreamWriter stmw = new StreamWriter(stm))
+        //                            {
+        //                                stmw.Write(l__encryptData);
+        //                            }
+        //                        }
+        //                        HttpStatusCode? StatusCode = null;
+        //                        l__Step = "Lấy chuỗi response";
+        //                        try
+        //                        {
+        //                            l__Step = "Bắt đầu chạy API";
+        //                            l__oResp = (HttpWebResponse)l__HttpWebReq.GetResponse();
+        //                        }
+        //                        catch (WebException we)
+        //                        {
+        //                            l__Step = "API lỗi";
+        //                            l__oResp = (HttpWebResponse)we.Response;
+        //                        }
+        //                        l__Step = "Lấy chuỗi Stream của API";
+        //                        var webResponseStream = l__oResp.GetResponseStream();
+        //                        l__Step = "Check chuỗi ResponseStream";
+        //                        if (webResponseStream != null && webResponseStream != Stream.Null)
+        //                        {
+        //                            l__Step = "Chuỗi ResponseStream không null";
+        //                            l__Step = "Lấy StatusCode";
+        //                            StatusCode = l__oResp.StatusCode;
+        //                        }
+        //                        int? statusCode = null;
+        //                        string statusName = null;
+        //                        l__Step = "Check StatusCode";
+        //                        if (StatusCode != null)
+        //                        {
+        //                            l__Step = "StatusCode không null";
+        //                            statusCode = (int)StatusCode;
+        //                            statusName = StatusCode.ToString();
+        //                        }
+        //                        if ((StatusCode == HttpStatusCode.Created) || (StatusCode == HttpStatusCode.OK))
+        //                        {
+        //                            l__Step = "Thành công";
+        //                            l__result = new TPFico_Customer_Result()
+        //                            {
+        //                                status = "1",
+        //                                messages = "Gửi thông tin khách hàng sang TPBank thành công! Mã khách hàng TPBank: " + l_CustInfo.Rows[0]["CustId"].ToString()
+        //                            };
+        //                            Status status = Status.PROCESSING;
+        //                            statusCode = (int)status;
+
+        //                            g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_TPFico_PushResult", CommandType.StoredProcedure, new SqlParameter[]{
+        //                                new SqlParameter("@Result", statusCode),
+        //                                new SqlParameter("@Msg", "Gửi thông tin thành công!"),
+        //                                new SqlParameter("@CustId", l_ObjectData.custId),
+        //                            });
+        //                        }
+        //                        else
+        //                        {
+        //                            l__Step = "Status trả về lỗi";
+        //                            StreamReader l__StreamReader = new StreamReader(l__oResp.GetResponseStream());
+
+        //                            var l_data = l__StreamReader.ReadToEnd();
+        //                            l__Step = "Giải mã chuỗi Response lỗi";
+        //                            var l__Json_Decrypt = PGPEncrypt_SignAndDecrypt(l_data);
+        //                            l__Step = "Gán vào list lỗi";
+        //                            l__result = new JavaScriptSerializer().Deserialize<TPFico_Customer_Result>(l__Json_Decrypt);
+        //                            WriteLog(0, 0, "InstallmentTPBank_TPFico_SendCustInfo", string.Format("{0} - {1}", statusCode.ToString(), statusName), l__Json_Decrypt);
+        //                            l__Step = "Trả lỗi về";
+        //                            l__result.status = "0";
+        //                            //Add - TuanNA89 - 31/07/2019 - Thêm Note nơi trả về lỗi
+        //                            l__result.messages = "Lỗi TPBank trả về: " + l__result.messages;
+        //                            //Add - TuanNA89 - 31/07/2019 - Check thêm trường hợp TPBank trả về lỗi "Lỗi gọi dịch vụ web" thì vẫn tính là thành công
+        //                            if (l__result.messages.Contains("Lỗi gọi dịch vụ web cust id"))
+        //                            {
+        //                                l__Step = "Thành công";
+        //                                l__result = new TPFico_Customer_Result()
+        //                                {
+        //                                    status = "1",
+        //                                    messages = "Gửi thông tin khách hàng sang TPBank thành công! Mã khách hàng TPBank: " + l_CustInfo.Rows[0]["CustId"].ToString()
+        //                                };
+        //                                Status status = Status.PROCESSING;
+        //                                statusCode = (int)status;
+
+        //                                g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_TPFico_PushResult", CommandType.StoredProcedure, new SqlParameter[]{
+        //                                new SqlParameter("@Result", statusCode),
+        //                                new SqlParameter("@Msg", "Gửi thông tin thành công!"),
+        //                                new SqlParameter("@CustId", l_ObjectData.custId),
+        //                            });
+        //                            }
+        //                            //Add - TuanNA89 - 31/07/2019 - Check thêm trường hợp TPBank trả về lỗi "Lỗi gọi dịch vụ web" thì vẫn tính là thành công
+
+        //                        }
+        //                        #endregion
+        //                    }
+        //                    else
+        //                    {
+        //                        l__result = new TPFico_Customer_Result()
+        //                        {
+        //                            status = "0",
+        //                            messages = "Xảy ra lỗi khi gộp hình"
+        //                        };
+        //                        WriteLog(0, 0, "InstallmentTPBank_TPFico_SendCustInfo", "", "Xảy ra lỗi khi gộp hình");
+        //                    }
+        //                }
+        //                else
+        //                {
+        //                    l__result = new TPFico_Customer_Result()
+        //                    {
+        //                        status = "0",
+        //                        messages = "Không lấy được chuỗi kết nối TPBank"
+        //                    };
+        //                    WriteLog(0, 0, "InstallmentTPBank_TPFico_SendCustInfo", "", "Không lấy được chuỗi kết nối TPBank");
+        //                }
+        //            }
+        //            else
+        //            {
+        //                l__result = new TPFico_Customer_Result()
+        //                {
+        //                    status = "0",
+        //                    messages = "Không tìm thấy thông tin khách hàng"
+        //                };
+        //                WriteLog(0, 0, "InstallmentTPBank_TPFico_SendCustInfo", "", "Không tìm thấy thông tin khách hàng");
+        //            }
+        //        }
+        //        else
+        //        {
+        //            l__result = new TPFico_Customer_Result()
+        //            {
+        //                status = "0",
+        //                messages = "Không lấy được thông tin khách hàng"
+        //            };
+        //            WriteLog(0, 0, "InstallmentTPBank_TPFico_SendCustInfo", "", "Không lấy được thông tin khách hàng");
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        string l__error = "- Bước bị lỗi: " + l__Step + "- Lỗi: " + ex.ToString();
+        //        Logger.WriteLogError("RegistrationForm - " + MethodBase.GetCurrentMethod().Name + "()", l__error);
+        //        string msgError = "";
+        //        if (ex.ToString().Contains("Unable to connect to the remote server"))
+        //        {
+        //            msgError = "Không kết nối được tới TPBank";
+        //        }
+        //        else
+        //        {
+        //            msgError = ex.ToString();
+        //        }
+
+        //        l__result = new TPFico_Customer_Result()
+        //        {
+        //            status = "0",
+        //            messages = msgError
+        //        };
+        //        WriteLog(0, 0, "InstallmentTPBank_TPFico_SendCustInfo", "", l__error);
+        //    }
+        //    finally
+        //    {
+        //        if (l__oResp != null)
+        //        {
+        //            l__oResp.Close();
+        //        }
+        //    }
+        //    return l__result;
+        //}
+        //public TPFico_Customer_Result InstallmentTPBank_TPFico_SendDocumentInfo(string p_IdFinal)
+        //{
+        //    TPFico_Customer_Result l__result = new TPFico_Customer_Result();
+        //    int l__IdLog = 0;
+        //    l__IdLog = WriteLog(0, 0, "InstallmentTPBank_TPFico_SendDocumentInfo", p_IdFinal, "");
+        //    HttpWebResponse l__oResp = null;
+        //    string l__Step = "";
+        //    try
+        //    {
+        //        l__Step = "Lấy token";
+        //        string l_Authorization = InstallmentTPBank_TPFico_GetAuthorization();
+        //        if (l_Authorization == null || l_Authorization == "")
+        //        {
+        //            l__result = new TPFico_Customer_Result()
+        //            {
+        //                status = "0",
+        //                messages = "Không lấy được chuỗi kết nối TPBank"
+        //            };
+        //        }
+        //        else
+        //        {
+        //            SqlParameter[] l_SqlParameter = new SqlParameter[]{
+        //                new SqlParameter("@Id_Final", p_IdFinal)
+        //            };
+        //            l__Step = "Gọi store lấy data";
+        //            DataTable l_DataTable = g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_CustInfo_ForAPI", CommandType.StoredProcedure, l_SqlParameter);
+        //            if (l_DataTable != null && l_DataTable.Rows.Count > 0)
+        //            {
+        //                #region == Gộp hình ==
+
+        //                List<string> l__Files = new List<string> { };
+        //                string l__Url__NewImage = "";
+        //                l__Step = "Add hình";
+        //                #region == Gộp hình đề nghị vay vốn ==                        
+        //                if ((l_DataTable.Rows[0]["Url_CRD_DXTNTD"].ToString() != null) && (l_DataTable.Rows[0]["Url_CRD_DXTNTD"].ToString() != ""))
+        //                    l__Files.Add(l_DataTable.Rows[0]["Url_CRD_DXTNTD"].ToString());
+
+        //                if ((l_DataTable.Rows[0]["Url_CRD_DXTNTD_2"].ToString() != null) && (l_DataTable.Rows[0]["Url_CRD_DXTNTD_2"].ToString() != ""))
+        //                    l__Files.Add(l_DataTable.Rows[0]["Url_CRD_DXTNTD_2"].ToString());
+
+        //                if ((l_DataTable.Rows[0]["Url_CRD_DXTNTD_3"].ToString() != null) && (l_DataTable.Rows[0]["Url_CRD_DXTNTD_3"].ToString() != ""))
+        //                    l__Files.Add(l_DataTable.Rows[0]["Url_CRD_DXTNTD_3"].ToString());
+
+        //                if ((l_DataTable.Rows[0]["Url_CRD_DXTNTD_4"].ToString() != null) && (l_DataTable.Rows[0]["Url_CRD_DXTNTD_4"].ToString() != ""))
+        //                    l__Files.Add(l_DataTable.Rows[0]["Url_CRD_DXTNTD_4"].ToString());
+
+        //                string date = DateTime.Now.ToString("yyyyMMdd");
+        //                l__Step = "Gộp hình";
+        //                if (l__Files.Count > 0)
+        //                    l__Url__NewImage = MergeImages(l__Files, "/TPBank/" + date + "/", "ACCA");
+        //                #endregion
+        //                #endregion
+
+        //                if (l__Url__NewImage != "")
+        //                {
+        //                    #region == Add Data ==
+        //                    l__Step = "Gộp Images";
+        //                    TPFico_DocumentInfo[] l_ObjectData =
+        //                    {
+        //                        new TPFico_DocumentInfo{
+        //                            file = (l__Url__NewImage == "" ) ? "" : authority + l_DataTable.Rows[0]["ImagePath"].ToString() + l__Url__NewImage,
+        //                            documentCode= "ACCA"
+        //                        },
+        //                        new TPFico_DocumentInfo{
+        //                            file= (l_DataTable.Rows[0]["Url_CRD_MoThe"].ToString() == "") ? "" : (authority + l_DataTable.Rows[0]["ImagePath"].ToString() + l_DataTable.Rows[0]["Url_CRD_MoThe"].ToString()),
+        //                            documentCode= "Signature"
+        //                        },
+        //                        //Edit - TuanNA89 - 13/08/2019 - Bỏ bảng kê mua hàng hoá
+        //                        //new TPFico_DocumentInfo{
+        //                        //    file= (l_DataTable.Rows[0]["Url_CRD_XacNhanThanhToan"].ToString() == "") ? "" : (authority + l_DataTable.Rows[0]["ImagePath"].ToString() + l_DataTable.Rows[0]["Url_CRD_XacNhanThanhToan"].ToString()),
+        //                        //    documentCode= "Detail of stock"
+        //                        //},
+        //                        //Edit - TuanNA89 - 13/08/2019 - Bỏ bảng kê mua hàng hoá
+        //                        new TPFico_DocumentInfo{
+        //                            file= (l_DataTable.Rows[0]["Url_CRD_GiayGiaoHang"].ToString() == "") ? "" : (authority + l_DataTable.Rows[0]["ImagePath"].ToString() + l_DataTable.Rows[0]["Url_CRD_GiayGiaoHang"].ToString()),
+        //                            documentCode= "Delivery note"
+        //                        },
+        //                    };
+        //                    #endregion
+
+        //                    l__Step = "Đẩy data giải ngân sang TPBank";
+        //                    #region == Push data to TPFico ==
+        //                    var l__jsData = new JavaScriptSerializer().Serialize(l_ObjectData);
+        //                    l__Step = "Mã hoá data";
+        //                    var l__encryptData = PGPEncrypt_SignAndEncrypt(l__jsData);
+
+        //                    string l__ReqUriStr = ConfigurationManager.AppSettings["TPFico_Url"].ToString() + String.Format(Api_TPBank.GuiThongTinGiaiNgan, l_DataTable.Rows[0]["CustId"].ToString());//Customer id
+        //                    //▼ Add - TuanNA89 - 08/11/2019 - Fix lỗi mất kết nối API TPBank
+        //                    ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
+        //                    System.Net.ServicePointManager.ServerCertificateValidationCallback +=
+        //                        delegate (object sender, System.Security.Cryptography.X509Certificates.X509Certificate certificate,
+        //                                                System.Security.Cryptography.X509Certificates.X509Chain chain,
+        //                                                System.Net.Security.SslPolicyErrors sslPolicyErrors)
+        //                        {
+        //                            return true; // **** Always accept
+        //                        };
+        //                    System.Net.ServicePointManager.Expect100Continue = false;
+        //                    //▲ Add - TuanNA89 - 08/11/2019 - Fix lỗi mất kết nối API TPBank
+        //                    var l__HttpWebReq = (HttpWebRequest)WebRequest.Create(l__ReqUriStr);
+        //                    l__HttpWebReq.KeepAlive = false;
+        //                    l__HttpWebReq.Method = "POST";
+
+        //                    l__HttpWebReq.ContentType = "application/json";
+        //                    l__HttpWebReq.Headers.Add("Authorization", l_Authorization);
+        //                    l__Step = "đang chạy";
+        //                    using (Stream stm = l__HttpWebReq.GetRequestStream())
+        //                    {
+        //                        using (StreamWriter stmw = new StreamWriter(stm))
+        //                        {
+        //                            stmw.Write(l__encryptData);
+        //                        }
+        //                    }
+
+        //                    HttpStatusCode? StatusCode = null;
+        //                    l__Step = "Lấy chuỗi response";
+        //                    try
+        //                    {
+        //                        l__Step = "Bắt đầu chạy API";
+        //                        l__oResp = (HttpWebResponse)l__HttpWebReq.GetResponse();
+        //                    }
+        //                    catch (WebException we)
+        //                    {
+        //                        l__Step = "API lỗi";
+        //                        l__oResp = (HttpWebResponse)we.Response;
+        //                    }
+        //                    l__Step = "Lấy chuỗi Stream của API";
+        //                    var webResponseStream = l__oResp.GetResponseStream();
+        //                    l__Step = "Check chuỗi ResponseStream";
+        //                    if (webResponseStream != null && webResponseStream != Stream.Null)
+        //                    {
+        //                        l__Step = "Chuỗi ResponseStream không null";
+        //                        l__Step = "Lấy StatusCode";
+        //                        StatusCode = l__oResp.StatusCode;
+        //                    }
+        //                    int? statusCode = null;
+        //                    string statusName = null;
+        //                    l__Step = "Check StatusCode";
+        //                    if (StatusCode != null)
+        //                    {
+        //                        l__Step = "StatusCode không null";
+        //                        statusCode = (int)StatusCode;
+        //                        statusName = StatusCode.ToString();
+        //                    }
+
+        //                    if ((StatusCode == HttpStatusCode.Created) || (StatusCode == HttpStatusCode.OK))
+        //                    {
+        //                        l__Step = "Thành công";
+        //                        l__result = new TPFico_Customer_Result()
+        //                        {
+        //                            status = "1",
+        //                            messages = "Gửi thông tin giải ngân sang TPBank thành công!"
+        //                        };
+
+        //                        g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_TPFico_PushResult", CommandType.StoredProcedure, new SqlParameter[]{
+        //                            new SqlParameter("@Result", 8),
+        //                            new SqlParameter("@Msg", "Gửi thông tin giải ngân thành công!"),
+        //                            new SqlParameter("@CustId",  l_DataTable.Rows[0]["CustId"].ToString()),
+        //                        });
+        //                    }
+        //                    else
+        //                    {
+        //                        l__Step = "Lấy chuỗi response lỗi";
+        //                        StreamReader l__StreamReader = new StreamReader(l__oResp.GetResponseStream());
+
+        //                        var l_data = l__StreamReader.ReadToEnd();
+        //                        l__Step = "Giải mã";
+        //                        var l__Json_Decrypt = PGPEncrypt_SignAndDecrypt(l_data);
+        //                        l__Step = "Gán object";
+        //                        var l__Data = new JavaScriptSerializer().Deserialize<TPFico_Customer_Result>(l__Json_Decrypt);
+        //                        WriteLog(0, 0, "InstallmentTPBank_TPFico_SendDocumentInfo", string.Format("{0} - {1}", statusCode.ToString(), statusName), l__Json_Decrypt);
+        //                        l__result = new TPFico_Customer_Result()
+        //                        {
+        //                            status = "0",
+        //                            //Edit - TuanNA89 - 31/07/2019 - Thêm Note nơi trả về lỗi
+        //                            messages = "Lỗi TPBank trả về: " + l__Data.messages
+        //                        };
+
+        //                        //Add - TuanNA89 - 31/07/2019 - Check thêm trường hợp TPBank trả về lỗi "Lỗi gọi dịch vụ web" thì vẫn tính là thành công
+        //                        if (l__result.messages.Contains("Lỗi gọi dịch vụ web cust id"))
+        //                        {
+        //                            l__Step = "Thành công";
+        //                            l__result = new TPFico_Customer_Result()
+        //                            {
+        //                                status = "1",
+        //                                messages = "Gửi thông tin giải ngân sang TPBank thành công!"
+        //                            };
+        //                            Status status = Status.PROCESSING;
+        //                            statusCode = (int)status;
+
+        //                            g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_TPFico_PushResult", CommandType.StoredProcedure, new SqlParameter[]{
+        //                            new SqlParameter("@Result", 8),
+        //                            new SqlParameter("@Msg", "Gửi thông tin giải ngân thành công!"),
+        //                            new SqlParameter("@CustId",  l_DataTable.Rows[0]["CustId"].ToString()),
+        //                            });
+        //                        }
+        //                        //Add - TuanNA89 - 31/07/2019 - Check thêm trường hợp TPBank trả về lỗi "Lỗi gọi dịch vụ web" thì vẫn tính là thành công
+        //                    }
+        //                    #endregion
+        //                }
+        //                else
+        //                {
+        //                    l__result = new TPFico_Customer_Result()
+        //                    {
+        //                        status = "0",
+        //                        messages = "Xảy ra lỗi khi gộp hình"
+        //                    };
+        //                    WriteLog(0, 0, "InstallmentTPBank_TPFico_SendDocumentInfo", "", "Xảy ra lỗi khi gộp hình");
+        //                }
+        //            }
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        string l__error = "- Bước bị lỗi: " + l__Step + "- Lỗi: " + ex.ToString();
+        //        Logger.WriteLogError("RegistrationForm - " + MethodBase.GetCurrentMethod().Name + "()", l__error);
+        //        string msgError = "";
+        //        if (ex.ToString().Contains("Unable to connect to the remote server"))
+        //        {
+        //            msgError = "Không kết nối được tới TPBank";
+        //        }
+        //        else
+        //        {
+        //            msgError = ex.ToString();
+        //        }
+
+        //        l__result = new TPFico_Customer_Result()
+        //        {
+        //            status = "0",
+        //            messages = msgError
+        //        };
+        //        WriteLog(0, 0, "InstallmentTPBank_TPFico_SendDocumentInfo", "", l__error);
+        //    }
+        //    finally
+        //    {
+        //        if (l__oResp != null)
+        //        {
+        //            l__oResp.Close();
+        //        }
+        //    }
+        //    return l__result;
+        //}
+        //public string InstallmentTPBank_TPFico_GetCustInfo(string p_IdFinal)
+        //{
+        //    string l__Step = "";
+        //    string xml = "";
+        //    HttpWebResponse l__oResp = null;
+        //    try
+        //    {
+        //        string p_Token = InstallmentTPBank_TPFico_GetAuthorization();
+        //        string l_data = "";
+
+        //        #region == Get data from TPFico ==
+
+        //        string l__ReqUriStr = ConfigurationManager.AppSettings["TPFico_Url"].ToString() + String.Format(Api_TPBank.LayThongTinDangKyKH, p_IdFinal);//Customer id
+        //        //▼ Add - TuanNA89 - 08/11/2019 - Fix lỗi mất kết nối API TPBank
+        //        ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
+        //        System.Net.ServicePointManager.ServerCertificateValidationCallback +=
+        //            delegate (object sender, System.Security.Cryptography.X509Certificates.X509Certificate certificate,
+        //                                    System.Security.Cryptography.X509Certificates.X509Chain chain,
+        //                                    System.Net.Security.SslPolicyErrors sslPolicyErrors)
+        //            {
+        //                return true; // **** Always accept
+        //            };
+        //        System.Net.ServicePointManager.Expect100Continue = false;
+        //        //▲ Add - TuanNA89 - 08/11/2019 - Fix lỗi mất kết nối API TPBank
+
+        //        var l__HttpWebReq = (HttpWebRequest)WebRequest.Create(l__ReqUriStr);
+        //        l__HttpWebReq.KeepAlive = false;
+        //        l__HttpWebReq.Method = "GET";
+
+        //        l__HttpWebReq.Headers.Add("Authorization", p_Token);
+
+        //        HttpStatusCode? StatusCode = null;
+        //        l__Step = "Lấy chuỗi response";
+        //        try
+        //        {
+        //            l__Step = "Bắt đầu chạy API";
+        //            l__oResp = (HttpWebResponse)l__HttpWebReq.GetResponse();
+        //        }
+        //        catch (WebException we)
+        //        {
+        //            l__Step = "API lỗi";
+        //            l__oResp = (HttpWebResponse)we.Response;
+        //        }
+        //        l__Step = "Lấy chuỗi Stream của API";
+        //        var webResponseStream = l__oResp.GetResponseStream();
+        //        l__Step = "Check chuỗi ResponseStream";
+        //        if (webResponseStream != null && webResponseStream != Stream.Null)
+        //        {
+        //            l__Step = "Chuỗi ResponseStream không null";
+        //            l__Step = "Lấy StatusCode";
+        //            StatusCode = l__oResp.StatusCode;
+        //        }
+        //        int? statusCode = null;
+        //        string statusName = null;
+        //        l__Step = "Check StatusCode";
+        //        if (StatusCode != null)
+        //        {
+        //            l__Step = "StatusCode không null";
+        //            statusCode = (int)StatusCode;
+        //            statusName = StatusCode.ToString();
+        //        }
+        //        if (StatusCode == HttpStatusCode.OK)
+        //        {
+        //            StreamReader l__StreamReader = new StreamReader(l__oResp.GetResponseStream());
+
+        //            l_data = l__StreamReader.ReadToEnd();
+        //            var l_dataDecrypt = "";
+        //            l_dataDecrypt = PGPEncrypt_SignAndDecrypt(l_data);
+        //            var l_custInfo = new TPFico_CustInfo_GetAllData();
+        //            l_custInfo = new JavaScriptSerializer().Deserialize<TPFico_CustInfo_GetAllData>(l_dataDecrypt);
+
+        //            using (var stringwriter = new System.IO.StringWriter())
+        //            {
+        //                var serializer = new XmlSerializer(l_custInfo.GetType());
+        //                serializer.Serialize(stringwriter, l_custInfo);
+        //                xml = stringwriter.ToString();
+        //            };
+        //        }
+        //        #endregion
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        string l__error = "- Bước bị lỗi: " + l__Step + "- Lỗi: " + ex.InnerException;
+        //        Logger.WriteLogError("RegistrationForm - " + MethodBase.GetCurrentMethod().Name + "()", l__error);
+        //        WriteLog(0, 0, MethodBase.GetCurrentMethod().Name, "", l__error);
+        //    }
+        //    finally
+        //    {
+        //        if (l__oResp != null)
+        //        {
+        //            l__oResp.Close();
+        //        }
+        //    }
+        //    return xml;
+        //}
+        //public TPFico_Customer_Result InstallmentTPBank_TPFico_TPFico_SendDataUpdate(string p_IdFinal, string p_Screen)
+        //{
+        //    int l__IdLog = 0;
+        //    TPFico_Customer_Result l__result = new TPFico_Customer_Result();
+        //    l__IdLog = WriteLog(0, 0, "InstallmentTPBank_TPFico_TPFico_SendDataUpdate", p_IdFinal, "");
+        //    string l__Step = "";
+        //    HttpWebResponse l__oResp = null;
+        //    try
+        //    {
+        //        SqlParameter[] l_SqlParameter = new SqlParameter[]{
+        //            new SqlParameter("@CustId", p_IdFinal)
+        //            ,new SqlParameter("@Screen", p_Screen)
+        //        };
+        //        l__Step = "Gọi store";
+        //        DataTable l_DataTable = g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_TPFico_GetDataUpdate", CommandType.StoredProcedure, l_SqlParameter);
+        //        if (l_DataTable != null && l_DataTable.Rows.Count > 0)
+        //        {
+        //            l__Step = "Lấy token";
+        //            string l_Key = InstallmentTPBank_TPFico_GetAuthorization();
+
+        //            if (l_Key != null && l_Key != "")
+        //            {
+        //                #region == (Đối với lỗi liên quan đến up hình - Gộp hình) ==
+        //                List<string> l__FileCMND = new List<string> { };
+        //                List<string> l__FileSHK = new List<string> { };
+        //                List<string> l__FileACCA = new List<string> { };
+
+        //                foreach (DataRow dr in l_DataTable.Rows)
+        //                {
+        //                    if (dr["Id_TagHtml"].ToString() == "CMND")
+        //                    {
+        //                        l__FileCMND.Add(dr["NewValue"].ToString());
+        //                    }
+        //                    else if (dr["Id_TagHtml"].ToString() == "SHK")
+        //                    {
+        //                        l__FileSHK.Add(dr["NewValue"].ToString());
+        //                    }
+        //                    else if (dr["Id_TagHtml"].ToString() == "ACCA")
+        //                    {
+        //                        l__FileACCA.Add(dr["NewValue"].ToString());
+        //                    }
+        //                }
+
+        //                string l__Url__NewImage_CMND = "";
+        //                string l__Url__NewImage_SHK = "";
+        //                string l__Url__NewImage_ACCA = "";
+        //                string date = DateTime.Now.ToString("yyyyMMdd");
+        //                string l_error_GopHinh = "";
+        //                l__Step = "Gộp hình CMND";
+        //                if (l__FileCMND.Count > 0)
+        //                {
+        //                    l__Url__NewImage_CMND = MergeImages(l__FileCMND, "/TPBank/" + date + "/", "CMND");
+        //                    if (l__Url__NewImage_CMND == "")
+        //                    {
+        //                        l_error_GopHinh = l_error_GopHinh + "- Lỗi gộp hình CMND";
+        //                    }
+        //                }
+
+        //                l__Step = "Gộp hình SHK";
+        //                if (l__FileSHK.Count > 0)
+        //                {
+        //                    l__Url__NewImage_SHK = MergeImages(l__FileSHK, "/TPBank/" + date + "/", "SHK");
+        //                    if (l__Url__NewImage_SHK == "")
+        //                    {
+        //                        l_error_GopHinh = l_error_GopHinh + "- Lỗi gộp hình SHK";
+        //                    }
+        //                }
+
+        //                l__Step = "Gộp hình ACCA";
+        //                if (l__FileACCA.Count > 0)
+        //                {
+        //                    l__Url__NewImage_ACCA = MergeImages(l__FileACCA, "/TPBank/" + date + "/", "ACCA");
+        //                    if (l__Url__NewImage_ACCA == "")
+        //                    {
+        //                        l_error_GopHinh = l_error_GopHinh + "- Lỗi gộp hình ACCA";
+        //                    }
+        //                }
+        //                #endregion
+
+        //                if (l_error_GopHinh == "")
+        //                {
+        //                    #region == Add data ==
+        //                    List<TPFico_FieldPushReturn> l_ListDataUpdate = new List<TPFico_FieldPushReturn>() { };
+        //                    TPFico_FieldPushReturn l_ItemDataUpdate = new TPFico_FieldPushReturn { };
+        //                    l__Step = "Add data";
+        //                    foreach (DataRow dr in l_DataTable.Rows)
+        //                    {
+        //                        //▼	Edit - TuanNA89 - 08/07/2019 - Thêm Path vào Url hình ảnh
+        //                        if (dr["Id_TagHtml"].ToString() == "CMND")
+        //                        {
+        //                            l_ItemDataUpdate = new TPFico_FieldPushReturn()
+        //                            {
+        //                                code = dr["SubCode"].ToString(),
+        //                                comment = (l__Url__NewImage_CMND == "") ? "" : authority + l_DataTable.Rows[0]["ImagePath"].ToString() + l__Url__NewImage_CMND
+        //                            };
+        //                        }
+        //                        else if (dr["Id_TagHtml"].ToString() == "SHK")
+        //                        {
+        //                            l_ItemDataUpdate = new TPFico_FieldPushReturn()
+        //                            {
+        //                                code = dr["SubCode"].ToString(),
+        //                                comment = (l__Url__NewImage_SHK == "") ? "" : authority + l_DataTable.Rows[0]["ImagePath"].ToString() + l__Url__NewImage_SHK
+        //                            };
+        //                        }
+        //                        else if (dr["Id_TagHtml"].ToString() == "ACCA")
+        //                        {
+        //                            l_ItemDataUpdate = new TPFico_FieldPushReturn()
+        //                            {
+        //                                code = dr["SubCode"].ToString(),
+        //                                comment = (l__Url__NewImage_ACCA == "") ? "" : authority + l_DataTable.Rows[0]["ImagePath"].ToString() + l__Url__NewImage_ACCA
+        //                            };
+        //                        }
+        //                        else
+        //                        {
+        //                            l_ItemDataUpdate = new TPFico_FieldPushReturn()
+        //                            {
+        //                                code = dr["SubCode"].ToString(),
+        //                                comment = dr["NewValue"].ToString()
+        //                            };
+        //                        }
+        //                        //▲	Edit - TuanNA89 - 08/07/2019 - Thêm Path vào Url hình ảnh
+        //                        if (dr["Rank"].ToString() == "1")
+        //                        {
+        //                            l_ListDataUpdate.Add(l_ItemDataUpdate);
+        //                        }
+        //                    }
+
+        //                    #endregion
+
+        //                    #region == Push data ==
+        //                    var l__jsData = new JavaScriptSerializer().Serialize(l_ListDataUpdate);
+        //                    WriteLog(0, 0, "InstallmentTPBank_TPFico_TPFico_SendDataUpdate", l__jsData, "");
+        //                    l__Step = "Mã hoá";
+        //                    var l__encryptData = PGPEncrypt_SignAndEncrypt(l__jsData);
+        //                    string l__ReqUriStr = "";
+        //                    if (p_Screen == "TPB_DangKy")
+        //                    {
+        //                        l__ReqUriStr = ConfigurationManager.AppSettings["TPFico_Url"].ToString() + String.Format(Api_TPBank.GuiThongTinKH_BiLoi, l_DataTable.Rows[0]["CustId"].ToString());//Customer id
+        //                    }
+        //                    else if (p_Screen == "TPB_GiaiNgan")
+        //                    {
+        //                        l__ReqUriStr = ConfigurationManager.AppSettings["TPFico_Url"].ToString() + String.Format(Api_TPBank.GuiThongTinGiaiNgan_BiLoi, l_DataTable.Rows[0]["CustId"].ToString());//Customer id
+        //                    }
+
+        //                    //▼ Add - TuanNA89 - 08/11/2019 - Fix lỗi mất kết nối API TPBank
+        //                    ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
+        //                    System.Net.ServicePointManager.ServerCertificateValidationCallback +=
+        //                        delegate (object sender, System.Security.Cryptography.X509Certificates.X509Certificate certificate,
+        //                                                System.Security.Cryptography.X509Certificates.X509Chain chain,
+        //                                                System.Net.Security.SslPolicyErrors sslPolicyErrors)
+        //                        {
+        //                            return true; // **** Always accept
+        //                        };
+        //                    System.Net.ServicePointManager.Expect100Continue = false;
+        //                    //▲ Add - TuanNA89 - 08/11/2019 - Fix lỗi mất kết nối API TPBank
+        //                    var l__HttpWebReq = (HttpWebRequest)WebRequest.Create(l__ReqUriStr);
+        //                    l__HttpWebReq.KeepAlive = false;
+        //                    l__HttpWebReq.Method = "PUT";
+
+
+        //                    l__HttpWebReq.ContentType = "application/json";
+        //                    l__HttpWebReq.Headers.Add("Authorization", l_Key);
+
+        //                    using (Stream stm = l__HttpWebReq.GetRequestStream())
+        //                    {
+        //                        using (StreamWriter stmw = new StreamWriter(stm))
+        //                        {
+        //                            stmw.Write(l__encryptData);
+        //                        }
+        //                    }
+
+        //                    HttpStatusCode? StatusCode = null;
+        //                    l__Step = "Lấy chuỗi response";
+        //                    try
+        //                    {
+        //                        l__Step = "Bắt đầu chạy API";
+        //                        l__oResp = (HttpWebResponse)l__HttpWebReq.GetResponse();
+        //                    }
+        //                    catch (WebException we)
+        //                    {
+        //                        l__Step = "API lỗi";
+        //                        l__oResp = (HttpWebResponse)we.Response;
+        //                    }
+        //                    l__Step = "Lấy chuỗi Stream của API";
+        //                    var webResponseStream = l__oResp.GetResponseStream();
+        //                    l__Step = "Check chuỗi ResponseStream";
+        //                    if (webResponseStream != null && webResponseStream != Stream.Null)
+        //                    {
+        //                        l__Step = "Chuỗi ResponseStream không null";
+        //                        l__Step = "Lấy StatusCode";
+        //                        StatusCode = l__oResp.StatusCode;
+        //                    }
+        //                    int? statusCode = null;
+        //                    string statusName = null;
+        //                    l__Step = "Check StatusCode";
+        //                    if (StatusCode != null)
+        //                    {
+        //                        l__Step = "StatusCode không null";
+        //                        statusCode = (int)StatusCode;
+        //                        statusName = StatusCode.ToString();
+        //                    }
+        //                    if ((StatusCode == HttpStatusCode.Created) || (StatusCode == HttpStatusCode.OK))
+        //                    {
+        //                        int l__StatusChange = 0;
+        //                        if (p_Screen == "TPB_DangKy")
+        //                        {
+        //                            l__StatusChange = 1; // Processing bước đăng ký
+        //                        }
+        //                        else if (p_Screen == "TPB_GiaiNgan")
+        //                        {
+        //                            l__StatusChange = 8; // Processing bước giải ngân
+        //                        }
+        //                        g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_TPFico_PushResult", CommandType.StoredProcedure, new SqlParameter[]{
+        //                            new SqlParameter("@Result", l__StatusChange),
+        //                            new SqlParameter("@Msg", "Gửi thông tin thành công!"),
+        //                            new SqlParameter("@CustId", p_IdFinal),
+        //                        });
+
+        //                        l__result = new TPFico_Customer_Result()
+        //                        {
+        //                            status = "1",
+        //                            messages = "Gửi thành công"
+        //                        };
+        //                    }
+        //                    else
+        //                    {
+        //                        StreamReader l__StreamReader = new StreamReader(l__oResp.GetResponseStream());
+
+        //                        var l__Response = l__StreamReader.ReadToEnd();
+        //                        var l__Json_Decrypt = PGPEncrypt_SignAndDecrypt(l__Response);
+        //                        WriteLog(0, 0, "InstallmentTPBank_TPFico_TPFico_SendDataUpdate", string.Format("{0} - {1}", statusCode.ToString(), statusName), l__Json_Decrypt);
+        //                        l__result = new JavaScriptSerializer().Deserialize<TPFico_Customer_Result>(l__Json_Decrypt);
+        //                        l__result.status = "0";
+        //                        //Add - TuanNA89 - 31/07/2019 - Thêm Note nơi trả về lỗi
+        //                        l__result.messages = "Lỗi TPBank trả về: " + l__result.messages;
+        //                    }
+        //                    #endregion
+        //                }
+        //                else
+        //                {
+        //                    l__result = new TPFico_Customer_Result()
+        //                    {
+        //                        status = "0",
+        //                        messages = "Xảy ra lỗi khi gộp hình"
+        //                    };
+
+        //                    WriteLog(0, 0, "InstallmentTPBank_TPFico_TPFico_SendDataUpdate", "", l_error_GopHinh);
+        //                }
+        //            }
+        //            else
+        //            {
+        //                l__result = new TPFico_Customer_Result()
+        //                {
+        //                    status = "0",
+        //                    messages = "Không lấy được chuỗi kết nối TPBank"
+        //                };
+        //                WriteLog(0, 0, "InstallmentTPBank_TPFico_TPFico_SendDataUpdate", "", "Không lấy được chuỗi kết nối TPBank");
+        //            }
+        //        }
+        //        else
+        //        {
+        //            l__result = new TPFico_Customer_Result()
+        //            {
+        //                status = "0",
+        //                messages = "Không tìm thấy thông tin"
+        //            };
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        string l__error = "- Bước bị lỗi: " + l__Step + "- Lỗi: " + ex.ToString();
+        //        Logger.WriteLogError("RegistrationForm - " + MethodBase.GetCurrentMethod().Name + "()", l__error);
+        //        string msgError = "";
+        //        if (ex.ToString().Contains("Unable to connect to the remote server"))
+        //        {
+        //            msgError = "Không kết nối được tới TPBank";
+        //        }
+        //        else
+        //        {
+        //            msgError = ex.ToString();
+        //        }
+
+        //        l__result = new TPFico_Customer_Result()
+        //        {
+        //            status = "0",
+        //            messages = msgError
+        //        };
+        //        WriteLog(0, 0, "InstallmentTPBank_TPFico_SendDocumentInfo", "", l__error);
+        //    }
+        //    finally
+        //    {
+        //        if (l__oResp != null)
+        //        {
+        //            l__oResp.Close();
+        //        }
+        //    }
+        //    return l__result;
+        //}
+        //▲	Add - TuanNA89 - 21/10/2019 - Thêm code hỗ trợ việc gọi API TPBank
+        #endregion
+        #region === Code mới ===
+        public string InstallmentTPBank_TPFico_TestConnection()
+        {
+            string l_Authorization = "";
+            string l_Function = MethodBase.GetCurrentMethod().Name, l_Method = "GET", l_Url = "", l_jsData = "", l_Error = "";
+            try
+            {
+                if (l_Authorization == "")
+                {
+                    l_Url = ConfigurationManager.AppSettings["TPFico_Url"].ToString() + Api_TPBank.LayToken;
+                    var TPFico_ClientId = ConfigurationManager.AppSettings["TPFico_ClientId"].ToString();
+                    var TPFico_ClientSecret = ConfigurationManager.AppSettings["TPFico_ClientSecret"].ToString();
+
+                    ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
+                    System.Net.ServicePointManager.ServerCertificateValidationCallback +=
+                        delegate (object sender, System.Security.Cryptography.X509Certificates.X509Certificate certificate,
+                                                System.Security.Cryptography.X509Certificates.X509Chain chain,
+                                                System.Net.Security.SslPolicyErrors sslPolicyErrors)
+                        {
+                            return true; // **** Always accept
+                        };
+                    System.Net.ServicePointManager.Expect100Continue = false;
+                    var l__HttpWebReq = (HttpWebRequest)WebRequest.Create(l_Url);
+                    l__HttpWebReq.KeepAlive = false;
+                    l__HttpWebReq.Method = l_Method;
+                    l__HttpWebReq.ContentType = "application/x-www-form-urlencoded";
+
+                    string svcCredentials = Convert.ToBase64String(ASCIIEncoding.ASCII.GetBytes(TPFico_ClientId + ":" + TPFico_ClientSecret));
+                    l__HttpWebReq.Headers.Add("Authorization", "Basic " + svcCredentials);
+                    string urlEncode = "grant_type=" + HttpUtility.UrlEncode("client_credentials");
+                    using (StreamWriter stOut = new StreamWriter(l__HttpWebReq.GetRequestStream(), System.Text.Encoding.ASCII))
+                    {
+                        stOut.Write(urlEncode);
+                        stOut.Close();
+                    }
+                    using (HttpWebResponse l__oResp = l__HttpWebReq.GetResponse() as HttpWebResponse)
+                    {
+                        using (StreamReader l__StreamReader = new StreamReader(l__oResp.GetResponseStream()))
+                        {
+                            var l_ResponseFromServer = l__StreamReader.ReadToEnd();
+                            if (l__oResp.StatusCode == HttpStatusCode.OK)
+                            {
+                                var result = JObject.Parse(l_ResponseFromServer);
+                                l_Authorization = result["token_type"].ToString() + " " + result["access_token"].ToString();
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                l_Authorization = ex.ToString();
+                Logger.WriteLogError("RegistrationForm - " + MethodBase.GetCurrentMethod().Name + "()", "Link API: " + l_Url + " - Error:" + ex.ToString());
+                WriteLog_TPBank(l_Function, l_Method, l_Url, l_jsData, "", ex.ToString());
+            }
+            return l_Authorization;
+        }
+        public string InstallmentTPBank_TPFico_GetAuthorization_Beta()
         {
             /*
              * Rule:
@@ -1190,7 +2416,7 @@ namespace WebCallLog.Controllers
                     check nếu token rỗng -> gọi API lấy token -> set thời gian lấy token + thời gian hết hạn
              */
             string l_Authorization = "";
-            string l__ReqUriStr = "";
+            string l_Function = MethodBase.GetCurrentMethod().Name, l_Method = "GET", l_Url = "", l_jsData = "", l_Error = "";
             try
             {
                 l_Authorization = g__Token__TPBank;
@@ -1206,8 +2432,65 @@ namespace WebCallLog.Controllers
 
                 if (l_Authorization == "")
                 {
-                    l__ReqUriStr = ConfigurationManager.AppSettings["TPFico_Url"].ToString() + "/api/auth/oauth/token";
-                    //▼ Add - TuanNA89 - 08/11/2019 - Fix lỗi mất kết nối API TPBank
+                    //l_Url = ConfigurationManager.AppSettings["TPFico_Url"].ToString() + Api_TPBank.LayToken;
+                    var TPFico_ClientId = ConfigurationManager.AppSettings["TPFico_ClientId"].ToString();
+                    var TPFico_ClientSecret = ConfigurationManager.AppSettings["TPFico_ClientSecret"].ToString();
+
+                    string p_Api = Api_TPBank.LayToken + String.Format("?grant_type=client_credentials&client_id={0}&client_secret={1}", TPFico_ClientId, TPFico_ClientSecret);
+
+                    var resultAPI = CallApiTPBank(l_Function, l_Method, p_Api, "", "", "");
+
+                    var result = JObject.Parse((JObject.Parse(resultAPI))["dataResponse"].ToString());
+
+                    l_Authorization = result["token_type"].ToString() + " " + result["access_token"].ToString();
+
+                    g__TimeExpires__Second = int.TryParse(result["expires_in"].ToString(), out g__TimeExpires__Second) ? g__TimeExpires__Second : 0;
+                    g__TimeCreateToken_TPBank = DateTime.Now;
+
+                    if (l_Authorization != g__Token__TPBank)
+                    {
+                        g__Token__TPBank = l_Authorization;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteLogError("RegistrationForm - " + MethodBase.GetCurrentMethod().Name + "()", "Link API: " + l_Url + " - Error:" + ex.ToString());
+                WriteLog_TPBank(l_Function, l_Method, l_Url, l_jsData, "", ex.ToString());
+            }
+            return l_Authorization;
+        }
+        public string InstallmentTPBank_TPFico_GetAuthorization()
+        {
+            /*
+             * Rule:
+                B1: gán dữ liệu từ biến token global -> token local
+                B2: nếu token có data -> lấy (time hiện tại - time lấy token)
+                        - nếu kết quả > time hết hạn -> set token rỗng
+                B3: 
+                    check nếu token rỗng -> gọi API lấy token -> set thời gian lấy token + thời gian hết hạn
+             */
+            string l_Authorization = "";
+            string l_Function = MethodBase.GetCurrentMethod().Name, l_Method = "POST", l_Url = "", l_jsData = "", l_Error = "";
+            try
+            {
+                l_Authorization = g__Token__TPBank;
+
+                if (l_Authorization != "")
+                {
+                    var seconds = (DateTime.Now - DateTime.Parse(g__TimeCreateToken_TPBank.ToString())).TotalSeconds;
+                    if (seconds >= g__TimeExpires__Second)
+                    {
+                        l_Authorization = "";
+                    }
+                }
+
+                if (l_Authorization == "")
+                {
+                    l_Url = ConfigurationManager.AppSettings["TPFico_Url"].ToString() + Api_TPBank.LayToken;
+                    var TPFico_ClientId = ConfigurationManager.AppSettings["TPFico_ClientId"].ToString();
+                    var TPFico_ClientSecret = ConfigurationManager.AppSettings["TPFico_ClientSecret"].ToString();
+
                     ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
                     System.Net.ServicePointManager.ServerCertificateValidationCallback +=
                         delegate (object sender, System.Security.Cryptography.X509Certificates.X509Certificate certificate,
@@ -1217,35 +2500,19 @@ namespace WebCallLog.Controllers
                             return true; // **** Always accept
                         };
                     System.Net.ServicePointManager.Expect100Continue = false;
-                    //▲ Add - TuanNA89 - 08/11/2019 - Fix lỗi mất kết nối API TPBank
-                    var l__HttpWebReq = (HttpWebRequest)WebRequest.Create(l__ReqUriStr);
+                    var l__HttpWebReq = (HttpWebRequest)WebRequest.Create(l_Url);
                     l__HttpWebReq.KeepAlive = false;
-                    l__HttpWebReq.Method = "POST";
+                    l__HttpWebReq.Method = l_Method;
                     l__HttpWebReq.ContentType = "application/x-www-form-urlencoded";
 
-                    string Username = "fpt-service";
-                    string Password = "fpt-service";
-
-                    string svcCredentials = Convert.ToBase64String(ASCIIEncoding.ASCII.GetBytes(Username + ":" + Password));
+                    string svcCredentials = Convert.ToBase64String(ASCIIEncoding.ASCII.GetBytes(TPFico_ClientId + ":" + TPFico_ClientSecret));
                     l__HttpWebReq.Headers.Add("Authorization", "Basic " + svcCredentials);
-
                     string urlEncode = "grant_type=" + HttpUtility.UrlEncode("client_credentials");
-
                     using (StreamWriter stOut = new StreamWriter(l__HttpWebReq.GetRequestStream(), System.Text.Encoding.ASCII))
                     {
                         stOut.Write(urlEncode);
                         stOut.Close();
                     }
-
-                    ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
-                    System.Net.ServicePointManager.ServerCertificateValidationCallback +=
-                        delegate (object sender, System.Security.Cryptography.X509Certificates.X509Certificate certificate,
-                                                System.Security.Cryptography.X509Certificates.X509Chain chain,
-                                                System.Net.Security.SslPolicyErrors sslPolicyErrors)
-                        {
-                            return true; // **** Always accept
-                        };
-
                     using (HttpWebResponse l__oResp = l__HttpWebReq.GetResponse() as HttpWebResponse)
                     {
                         using (StreamReader l__StreamReader = new StreamReader(l__oResp.GetResponseStream()))
@@ -1270,39 +2537,117 @@ namespace WebCallLog.Controllers
             }
             catch (Exception ex)
             {
-                Logger.WriteLogError("RegistrationForm - " + MethodBase.GetCurrentMethod().Name + "()", "Link API: " + l__ReqUriStr + " - Error:" + ex.ToString());
-                WriteLog(0, 0, "InstallmentTPBank_TPFico_GetAuthorization", "", ex.ToString());
+                Logger.WriteLogError("RegistrationForm - " + MethodBase.GetCurrentMethod().Name + "()", "Link API: " + l_Url + " - Error:" + ex.ToString());
+                WriteLog_TPBank(l_Function, l_Method, l_Url, l_jsData, "", ex.ToString());
             }
             return l_Authorization;
         }
-        //▲	Add - TuanNA89 - 22/07/2019 - Lưu Token của TPBank
-        public TPFico_Customer_Result InstallmentTPBank_TPFico_SendCustInfo(string p_IdFinal)
+        public string InstallmentTPBank_TPFico_SendCustInfo(string p_IdFinal)
         {
             TPFico_Customer_Result l__result = new TPFico_Customer_Result();
-            int l__IdLog = 0;
-            l__IdLog = WriteLog(0, 0, "InstallmentTPBank_TPFico_SendCustInfo", p_IdFinal, "");
             string l__Step = "";
-            HttpWebResponse l__oResp = null;
+            string l_Function = MethodBase.GetCurrentMethod().Name, l_Method = "POST", l_Url = "", l_jsData = "", l_Error = "";
             try
             {
-                SqlParameter[] l_SqlParameter = new SqlParameter[]{
-                    new SqlParameter("@Id_Final", p_IdFinal)
-                };
-                l__Step = "Gọi store";
-                DataSet l_DataSet = g_SqlDBHelper.ExecuteCommandDataSet("sp_InstallmentTPBank_CustInfo_ForAPI", CommandType.StoredProcedure, l_SqlParameter);
-                if (l_DataSet != null && l_DataSet.Tables.Count > 0)
-                {
-                    DataTable l_CustInfo = l_DataSet.Tables[0];
-                    DataTable l_ProdDetails = l_DataSet.Tables[1];
-                    DataTable l_Ref_Address = l_DataSet.Tables[3];
-                    if (l_CustInfo != null && l_CustInfo.Rows.Count > 0)
-                    {
-                        l__Step = "Lấy token";
-                        string l_Key = InstallmentTPBank_TPFico_GetAuthorization();
+                l__Step = "Lấy token";
+                string l_Key = InstallmentTPBank_TPFico_GetAuthorization();
 
-                        if (l_Key != null && l_Key != "")
+                if (!string.IsNullOrEmpty(l_Key.Trim()))
+                {
+                    SqlParameter[] l_SqlParameter = new SqlParameter[]{
+                        new SqlParameter("@Id_Final", p_IdFinal)
+                    };
+                    l__Step = "Gọi store";
+                    DataSet l_DataSet = g_SqlDBHelper.ExecuteCommandDataSet("sp_InstallmentTPBank_CustInfo_ForAPI", CommandType.StoredProcedure, l_SqlParameter);
+                    if (l_DataSet != null && l_DataSet.Tables.Count > 0)
+                    {
+                        DataTable l_CustInfo = l_DataSet.Tables[0];
+                        DataTable l_ProdDetails = l_DataSet.Tables[1];
+                        DataTable l_Ref_Address = l_DataSet.Tables[3];
+
+                        l__Step = "Add Images";
+                        var l__ListPhotos = new List<TPFico_CustInfo_Photo>();
+                        List<string> l__Files = new List<string> { };
+                        string l__Url__NewImage__CMND = "", l__Url__NewImage__SHK = "";
+                        string date = DateTime.Now.ToString("yyyyMMdd");
+
+                        #region == Gộp CMND ==
+                        l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_MT_CMND"].ToString());
+                        l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_MS_CMND"].ToString());
+                        l__Url__NewImage__CMND = MergeImages(l__Files, "/TPBank/" + date + "/", "CMND");
+                        #endregion
+
+                        #region == Gộp Sổ Hộ Khẩu ==
+                        l__Files.Clear();
+                        if ((l_CustInfo.Rows[0]["Url_CRD_SHK_1"].ToString() != null) && (l_CustInfo.Rows[0]["Url_CRD_SHK_1"].ToString() != ""))
+                            l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_SHK_1"].ToString());
+
+                        if ((l_CustInfo.Rows[0]["Url_CRD_SHK_2"].ToString() != null) && (l_CustInfo.Rows[0]["Url_CRD_SHK_2"].ToString() != ""))
+                            l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_SHK_2"].ToString());
+
+                        if ((l_CustInfo.Rows[0]["Url_CRD_SHK_3"].ToString() != null) && (l_CustInfo.Rows[0]["Url_CRD_SHK_3"].ToString() != ""))
+                            l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_SHK_3"].ToString());
+
+                        if ((l_CustInfo.Rows[0]["Url_CRD_SHK_4"].ToString() != null) && (l_CustInfo.Rows[0]["Url_CRD_SHK_4"].ToString() != ""))
+                            l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_SHK_4"].ToString());
+
+                        if ((l_CustInfo.Rows[0]["Url_CRD_SHK_5"].ToString() != null) && (l_CustInfo.Rows[0]["Url_CRD_SHK_5"].ToString() != ""))
+                            l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_SHK_5"].ToString());
+
+                        if ((l_CustInfo.Rows[0]["Url_CRD_SHK_6"].ToString() != null) && (l_CustInfo.Rows[0]["Url_CRD_SHK_6"].ToString() != ""))
+                            l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_SHK_6"].ToString());
+
+                        if ((l_CustInfo.Rows[0]["Url_CRD_SHK_7"].ToString() != null) && (l_CustInfo.Rows[0]["Url_CRD_SHK_7"].ToString() != ""))
+                            l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_SHK_7"].ToString());
+
+                        if (l__Files.Count > 0)
                         {
-                            #region == Add data ==
+                            l__Url__NewImage__SHK = MergeImages(l__Files, "/TPBank/" + date + "/", "SHK");
+                        }
+                        #endregion
+
+                        if (l__Url__NewImage__CMND == "" || ((l__Files.Count > 0) && (l__Url__NewImage__SHK == "")))
+                        {
+                            var strHinhLoi = "";
+                            if (l__Url__NewImage__CMND == "") strHinhLoi = "CMND";
+                            else if (l__Url__NewImage__SHK == "") strHinhLoi = "Sổ hộ khẩu";
+                            l__result = new TPFico_Customer_Result()
+                            {
+                                status = "0",
+                                messages = "Lỗi gộp hình " + strHinhLoi
+                            };
+                        }
+                        else
+                        {
+                            #region == Add Url Images ==
+                            l__ListPhotos.Add(new TPFico_CustInfo_Photo
+                            {
+                                link = (l_CustInfo.Rows[0]["Url_CRD_CD_DKMoThe"].ToString() == "") ? "" : (authority + l_CustInfo.Rows[0]["ImagePath"].ToString() + l_CustInfo.Rows[0]["Url_CRD_CD_DKMoThe"].ToString()),
+                                documentType = "selfie"
+                            });
+
+                            l__ListPhotos.Add(new TPFico_CustInfo_Photo
+                            {
+                                link = (l_CustInfo.Rows[0]["Url_CRD_KH_CMND"].ToString() == "") ? "" : (authority + l_CustInfo.Rows[0]["ImagePath"].ToString() + l_CustInfo.Rows[0]["Url_CRD_KH_CMND"].ToString()),
+                                documentType = "employeecard"
+                            });
+                            if (l__Url__NewImage__SHK != "")
+                            {
+                                l__ListPhotos.Add(new TPFico_CustInfo_Photo
+                                {
+                                    link = authority + l_CustInfo.Rows[0]["ImagePath"].ToString() + l__Url__NewImage__SHK,
+                                    documentType = "fb"
+                                });
+                            }
+                            if (l__Url__NewImage__CMND != "")
+                            {
+                                l__ListPhotos.Add(new TPFico_CustInfo_Photo
+                                {
+                                    link = (l__Url__NewImage__CMND == "") ? "" : authority + l_CustInfo.Rows[0]["ImagePath"].ToString() + l__Url__NewImage__CMND,
+                                    documentType = "National_ID"
+                                });
+                            }
+                            #endregion
                             l__Step = "Add detail product";
                             #region == Add Detail Products ==
                             List<TPFico_CustInfo_ProductDetail> l_ListProducts = new List<TPFico_CustInfo_ProductDetail> { };
@@ -1405,258 +2750,78 @@ namespace WebCallLog.Controllers
 
 
                             #endregion
-                            l__Step = "Add Images";
-                            #region == Add Url Images ==
-                            var l__ListPhotos = new List<TPFico_CustInfo_Photo>();
-                            List<string> l__Files = new List<string> { };
-                            string l__Url__NewImage = "";
-                            l__ListPhotos.Add(new TPFico_CustInfo_Photo
+                            l__Step = "Add Order Infor";
+                            #region == Add Data
+                            var l_ObjectData = new TPFico_CustInfo()
                             {
-                                link = (l_CustInfo.Rows[0]["Url_CRD_CD_DKMoThe"].ToString() == "") ? "" : (authority + l_CustInfo.Rows[0]["ImagePath"].ToString() + l_CustInfo.Rows[0]["Url_CRD_CD_DKMoThe"].ToString()),
-                                documentType = "selfie"
-                            });
-
-                            l__ListPhotos.Add(new TPFico_CustInfo_Photo
-                            {
-                                link = (l_CustInfo.Rows[0]["Url_CRD_KH_CMND"].ToString() == "") ? "" : (authority + l_CustInfo.Rows[0]["ImagePath"].ToString() + l_CustInfo.Rows[0]["Url_CRD_KH_CMND"].ToString()),
-                                documentType = "employeecard"
-                            });
-
-                            string date = DateTime.Now.ToString("yyyyMMdd");
-
-                            #region == Gộp CMND ==
-
-                            l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_MT_CMND"].ToString());
-                            l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_MS_CMND"].ToString());
-                            l__Url__NewImage = MergeImages(l__Files, "/TPBank/" + date + "/", "CMND");
-                            if (l__Url__NewImage != "")
-                            {
-                                l__ListPhotos.Add(new TPFico_CustInfo_Photo
+                                custId = l_CustInfo.Rows[0]["CustId"].ToString(),//Loan id
+                                lastName = l_CustInfo.Rows[0]["LastName"].ToString(),//Last name of Customer
+                                firstName = l_CustInfo.Rows[0]["FirstName"].ToString(),//First name of Customer
+                                middleName = l_CustInfo.Rows[0]["MidName"].ToString(),//Middle name of Customer
+                                gender = l_CustInfo.Rows[0]["Gender"].ToString(),//Gender
+                                dateOfBirth = l_CustInfo.Rows[0]["Birthday"].ToString(),//Date of Birth
+                                nationalId = l_CustInfo.Rows[0]["CMND"].ToString(),//National ID of Customer
+                                issueDate = l_CustInfo.Rows[0]["NgayCapCMND"].ToString(),//Issued Date of ID
+                                issuePlace = l_CustInfo.Rows[0]["NoiCapCMND"].ToString(),
+                                employeeCard = l_CustInfo.Rows[0]["MaNV_KH"].ToString(),//Employee card number
+                                mobilePhone = l_CustInfo.Rows[0]["SDT"].ToString(),//Mobile Phone
+                                durationYear = l_CustInfo.Rows[0]["ThoiGianCuTru_Nam"].ToString(),//Duration of living at current address (Year)
+                                durationMonth = l_CustInfo.Rows[0]["ThoiGianCuTru_Thang"].ToString(),//Duration of living at current address (Month)
+                                map = l_CustInfo.Rows[0]["DiaChi_HuongDan"].ToString(),//Guideline to the address
+                                ownerNationalId = l_CustInfo.Rows[0]["CMND_ChuHo"].ToString(),//Owner National ID
+                                contactAddress = l_CustInfo.Rows[0]["DiaChiLienHe_TypeName"].ToString(),//Contact Address
+                                maritalStatus = l_CustInfo.Rows[0]["maritalStatus"].ToString(),
+                                dsaCode = l_CustInfo.Rows[0]["MaNVFPT"].ToString(),//Code of Sale
+                                companyName = l_CustInfo.Rows[0]["TenCongTyKHLamViec"].ToString(),
+                                taxCode = l_CustInfo.Rows[0]["MSTCtyKH"].ToString(),
+                                salary = l_CustInfo.Rows[0]["ThuNhapHangThang"].ToString(),// Add - TuanNA89 - 02/07/2019 - Thêm thu nhập hàng tháng
+                                loanDetail = new TPFico_CustInfo_LoanDetail
                                 {
-                                    link = (l__Url__NewImage == "") ? "" : authority + l_CustInfo.Rows[0]["ImagePath"].ToString() + l__Url__NewImage,
-                                    documentType = "National_ID"
-                                });
-                                #endregion
-
-                                #region == Gộp Sổ Hộ Khẩu ==
-                                l__Files.Clear();
-                                if ((l_CustInfo.Rows[0]["Url_CRD_SHK_1"].ToString() != null) && (l_CustInfo.Rows[0]["Url_CRD_SHK_1"].ToString() != ""))
-                                    l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_SHK_1"].ToString());
-
-                                if ((l_CustInfo.Rows[0]["Url_CRD_SHK_2"].ToString() != null) && (l_CustInfo.Rows[0]["Url_CRD_SHK_2"].ToString() != ""))
-                                    l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_SHK_2"].ToString());
-
-                                if ((l_CustInfo.Rows[0]["Url_CRD_SHK_3"].ToString() != null) && (l_CustInfo.Rows[0]["Url_CRD_SHK_3"].ToString() != ""))
-                                    l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_SHK_3"].ToString());
-
-                                if ((l_CustInfo.Rows[0]["Url_CRD_SHK_4"].ToString() != null) && (l_CustInfo.Rows[0]["Url_CRD_SHK_4"].ToString() != ""))
-                                    l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_SHK_4"].ToString());
-
-                                if ((l_CustInfo.Rows[0]["Url_CRD_SHK_5"].ToString() != null) && (l_CustInfo.Rows[0]["Url_CRD_SHK_5"].ToString() != ""))
-                                    l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_SHK_5"].ToString());
-
-                                if ((l_CustInfo.Rows[0]["Url_CRD_SHK_6"].ToString() != null) && (l_CustInfo.Rows[0]["Url_CRD_SHK_6"].ToString() != ""))
-                                    l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_SHK_6"].ToString());
-
-                                if ((l_CustInfo.Rows[0]["Url_CRD_SHK_7"].ToString() != null) && (l_CustInfo.Rows[0]["Url_CRD_SHK_7"].ToString() != ""))
-                                    l__Files.Add(l_CustInfo.Rows[0]["Url_CRD_SHK_7"].ToString());
-
-                                if (l__Files.Count > 0)
-                                {
-                                    l__Url__NewImage = MergeImages(l__Files, "/TPBank/" + date + "/", "SHK");
-                                    l__ListPhotos.Add(new TPFico_CustInfo_Photo
-                                    {
-                                        link = (l__Url__NewImage == "") ? "" : authority + l_CustInfo.Rows[0]["ImagePath"].ToString() + l__Url__NewImage,
-                                        documentType = "fb"
-                                    });
-                                }
-                                #endregion
-
-                                #endregion
-                                l__Step = "Add Order Infor";
-                                var l_ObjectData = new TPFico_CustInfo()
-                                {
-                                    custId = l_CustInfo.Rows[0]["CustId"].ToString(),//Loan id
-                                    lastName = l_CustInfo.Rows[0]["LastName"].ToString(),//Last name of Customer
-                                    firstName = l_CustInfo.Rows[0]["FirstName"].ToString(),//First name of Customer
-                                    middleName = l_CustInfo.Rows[0]["MidName"].ToString(),//Middle name of Customer
-                                    gender = l_CustInfo.Rows[0]["Gender"].ToString(),//Gender
-                                    dateOfBirth = l_CustInfo.Rows[0]["Birthday"].ToString(),//Date of Birth
-                                    nationalId = l_CustInfo.Rows[0]["CMND"].ToString(),//National ID of Customer
-                                    issueDate = l_CustInfo.Rows[0]["NgayCapCMND"].ToString(),//Issued Date of ID
-                                    issuePlace = l_CustInfo.Rows[0]["NoiCapCMND"].ToString(),
-                                    employeeCard = l_CustInfo.Rows[0]["MaNV_KH"].ToString(),//Employee card number
-                                    mobilePhone = l_CustInfo.Rows[0]["SDT"].ToString(),//Mobile Phone
-                                    durationYear = l_CustInfo.Rows[0]["ThoiGianCuTru_Nam"].ToString(),//Duration of living at current address (Year)
-                                    durationMonth = l_CustInfo.Rows[0]["ThoiGianCuTru_Thang"].ToString(),//Duration of living at current address (Month)
-                                    map = l_CustInfo.Rows[0]["DiaChi_HuongDan"].ToString(),//Guideline to the address
-                                    ownerNationalId = l_CustInfo.Rows[0]["CMND_ChuHo"].ToString(),//Owner National ID
-                                    contactAddress = l_CustInfo.Rows[0]["DiaChiLienHe_TypeName"].ToString(),//Contact Address
-                                    maritalStatus = l_CustInfo.Rows[0]["maritalStatus"].ToString(),
-                                    dsaCode = l_CustInfo.Rows[0]["MaNVFPT"].ToString(),//Code of Sale
-                                    companyName = l_CustInfo.Rows[0]["TenCongTyKHLamViec"].ToString(),
-                                    taxCode = l_CustInfo.Rows[0]["MSTCtyKH"].ToString(),
-                                    salary = l_CustInfo.Rows[0]["ThuNhapHangThang"].ToString(),// Add - TuanNA89 - 02/07/2019 - Thêm thu nhập hàng tháng
-                                    loanDetail = new TPFico_CustInfo_LoanDetail
-                                    {
-                                        product = l_CustInfo.Rows[0]["SanPhamVay"].ToString(),//Product Applied
-                                        loanAmount = l_CustInfo.Rows[0]["TienVay"].ToString(),//Loan amount requested
-                                        downPayment = l_CustInfo.Rows[0]["TraTruoc"].ToString(),//Amount of down payment for total bill
-                                        annualr = l_CustInfo.Rows[0]["LaiSuat"].ToString(),//Annual interest rate
-                                        dueDate = l_CustInfo.Rows[0]["NgayThanhToanHangThang"].ToString(),
-                                        tenor = l_CustInfo.Rows[0]["KyHan"].ToString(),//Tenor of the loan
-                                    },
-                                    addresses = l__ListAddresses,
-                                    photos = l__ListPhotos,
-                                    productDetails = l_ListProducts, //Product details
-                                    references = l__ListReferences
-                                };
-                                #endregion
-                                l__Step = "Add xong data rồi";
-                                #region == Push data ==
-                                var l__jsData = new JavaScriptSerializer().Serialize(l_ObjectData);
-                                l__Step = "Mã hoá data";
-                                var l__encryptData = PGPEncrypt_SignAndEncrypt(l__jsData);
-
-                                string l__ReqUriStr = ConfigurationManager.AppSettings["TPFico_Url"].ToString() + Api_TPBank.GuiThongTinKH;
-                                l__Step = "Lấy link bước 1";
-                                //▼ Add - TuanNA89 - 08/11/2019 - Fix lỗi mất kết nối API TPBank
-                                ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
-                                System.Net.ServicePointManager.ServerCertificateValidationCallback +=
-                                    delegate (object sender, System.Security.Cryptography.X509Certificates.X509Certificate certificate,
-                                                            System.Security.Cryptography.X509Certificates.X509Chain chain,
-                                                            System.Net.Security.SslPolicyErrors sslPolicyErrors)
-                                    {
-                                        return true; // **** Always accept
-                                    };
-                                System.Net.ServicePointManager.Expect100Continue = false;
-                                //▲ Add - TuanNA89 - 08/11/2019 - Fix lỗi mất kết nối API TPBank
-                                var l__HttpWebReq = (HttpWebRequest)WebRequest.Create(l__ReqUriStr);
-                                l__HttpWebReq.KeepAlive = false;
-                                l__HttpWebReq.Method = "POST";
-                                l__HttpWebReq.ContentType = "application/json";
-                                l__HttpWebReq.Headers.Add("Authorization", l_Key);
-                                l__Step = "Bắt đầu gọi API";
-                                using (Stream stm = l__HttpWebReq.GetRequestStream())
-                                {
-                                    using (StreamWriter stmw = new StreamWriter(stm))
-                                    {
-                                        stmw.Write(l__encryptData);
-                                    }
-                                }
-
-                                ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
-                                System.Net.ServicePointManager.ServerCertificateValidationCallback +=
-                                        delegate (object sender, System.Security.Cryptography.X509Certificates.X509Certificate certificate,
-                                                            System.Security.Cryptography.X509Certificates.X509Chain chain,
-                                                            System.Net.Security.SslPolicyErrors sslPolicyErrors)
-                                        {
-                                            return true; // **** Always accept
-                                        };
-                                System.Net.ServicePointManager.Expect100Continue = false;
-                                HttpStatusCode? StatusCode = null;
-                                l__Step = "Lấy chuỗi response";
-                                try
-                                {
-                                    l__Step = "Bắt đầu chạy API";
-                                    l__oResp = (HttpWebResponse)l__HttpWebReq.GetResponse();
-                                }
-                                catch (WebException we)
-                                {
-                                    l__Step = "API lỗi";
-                                    l__oResp = (HttpWebResponse)we.Response;
-                                }
-                                l__Step = "Lấy chuỗi Stream của API";
-                                var webResponseStream = l__oResp.GetResponseStream();
-                                l__Step = "Check chuỗi ResponseStream";
-                                if (webResponseStream != null && webResponseStream != Stream.Null)
-                                {
-                                    l__Step = "Chuỗi ResponseStream không null";
-                                    l__Step = "Lấy StatusCode";
-                                    StatusCode = l__oResp.StatusCode;
-                                }
-                                int? statusCode = null;
-                                string statusName = null;
-                                l__Step = "Check StatusCode";
-                                if (StatusCode != null)
-                                {
-                                    l__Step = "StatusCode không null";
-                                    statusCode = (int)StatusCode;
-                                    statusName = StatusCode.ToString();
-                                }
-                                if ((StatusCode == HttpStatusCode.Created) || (StatusCode == HttpStatusCode.OK))
-                                {
-                                    l__Step = "Thành công";
-                                    l__result = new TPFico_Customer_Result()
-                                    {
-                                        status = "1",
-                                        messages = "Gửi thông tin khách hàng sang TPBank thành công! Mã khách hàng TPBank: " + l_CustInfo.Rows[0]["CustId"].ToString()
-                                    };
-                                    Status status = Status.PROCESSING;
-                                    statusCode = (int)status;
-
-                                    g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_TPFico_PushResult", CommandType.StoredProcedure, new SqlParameter[]{
-                                    new SqlParameter("@Result", statusCode),
-                                    new SqlParameter("@Msg", "Gửi thông tin thành công!"),
-                                    new SqlParameter("@CustId", l_ObjectData.custId),
-                                });
-                                }
-                                else
-                                {
-                                    l__Step = "Status trả về lỗi";
-                                    StreamReader l__StreamReader = new StreamReader(l__oResp.GetResponseStream());
-
-                                    var l_data = l__StreamReader.ReadToEnd();
-                                    l__Step = "Giải mã chuỗi Response lỗi";
-                                    var l__Json_Decrypt = PGPEncrypt_SignAndDecrypt(l_data);
-                                    l__Step = "Gán vào list lỗi";
-                                    l__result = new JavaScriptSerializer().Deserialize<TPFico_Customer_Result>(l__Json_Decrypt);
-                                    WriteLog(0, 0, "InstallmentTPBank_TPFico_SendCustInfo", string.Format("{0} - {1}", statusCode.ToString(), statusName), l__Json_Decrypt);
-                                    l__Step = "Trả lỗi về";
-                                    l__result.status = "0";
-                                    //Add - TuanNA89 - 31/07/2019 - Thêm Note nơi trả về lỗi
-                                    l__result.messages = "Lỗi TPBank trả về: " + l__result.messages;
-                                    //Add - TuanNA89 - 31/07/2019 - Check thêm trường hợp TPBank trả về lỗi "Lỗi gọi dịch vụ web" thì vẫn tính là thành công
-                                    if (l__result.messages.Contains("Lỗi gọi dịch vụ web cust id"))
-                                    {
-                                        l__Step = "Thành công";
-                                        l__result = new TPFico_Customer_Result()
-                                        {
-                                            status = "1",
-                                            messages = "Gửi thông tin khách hàng sang TPBank thành công! Mã khách hàng TPBank: " + l_CustInfo.Rows[0]["CustId"].ToString()
-                                        };
-                                        Status status = Status.PROCESSING;
-                                        statusCode = (int)status;
-
-                                        g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_TPFico_PushResult", CommandType.StoredProcedure, new SqlParameter[]{
-                                        new SqlParameter("@Result", statusCode),
-                                        new SqlParameter("@Msg", "Gửi thông tin thành công!"),
-                                        new SqlParameter("@CustId", l_ObjectData.custId),
-                                    });
-                                    }
-                                    //Add - TuanNA89 - 31/07/2019 - Check thêm trường hợp TPBank trả về lỗi "Lỗi gọi dịch vụ web" thì vẫn tính là thành công
-
-                                }
-                                #endregion
-                            }
-                            else
-                            {
-                                l__result = new TPFico_Customer_Result()
-                                {
-                                    status = "0",
-                                    messages = "Xảy ra lỗi khi gộp hình"
-                                };
-                                WriteLog(0, 0, "InstallmentTPBank_TPFico_SendCustInfo", "", "Xảy ra lỗi khi gộp hình");
-                            }
-                        }
-                        else
-                        {
+                                    product = l_CustInfo.Rows[0]["SanPhamVay"].ToString(),//Product Applied
+                                    loanAmount = l_CustInfo.Rows[0]["TienVay"].ToString(),//Loan amount requested
+                                    downPayment = l_CustInfo.Rows[0]["TraTruoc"].ToString().Replace(",", "."),//Amount of down payment for total bill
+                                    annualr = l_CustInfo.Rows[0]["LaiSuat"].ToString(),//Annual interest rate
+                                    dueDate = l_CustInfo.Rows[0]["NgayThanhToanHangThang"].ToString(),
+                                    tenor = l_CustInfo.Rows[0]["KyHan"].ToString(),//Tenor of the loan
+                                },
+                                addresses = l__ListAddresses,
+                                photos = l__ListPhotos,
+                                productDetails = l_ListProducts, //Product details
+                                references = l__ListReferences
+                            };
+                            #endregion
+                            l__Step = "Add xong data rồi";
+                            #region == Push data ==
+                            l_Url = Api_TPBank.GuiThongTinKH;
+                            l_jsData = new JavaScriptSerializer().Serialize(l_ObjectData);
+                            WriteLog_TPBank(l_Function, l_Method, l_Url, l_jsData, p_IdFinal, "Trước khi gọi API: " + l_jsData);
+                            var resultAPI = CallApiTPBank(l_Function, l_Method, l_Url, l_Key, p_IdFinal, l_jsData);
+                            WriteLog_TPBank(l_Function, l_Method, l_Url, l_jsData, p_IdFinal, "Sau khi gọi API: " + resultAPI);
+                            var result = new JavaScriptSerializer().Deserialize<TPFico_Customer_Result>(resultAPI);
                             l__result = new TPFico_Customer_Result()
                             {
-                                status = "0",
-                                messages = "Không lấy được chuỗi kết nối TPBank"
+                                status = result.status,
+                                messages = result.messages,
+                                StatusCode = result.StatusCode
                             };
-                            WriteLog(0, 0, "InstallmentTPBank_TPFico_SendCustInfo", "", "Không lấy được chuỗi kết nối TPBank");
+                            if (l__result.status == "1")
+                            {
+                                l__Step = "Thành công";
+                                l__result = new TPFico_Customer_Result()
+                                {
+                                    status = "1",
+                                    messages = "Gửi thông tin khách hàng sang TPBank thành công! Mã khách hàng TPBank: " + l_CustInfo.Rows[0]["CustId"].ToString()
+                                };
+
+                                g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_TPFico_PushResult", CommandType.StoredProcedure, new SqlParameter[]{
+                                        new SqlParameter("@Result", (int)Status.PROCESSING),
+                                        new SqlParameter("@Msg", "Gửi thông tin thành công!"),
+                                        new SqlParameter("@CustId", p_IdFinal),
+                                    });
+                            }
+
+                            WriteLog_TPBank(l_Function, l_Method, l_Url, l_jsData, p_IdFinal, new JavaScriptSerializer().Serialize(l__result));
+                            #endregion
                         }
                     }
                     else
@@ -1664,9 +2829,8 @@ namespace WebCallLog.Controllers
                         l__result = new TPFico_Customer_Result()
                         {
                             status = "0",
-                            messages = "Không tìm thấy thông tin khách hàng"
+                            messages = "Không lấy được thông tin khách hàng"
                         };
-                        WriteLog(0, 0, "InstallmentTPBank_TPFico_SendCustInfo", "", "Không tìm thấy thông tin khách hàng");
                     }
                 }
                 else
@@ -1674,61 +2838,35 @@ namespace WebCallLog.Controllers
                     l__result = new TPFico_Customer_Result()
                     {
                         status = "0",
-                        messages = "Không lấy được thông tin khách hàng"
+                        messages = "Không tìm thấy thông tin khách hàng"
                     };
-                    WriteLog(0, 0, "InstallmentTPBank_TPFico_SendCustInfo", "", "Không lấy được thông tin khách hàng");
                 }
             }
             catch (Exception ex)
             {
                 string l__error = "- Bước bị lỗi: " + l__Step + "- Lỗi: " + ex.ToString();
                 Logger.WriteLogError("RegistrationForm - " + MethodBase.GetCurrentMethod().Name + "()", l__error);
-                string msgError = "";
-                if (ex.ToString().Contains("Unable to connect to the remote server"))
-                {
-                    msgError = "Không kết nối được tới TPBank";
-                }
-                else
-                {
-                    msgError = ex.ToString();
-                }
-
                 l__result = new TPFico_Customer_Result()
                 {
                     status = "0",
-                    messages = msgError
+                    messages = ex.ToString()
                 };
-                WriteLog(0, 0, "InstallmentTPBank_TPFico_SendCustInfo", "", l__error);
+                WriteLog_TPBank(l_Function, l_Method, l_Url, l_jsData, p_IdFinal, l__error);
             }
-            finally
-            {
-                if (l__oResp != null)
-                {
-                    l__oResp.Close();
-                }
-            }
-            return l__result;
+            //var json = Json(l__result, JsonRequestBehavior.AllowGet);
+            //json.MaxJsonLength = int.MaxValue;
+            return JsonConvert.SerializeObject(l__result);
         }
-        public TPFico_Customer_Result InstallmentTPBank_TPFico_SendDocumentInfo(string p_IdFinal)
+        public string InstallmentTPBank_TPFico_SendDocumentInfo(string p_IdFinal)
         {
             TPFico_Customer_Result l__result = new TPFico_Customer_Result();
-            int l__IdLog = 0;
-            l__IdLog = WriteLog(0, 0, "InstallmentTPBank_TPFico_SendDocumentInfo", p_IdFinal, "");
-            HttpWebResponse l__oResp = null;
             string l__Step = "";
+            string l_Function = MethodBase.GetCurrentMethod().Name, l_Method = "POST", l_Url = "", l_jsData = "", l_Error = "";
             try
             {
                 l__Step = "Lấy token";
-                string l_Authorization = InstallmentTPBank_TPFico_GetAuthorization();
-                if (l_Authorization == null || l_Authorization == "")
-                {
-                    l__result = new TPFico_Customer_Result()
-                    {
-                        status = "0",
-                        messages = "Không lấy được chuỗi kết nối TPBank"
-                    };
-                }
-                else
+                string l_Key = InstallmentTPBank_TPFico_GetAuthorization();
+                if (!string.IsNullOrEmpty(l_Key.Trim()))
                 {
                     SqlParameter[] l_SqlParameter = new SqlParameter[]{
                         new SqlParameter("@Id_Final", p_IdFinal)
@@ -1738,11 +2876,10 @@ namespace WebCallLog.Controllers
                     if (l_DataTable != null && l_DataTable.Rows.Count > 0)
                     {
                         #region == Gộp hình ==
-
                         List<string> l__Files = new List<string> { };
                         string l__Url__NewImage = "";
                         l__Step = "Add hình";
-                        #region == Gộp hình đề nghị vay vốn ==
+                        #region == Gộp hình đề nghị vay vốn ==                        
                         if ((l_DataTable.Rows[0]["Url_CRD_DXTNTD"].ToString() != null) && (l_DataTable.Rows[0]["Url_CRD_DXTNTD"].ToString() != ""))
                             l__Files.Add(l_DataTable.Rows[0]["Url_CRD_DXTNTD"].ToString());
 
@@ -1767,154 +2904,51 @@ namespace WebCallLog.Controllers
                             #region == Add Data ==
                             l__Step = "Gộp Images";
                             TPFico_DocumentInfo[] l_ObjectData =
-                        {
-                            new TPFico_DocumentInfo{
-                                file = (l__Url__NewImage == "" ) ? "" : authority + l_DataTable.Rows[0]["ImagePath"].ToString() + l__Url__NewImage,
-                                documentCode= "ACCA"
-                            },
-                            new TPFico_DocumentInfo{
-                                file= (l_DataTable.Rows[0]["Url_CRD_MoThe"].ToString() == "") ? "" : (authority + l_DataTable.Rows[0]["ImagePath"].ToString() + l_DataTable.Rows[0]["Url_CRD_MoThe"].ToString()),
-                                documentCode= "Signature"
-                            },
-                                //Edit - TuanNA89 - 13/08/2019 - Bỏ bảng kê mua hàng hoá
-                            //new TPFico_DocumentInfo{
-                            //    file= (l_DataTable.Rows[0]["Url_CRD_XacNhanThanhToan"].ToString() == "") ? "" : (authority + l_DataTable.Rows[0]["ImagePath"].ToString() + l_DataTable.Rows[0]["Url_CRD_XacNhanThanhToan"].ToString()),
-                            //    documentCode= "Detail of stock"
-                            //},
-                                //Edit - TuanNA89 - 13/08/2019 - Bỏ bảng kê mua hàng hoá
-                            new TPFico_DocumentInfo{
-                                file= (l_DataTable.Rows[0]["Url_CRD_GiayGiaoHang"].ToString() == "") ? "" : (authority + l_DataTable.Rows[0]["ImagePath"].ToString() + l_DataTable.Rows[0]["Url_CRD_GiayGiaoHang"].ToString()),
-                                documentCode= "Delivery note"
-                            },
-                        };
+                            {
+                                new TPFico_DocumentInfo{
+                                    file = (l__Url__NewImage == "" ) ? "" : authority + l_DataTable.Rows[0]["ImagePath"].ToString() + l__Url__NewImage,
+                                    documentCode= "ACCA"
+                                },
+                                new TPFico_DocumentInfo{
+                                    file= (l_DataTable.Rows[0]["Url_CRD_MoThe"].ToString() == "") ? "" : (authority + l_DataTable.Rows[0]["ImagePath"].ToString() + l_DataTable.Rows[0]["Url_CRD_MoThe"].ToString()),
+                                    documentCode= "Signature"
+                                },
+                                new TPFico_DocumentInfo{
+                                    file= (l_DataTable.Rows[0]["Url_CRD_GiayGiaoHang"].ToString() == "") ? "" : (authority + l_DataTable.Rows[0]["ImagePath"].ToString() + l_DataTable.Rows[0]["Url_CRD_GiayGiaoHang"].ToString()),
+                                    documentCode= "Delivery note"
+                                },
+                            };
                             #endregion
 
                             l__Step = "Đẩy data giải ngân sang TPBank";
-                            #region == Push data to TPFico ==
-                            var l__jsData = new JavaScriptSerializer().Serialize(l_ObjectData);
-                            l__Step = "Mã hoá data";
-                            var l__encryptData = PGPEncrypt_SignAndEncrypt(l__jsData);
+                            #region == Push data ==
+                            l_Url = String.Format(Api_TPBank.GuiThongTinGiaiNgan, l_DataTable.Rows[0]["CustId"].ToString());
+                            l_jsData = new JavaScriptSerializer().Serialize(l_ObjectData);
+                            WriteLog_TPBank(l_Function, l_Method, l_Url, l_jsData, p_IdFinal, "Trước khi gọi API: " + l_jsData);
+                            var resultAPI = CallApiTPBank(l_Function, l_Method, l_Url, l_Key, p_IdFinal, l_jsData);
+                            WriteLog_TPBank(l_Function, l_Method, l_Url, l_jsData, p_IdFinal, "Sau khi gọi API: " + resultAPI);
+                            var result = new JavaScriptSerializer().Deserialize<TPFico_Customer_Result>(resultAPI);
+                            l__result = new TPFico_Customer_Result()
+                            {
+                                status = result.status,
+                                messages = result.messages,
+                                StatusCode = result.StatusCode
+                            };
+                            if (l__result.status == "1")
+                            {
+                                int l__StatusChange = (int)Status.WaitingDiburse;
 
-                            string l__ReqUriStr = ConfigurationManager.AppSettings["TPFico_Url"].ToString() + String.Format(Api_TPBank.GuiThongTinGiaiNgan, l_DataTable.Rows[0]["CustId"].ToString());//Customer id
-                            //▼ Add - TuanNA89 - 08/11/2019 - Fix lỗi mất kết nối API TPBank
-                            ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
-                            System.Net.ServicePointManager.ServerCertificateValidationCallback +=
-                                delegate (object sender, System.Security.Cryptography.X509Certificates.X509Certificate certificate,
-                                                        System.Security.Cryptography.X509Certificates.X509Chain chain,
-                                                        System.Net.Security.SslPolicyErrors sslPolicyErrors)
-                                {
-                                    return true; // **** Always accept
-                                };
-                            System.Net.ServicePointManager.Expect100Continue = false;
-                            //▲ Add - TuanNA89 - 08/11/2019 - Fix lỗi mất kết nối API TPBank
-                            var l__HttpWebReq = (HttpWebRequest)WebRequest.Create(l__ReqUriStr);
-                            l__HttpWebReq.KeepAlive = false;
-                            l__HttpWebReq.Method = "POST";
+                                g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_TPFico_PushResult", CommandType.StoredProcedure, new SqlParameter[]{
+                                    new SqlParameter("@Result", l__StatusChange),
+                                    new SqlParameter("@Msg", "Gửi thông tin thành công!"),
+                                    new SqlParameter("@CustId", p_IdFinal),
+                                });
 
-                            l__HttpWebReq.ContentType = "application/json";
-                            l__HttpWebReq.Headers.Add("Authorization", l_Authorization);
-                            l__Step = "đang chạy";
-                            using (Stream stm = l__HttpWebReq.GetRequestStream())
-                            {
-                                using (StreamWriter stmw = new StreamWriter(stm))
-                                {
-                                    stmw.Write(l__encryptData);
-                                }
-                            }
-
-                            ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
-                            System.Net.ServicePointManager.ServerCertificateValidationCallback +=
-                                    delegate (object sender, System.Security.Cryptography.X509Certificates.X509Certificate certificate,
-                                                        System.Security.Cryptography.X509Certificates.X509Chain chain,
-                                                        System.Net.Security.SslPolicyErrors sslPolicyErrors)
-                                    {
-                                        return true; // **** Always accept
-                                    };
-
-                            System.Net.ServicePointManager.Expect100Continue = false;
-                            HttpStatusCode? StatusCode = null;
-                            l__Step = "Lấy chuỗi response";
-                            try
-                            {
-                                l__Step = "Bắt đầu chạy API";
-                                l__oResp = (HttpWebResponse)l__HttpWebReq.GetResponse();
-                            }
-                            catch (WebException we)
-                            {
-                                l__Step = "API lỗi";
-                                l__oResp = (HttpWebResponse)we.Response;
-                            }
-                            l__Step = "Lấy chuỗi Stream của API";
-                            var webResponseStream = l__oResp.GetResponseStream();
-                            l__Step = "Check chuỗi ResponseStream";
-                            if (webResponseStream != null && webResponseStream != Stream.Null)
-                            {
-                                l__Step = "Chuỗi ResponseStream không null";
-                                l__Step = "Lấy StatusCode";
-                                StatusCode = l__oResp.StatusCode;
-                            }
-                            int? statusCode = null;
-                            string statusName = null;
-                            l__Step = "Check StatusCode";
-                            if (StatusCode != null)
-                            {
-                                l__Step = "StatusCode không null";
-                                statusCode = (int)StatusCode;
-                                statusName = StatusCode.ToString();
-                            }
-
-                            if ((StatusCode == HttpStatusCode.Created) || (StatusCode == HttpStatusCode.OK))
-                            {
-                                l__Step = "Thành công";
                                 l__result = new TPFico_Customer_Result()
                                 {
                                     status = "1",
-                                    messages = "Gửi thông tin giải ngân sang TPBank thành công!"
+                                    messages = "Gửi thành công"
                                 };
-
-                                g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_TPFico_PushResult", CommandType.StoredProcedure, new SqlParameter[]{
-                                    new SqlParameter("@Result", 8),
-                                    new SqlParameter("@Msg", "Gửi thông tin giải ngân thành công!"),
-                                    new SqlParameter("@CustId",  l_DataTable.Rows[0]["CustId"].ToString()),
-                                });
-                            }
-                            else
-                            {
-                                l__Step = "Lấy chuỗi response lỗi";
-                                StreamReader l__StreamReader = new StreamReader(l__oResp.GetResponseStream());
-
-                                var l_data = l__StreamReader.ReadToEnd();
-                                l__Step = "Giải mã";
-                                var l__Json_Decrypt = PGPEncrypt_SignAndDecrypt(l_data);
-                                l__Step = "Gán object";
-                                var l__Data = new JavaScriptSerializer().Deserialize<TPFico_Customer_Result>(l__Json_Decrypt);
-                                WriteLog(0, 0, "InstallmentTPBank_TPFico_SendDocumentInfo", string.Format("{0} - {1}", statusCode.ToString(), statusName), l__Json_Decrypt);
-                                l__result = new TPFico_Customer_Result()
-                                {
-                                    status = "0",
-                                    //Edit - TuanNA89 - 31/07/2019 - Thêm Note nơi trả về lỗi
-                                    messages = "Lỗi TPBank trả về: " + l__Data.messages
-                                };
-
-                                //Add - TuanNA89 - 31/07/2019 - Check thêm trường hợp TPBank trả về lỗi "Lỗi gọi dịch vụ web" thì vẫn tính là thành công
-                                if (l__result.messages.Contains("Lỗi gọi dịch vụ web cust id"))
-                                {
-                                    l__Step = "Thành công";
-                                    l__result = new TPFico_Customer_Result()
-                                    {
-                                        status = "1",
-                                        messages = "Gửi thông tin giải ngân sang TPBank thành công!"
-                                    };
-                                    Status status = Status.PROCESSING;
-                                    statusCode = (int)status;
-
-                                    g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_TPFico_PushResult", CommandType.StoredProcedure, new SqlParameter[]{
-                                    new SqlParameter("@Result", 8),
-                                    new SqlParameter("@Msg", "Gửi thông tin giải ngân thành công!"),
-                                    new SqlParameter("@CustId",  l_DataTable.Rows[0]["CustId"].ToString()),
-                                    });
-                                }
-                                //Add - TuanNA89 - 31/07/2019 - Check thêm trường hợp TPBank trả về lỗi "Lỗi gọi dịch vụ web" thì vẫn tính là thành công
                             }
                             #endregion
                         }
@@ -1925,9 +2959,16 @@ namespace WebCallLog.Controllers
                                 status = "0",
                                 messages = "Xảy ra lỗi khi gộp hình"
                             };
-                            WriteLog(0, 0, "InstallmentTPBank_TPFico_SendDocumentInfo", "", "Xảy ra lỗi khi gộp hình");
                         }
                     }
+                }
+                else
+                {
+                    l__result = new TPFico_Customer_Result()
+                    {
+                        status = "0",
+                        messages = "Không lấy được chuỗi kết nối TPBank"
+                    };
                 }
             }
             catch (Exception ex)
@@ -1949,133 +2990,31 @@ namespace WebCallLog.Controllers
                     status = "0",
                     messages = msgError
                 };
-                WriteLog(0, 0, "InstallmentTPBank_TPFico_SendDocumentInfo", "", l__error);
+                WriteLog_TPBank(l_Function, l_Method, l_Url, l_jsData, p_IdFinal, l__error);
             }
-            finally
-            {
-                if (l__oResp != null)
-                {
-                    l__oResp.Close();
-                }
-            }
-            return l__result;
+
+            //var json = Json(l__result, JsonRequestBehavior.AllowGet);
+            //json.MaxJsonLength = int.MaxValue;
+            return JsonConvert.SerializeObject(l__result);
         }
-        public string InstallmentTPBank_TPFico_GetCustInfo(string p_IdFinal)
+        public string InstallmentTPBank_TPFico_TPFico_SendDataUpdate(string p_IdFinal, string p_Screen)
         {
-            string l__Step = "";
-            string xml = "";
-            HttpWebResponse l__oResp = null;
-            try
-            {
-                string p_Token = InstallmentTPBank_TPFico_GetAuthorization();
-                string l_data = "";
-
-                #region == Get data from TPFico ==
-
-                string l__ReqUriStr = ConfigurationManager.AppSettings["TPFico_Url"].ToString() + String.Format(Api_TPBank.LayThongTinDangKyKH, p_IdFinal);//Customer id
-                //▼ Add - TuanNA89 - 08/11/2019 - Fix lỗi mất kết nối API TPBank
-                ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
-                System.Net.ServicePointManager.ServerCertificateValidationCallback +=
-                    delegate (object sender, System.Security.Cryptography.X509Certificates.X509Certificate certificate,
-                                            System.Security.Cryptography.X509Certificates.X509Chain chain,
-                                            System.Net.Security.SslPolicyErrors sslPolicyErrors)
-                    {
-                        return true; // **** Always accept
-                    };
-                System.Net.ServicePointManager.Expect100Continue = false;
-                //▲ Add - TuanNA89 - 08/11/2019 - Fix lỗi mất kết nối API TPBank
-
-                var l__HttpWebReq = (HttpWebRequest)WebRequest.Create(l__ReqUriStr);
-                l__HttpWebReq.KeepAlive = false;
-                l__HttpWebReq.Method = "GET";
-
-                l__HttpWebReq.Headers.Add("Authorization", p_Token);
-
-                HttpStatusCode? StatusCode = null;
-                l__Step = "Lấy chuỗi response";
-                try
-                {
-                    l__Step = "Bắt đầu chạy API";
-                    l__oResp = (HttpWebResponse)l__HttpWebReq.GetResponse();
-                }
-                catch (WebException we)
-                {
-                    l__Step = "API lỗi";
-                    l__oResp = (HttpWebResponse)we.Response;
-                }
-                l__Step = "Lấy chuỗi Stream của API";
-                var webResponseStream = l__oResp.GetResponseStream();
-                l__Step = "Check chuỗi ResponseStream";
-                if (webResponseStream != null && webResponseStream != Stream.Null)
-                {
-                    l__Step = "Chuỗi ResponseStream không null";
-                    l__Step = "Lấy StatusCode";
-                    StatusCode = l__oResp.StatusCode;
-                }
-                int? statusCode = null;
-                string statusName = null;
-                l__Step = "Check StatusCode";
-                if (StatusCode != null)
-                {
-                    l__Step = "StatusCode không null";
-                    statusCode = (int)StatusCode;
-                    statusName = StatusCode.ToString();
-                }
-                if (StatusCode == HttpStatusCode.OK)
-                {
-                    StreamReader l__StreamReader = new StreamReader(l__oResp.GetResponseStream());
-
-                    l_data = l__StreamReader.ReadToEnd();
-                    var l_dataDecrypt = "";
-                    l_dataDecrypt = PGPEncrypt_SignAndDecrypt(l_data);
-                    var l_custInfo = new TPFico_CustInfo_GetAllData();
-                    l_custInfo = new JavaScriptSerializer().Deserialize<TPFico_CustInfo_GetAllData>(l_dataDecrypt);
-
-                    using (var stringwriter = new System.IO.StringWriter())
-                    {
-                        var serializer = new XmlSerializer(l_custInfo.GetType());
-                        serializer.Serialize(stringwriter, l_custInfo);
-                        xml = stringwriter.ToString();
-                    };
-                }
-                #endregion
-            }
-            catch (Exception ex)
-            {
-                string l__error = "- Bước bị lỗi: " + l__Step + "- Lỗi: " + ex.InnerException;
-                Logger.WriteLogError("RegistrationForm - " + MethodBase.GetCurrentMethod().Name + "()", l__error);
-                WriteLog(0, 0, MethodBase.GetCurrentMethod().Name, "", l__error);
-            }
-            finally
-            {
-                if (l__oResp != null)
-                {
-                    l__oResp.Close();
-                }
-            }
-            return xml;
-        }
-        public TPFico_Customer_Result InstallmentTPBank_TPFico_TPFico_SendDataUpdate(string p_IdFinal, string p_Screen)
-        {
-            int l__IdLog = 0;
             TPFico_Customer_Result l__result = new TPFico_Customer_Result();
-            l__IdLog = WriteLog(0, 0, "InstallmentTPBank_TPFico_TPFico_SendDataUpdate", p_IdFinal, "");
             string l__Step = "";
             HttpWebResponse l__oResp = null;
+            string l_Function = MethodBase.GetCurrentMethod().Name, l_Method = "PUT", l_Url = "", l_jsData = "", l_Error = "";
             try
             {
-                SqlParameter[] l_SqlParameter = new SqlParameter[]{
-                    new SqlParameter("@CustId", p_IdFinal)
-                    ,new SqlParameter("@Screen", p_Screen)
-                };
-                l__Step = "Gọi store";
-                DataTable l_DataTable = g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_TPFico_GetDataUpdate", CommandType.StoredProcedure, l_SqlParameter);
-                if (l_DataTable != null && l_DataTable.Rows.Count > 0)
+                string l_Key = InstallmentTPBank_TPFico_GetAuthorization();
+                if (!string.IsNullOrEmpty(l_Key.Trim()))
                 {
-                    l__Step = "Lấy token";
-                    string l_Key = InstallmentTPBank_TPFico_GetAuthorization();
-
-                    if (l_Key != null && l_Key != "")
+                    SqlParameter[] l_SqlParameter = new SqlParameter[]{
+                        new SqlParameter("@CustId", p_IdFinal)
+                        ,new SqlParameter("@Screen", p_Screen)
+                    };
+                    l__Step = "Gọi store";
+                    DataTable l_DataTable = g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_TPFico_GetDataUpdate", CommandType.StoredProcedure, l_SqlParameter);
+                    if (l_DataTable != null && l_DataTable.Rows.Count > 0)
                     {
                         #region == (Đối với lỗi liên quan đến up hình - Gộp hình) ==
                         List<string> l__FileCMND = new List<string> { };
@@ -2184,98 +3123,40 @@ namespace WebCallLog.Controllers
 
                             #endregion
 
-                            #region == Push data ==
-                            var l__jsData = new JavaScriptSerializer().Serialize(l_ListDataUpdate);
-                            WriteLog(0, 0, "InstallmentTPBank_TPFico_TPFico_SendDataUpdate", l__jsData, "");
                             l__Step = "Mã hoá";
-                            var l__encryptData = PGPEncrypt_SignAndEncrypt(l__jsData);
+                            var l__encryptData = PGPEncrypt_SignAndEncrypt(l_jsData);
                             string l__ReqUriStr = "";
+
+                            #region == Push data ==
                             if (p_Screen == "TPB_DangKy")
                             {
-                                l__ReqUriStr = ConfigurationManager.AppSettings["TPFico_Url"].ToString() + String.Format(Api_TPBank.GuiThongTinKH_BiLoi, l_DataTable.Rows[0]["CustId"].ToString());//Customer id
+                                l_Url = String.Format(Api_TPBank.GuiThongTinKH_BiLoi, l_DataTable.Rows[0]["CustId"].ToString());//Customer id
                             }
                             else if (p_Screen == "TPB_GiaiNgan")
                             {
-                                l__ReqUriStr = ConfigurationManager.AppSettings["TPFico_Url"].ToString() + String.Format(Api_TPBank.GuiThongTinGiaiNgan_BiLoi, l_DataTable.Rows[0]["CustId"].ToString());//Customer id
+                                l_Url = String.Format(Api_TPBank.GuiThongTinGiaiNgan_BiLoi, l_DataTable.Rows[0]["CustId"].ToString());//Customer id
                             }
-
-                            //▼ Add - TuanNA89 - 08/11/2019 - Fix lỗi mất kết nối API TPBank
-                            ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
-                            System.Net.ServicePointManager.ServerCertificateValidationCallback +=
-                                delegate (object sender, System.Security.Cryptography.X509Certificates.X509Certificate certificate,
-                                                        System.Security.Cryptography.X509Certificates.X509Chain chain,
-                                                        System.Net.Security.SslPolicyErrors sslPolicyErrors)
-                                {
-                                    return true; // **** Always accept
-                                };
-                            System.Net.ServicePointManager.Expect100Continue = false;
-                            //▲ Add - TuanNA89 - 08/11/2019 - Fix lỗi mất kết nối API TPBank
-                            var l__HttpWebReq = (HttpWebRequest)WebRequest.Create(l__ReqUriStr);
-                            l__HttpWebReq.KeepAlive = false;
-                            l__HttpWebReq.Method = "PUT";
-
-
-                            l__HttpWebReq.ContentType = "application/json";
-                            l__HttpWebReq.Headers.Add("Authorization", l_Key);
-
-                            using (Stream stm = l__HttpWebReq.GetRequestStream())
+                            l_jsData = new JavaScriptSerializer().Serialize(l_ListDataUpdate);
+                            WriteLog_TPBank(l_Function, l_Method, l_Url, l_jsData, p_IdFinal, "Trước khi gọi API: " + l_jsData);
+                            var resultAPI = CallApiTPBank(l_Function, l_Method, l_Url, l_Key, p_IdFinal, l_jsData);
+                            WriteLog_TPBank(l_Function, l_Method, l_Url, l_jsData, p_IdFinal, "Sau khi gọi API: " + resultAPI);
+                            var result = new JavaScriptSerializer().Deserialize<TPFico_Customer_Result>(resultAPI);
+                            l__result = new TPFico_Customer_Result()
                             {
-                                using (StreamWriter stmw = new StreamWriter(stm))
-                                {
-                                    stmw.Write(l__encryptData);
-                                }
-                            }
-
-                            ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
-                            System.Net.ServicePointManager.ServerCertificateValidationCallback +=
-                                    delegate (object sender, System.Security.Cryptography.X509Certificates.X509Certificate certificate,
-                                                        System.Security.Cryptography.X509Certificates.X509Chain chain,
-                                                        System.Net.Security.SslPolicyErrors sslPolicyErrors)
-                                    {
-                                        return true; // **** Always accept
-                                    };
-
-                            System.Net.ServicePointManager.Expect100Continue = false;
-                            HttpStatusCode? StatusCode = null;
-                            l__Step = "Lấy chuỗi response";
-                            try
-                            {
-                                l__Step = "Bắt đầu chạy API";
-                                l__oResp = (HttpWebResponse)l__HttpWebReq.GetResponse();
-                            }
-                            catch (WebException we)
-                            {
-                                l__Step = "API lỗi";
-                                l__oResp = (HttpWebResponse)we.Response;
-                            }
-                            l__Step = "Lấy chuỗi Stream của API";
-                            var webResponseStream = l__oResp.GetResponseStream();
-                            l__Step = "Check chuỗi ResponseStream";
-                            if (webResponseStream != null && webResponseStream != Stream.Null)
-                            {
-                                l__Step = "Chuỗi ResponseStream không null";
-                                l__Step = "Lấy StatusCode";
-                                StatusCode = l__oResp.StatusCode;
-                            }
-                            int? statusCode = null;
-                            string statusName = null;
-                            l__Step = "Check StatusCode";
-                            if (StatusCode != null)
-                            {
-                                l__Step = "StatusCode không null";
-                                statusCode = (int)StatusCode;
-                                statusName = StatusCode.ToString();
-                            }
-                            if ((StatusCode == HttpStatusCode.Created) || (StatusCode == HttpStatusCode.OK))
+                                status = result.status,
+                                messages = result.messages,
+                                StatusCode = result.StatusCode
+                            };
+                            if (l__result.status == "1")
                             {
                                 int l__StatusChange = 0;
                                 if (p_Screen == "TPB_DangKy")
                                 {
-                                    l__StatusChange = 1; // Processing bước đăng ký
+                                    l__StatusChange = (int)Status.PROCESSING; // Processing bước đăng ký
                                 }
                                 else if (p_Screen == "TPB_GiaiNgan")
                                 {
-                                    l__StatusChange = 8; // Processing bước giải ngân
+                                    l__StatusChange = (int)Status.WaitingDiburse; // Processing bước giải ngân
                                 }
                                 g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_TPFico_PushResult", CommandType.StoredProcedure, new SqlParameter[]{
                                     new SqlParameter("@Result", l__StatusChange),
@@ -2289,18 +3170,6 @@ namespace WebCallLog.Controllers
                                     messages = "Gửi thành công"
                                 };
                             }
-                            else
-                            {
-                                StreamReader l__StreamReader = new StreamReader(l__oResp.GetResponseStream());
-
-                                var l__Response = l__StreamReader.ReadToEnd();
-                                var l__Json_Decrypt = PGPEncrypt_SignAndDecrypt(l__Response);
-                                WriteLog(0, 0, "InstallmentTPBank_TPFico_TPFico_SendDataUpdate", string.Format("{0} - {1}", statusCode.ToString(), statusName), l__Json_Decrypt);
-                                l__result = new JavaScriptSerializer().Deserialize<TPFico_Customer_Result>(l__Json_Decrypt);
-                                l__result.status = "0";
-                                //Add - TuanNA89 - 31/07/2019 - Thêm Note nơi trả về lỗi
-                                l__result.messages = "Lỗi TPBank trả về: " + l__result.messages;
-                            }
                             #endregion
                         }
                         else
@@ -2310,8 +3179,7 @@ namespace WebCallLog.Controllers
                                 status = "0",
                                 messages = "Xảy ra lỗi khi gộp hình"
                             };
-
-                            WriteLog(0, 0, "InstallmentTPBank_TPFico_TPFico_SendDataUpdate", "", l_error_GopHinh);
+                            WriteLog_TPBank(l_Function, l_Method, l_Url, l_jsData, p_IdFinal, l_error_GopHinh);
                         }
                     }
                     else
@@ -2319,9 +3187,9 @@ namespace WebCallLog.Controllers
                         l__result = new TPFico_Customer_Result()
                         {
                             status = "0",
-                            messages = "Không lấy được chuỗi kết nối TPBank"
+                            messages = "Không tìm thấy thông tin"
                         };
-                        WriteLog(0, 0, "InstallmentTPBank_TPFico_TPFico_SendDataUpdate", "", "Không lấy được chuỗi kết nối TPBank");
+                        WriteLog_TPBank(l_Function, l_Method, l_Url, l_jsData, p_IdFinal, "Không tìm thấy thông tin");
                     }
                 }
                 else
@@ -2329,14 +3197,14 @@ namespace WebCallLog.Controllers
                     l__result = new TPFico_Customer_Result()
                     {
                         status = "0",
-                        messages = "Không tìm thấy thông tin"
+                        messages = "Không lấy được chuỗi token"
                     };
+                    WriteLog_TPBank(l_Function, l_Method, l_Url, l_jsData, p_IdFinal, "Không nhận được chuỗi Token");
                 }
             }
             catch (Exception ex)
             {
                 string l__error = "- Bước bị lỗi: " + l__Step + "- Lỗi: " + ex.ToString();
-                Logger.WriteLogError("RegistrationForm - " + MethodBase.GetCurrentMethod().Name + "()", l__error);
                 string msgError = "";
                 if (ex.ToString().Contains("Unable to connect to the remote server"))
                 {
@@ -2344,7 +3212,7 @@ namespace WebCallLog.Controllers
                 }
                 else
                 {
-                    msgError = ex.ToString();
+                    msgError = l__error;
                 }
 
                 l__result = new TPFico_Customer_Result()
@@ -2352,17 +3220,63 @@ namespace WebCallLog.Controllers
                     status = "0",
                     messages = msgError
                 };
-                WriteLog(0, 0, "InstallmentTPBank_TPFico_SendDocumentInfo", "", l__error);
+                WriteLog_TPBank(l_Function, l_Method, l_Url, l_jsData, p_IdFinal, msgError);
             }
-            finally
+            //var json = Json(l__result, JsonRequestBehavior.AllowGet);
+            //json.MaxJsonLength = int.MaxValue;
+            return JsonConvert.SerializeObject(l__result);
+        }
+        public void InstallmentTPBank_TPFico_GetAndUpdateCustInfo(string p_IdFinal)
+        {
+            string l__Step = "";
+            string l_Function = MethodBase.GetCurrentMethod().Name, l_Method = "GET", l_Url = "", l_jsData = "", l_Error = "";
+            try
             {
-                if (l__oResp != null)
+                string l_Key = InstallmentTPBank_TPFico_GetAuthorization();
+                if (!string.IsNullOrEmpty(l_Key.Trim()))
                 {
-                    l__oResp.Close();
+                    #region == Get data from TPFico ==
+                    l_Url = String.Format(Api_TPBank.LayThongTinDangKyKH, p_IdFinal);
+                    var l_custInfo = new TPFico_CustInfo_GetAllData();
+                    WriteLog_TPBank(l_Function, l_Method, l_Url, l_jsData, p_IdFinal, "Trước khi gọi API: " + l_jsData);
+                    var resultAPI = CallApiTPBank(l_Function, l_Method, l_Url, l_Key, p_IdFinal, l_jsData);
+                    WriteLog_TPBank(l_Function, l_Method, l_Url, l_jsData, p_IdFinal, "Sau khi gọi API: " + resultAPI);
+                    var result = new JavaScriptSerializer().Deserialize<TPFico_Customer_Result>(resultAPI);
+                    if (result.status == "1")
+                    {
+                        l_custInfo = new JavaScriptSerializer().Deserialize<TPFico_CustInfo_GetAllData>(result.dataResponse);
+                        string xml = "";
+                        using (var stringwriter = new System.IO.StringWriter())
+                        {
+                            var serializer = new XmlSerializer(l_custInfo.GetType());
+                            serializer.Serialize(stringwriter, l_custInfo);
+                            xml = stringwriter.ToString();
+                        };
+                        if (xml != "")
+                        {
+                            g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_UpdateAll_CustomerInfor"
+                                                        , CommandType.StoredProcedure
+                                                        , new SqlParameter[]{
+                                                                new SqlParameter("@strInfoCust_TPBank", xml)
+                                                    }
+                            );
+                        }
+                    }
+                    #endregion
+                }
+                else
+                {
+                    WriteLog_TPBank(l_Function, l_Method, l_Url, l_jsData, p_IdFinal, "Không nhận được chuỗi Token");
                 }
             }
-            return l__result;
+            catch (Exception ex)
+            {
+                string l__error = "- Bước bị lỗi: " + l__Step + "- Lỗi: " + ex.InnerException;
+                WriteLog_TPBank(l_Function, l_Method, l_Url, l_jsData, p_IdFinal, l__error);
+            }
         }
+        #endregion
+        // TuanNA89 - 06/08/2020 - Tối ưu lại 1 số Code liên quan đến TPBank
         #endregion
 
         #region ===Function để TPBank gọi===
@@ -2423,18 +3337,20 @@ namespace WebCallLog.Controllers
                     {
                         if (l__Data.status == Status.APPROVED.ToString()) // duyệt
                         {
-                            string l__XmlCustInfo = "";
-                            l__XmlCustInfo = InstallmentTPBank_TPFico_GetCustInfo(l__Data.custId);
+                            //TuanNA89 - 06/08/2020 - Tối ưu lại 1 số Code liên quan đến TPBank
+                            InstallmentTPBank_TPFico_GetAndUpdateCustInfo(l__Data.custId);
+                            //string l__XmlCustInfo = "";
+                            //l__XmlCustInfo = InstallmentTPBank_TPFico_GetCustInfo(l__Data.custId);
 
-                            if (l__XmlCustInfo != "")
-                            {
-                                g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_UpdateAll_CustomerInfor"
-                                                            , CommandType.StoredProcedure
-                                                            , new SqlParameter[]{
-                                                                new SqlParameter("@strInfoCust_TPBank", l__XmlCustInfo)
-                                                        }
-                                );
-                            }
+                            //if (l__XmlCustInfo != "")
+                            //{
+                            //    g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_UpdateAll_CustomerInfor"
+                            //                                , CommandType.StoredProcedure
+                            //                                , new SqlParameter[]{
+                            //                                    new SqlParameter("@strInfoCust_TPBank", l__XmlCustInfo)
+                            //                            }
+                            //    );
+                            //}
                         }
 
                         Status status = (Status)Enum.Parse(typeof(Status), l__Data.status);
@@ -2469,7 +3385,8 @@ namespace WebCallLog.Controllers
             }
             if (l__ObjResult.status == "0")
             {
-                Response.StatusCode = 400;
+                // TuanNA89 - 06/08/2020 - Tối ưu lại 1 số Code liên quan đến TPBank
+                //Response.StatusCode = 400;
                 l__Result = PGPEncrypt_SignAndEncrypt(JsonConvert.SerializeObject(l__ObjResult));
             }
             if (l__ObjResult.status == "1") Response.StatusCode = (int)HttpStatusCode.OK;
@@ -2639,7 +3556,8 @@ namespace WebCallLog.Controllers
             try
             {
                 string p__FilePath = "";
-                p__FilePath = Url.Replace(authority, "");
+                if (Url.Contains("/TPBank/"))
+                    p__FilePath = Url.Replace(authority, "");
                 var l_OriginalDirectory = new DirectoryInfo(Server.MapPath(p__FilePath));
                 var l__FullPath = System.IO.Path.Combine(l_OriginalDirectory.ToString(), "");
                 if (System.IO.File.Exists(l__FullPath))
@@ -2681,9 +3599,38 @@ namespace WebCallLog.Controllers
             return Json("", JsonRequestBehavior.AllowGet);
         }
         //▲	Add - TuanNA89 - 08/07/2019 - Download file bằng link Url
+
+        public string InstallmentTPBank_TPFico_DeleteFolder()
+        {
+            string result = "";
+            var l_FolderFileAttach = Keyword.FolderFileAttach;
+            var l_OriginalDirectory = new DirectoryInfo(Server.MapPath(l_FolderFileAttach));
+            string l_PathString = System.IO.Path.Combine(l_OriginalDirectory.ToString(), "");
+            var l_Path_Folder = string.Format("{0}{1}", l_PathString, "TPBank");
+            DateTime TimeOldest = DateTime.Now;
+            DirectoryInfo di = new DirectoryInfo(l_Path_Folder);
+            DirectoryInfo[] subDirs = di.GetDirectories();
+            string folderOldest = "";
+
+            if (subDirs.Length > 0)
+            {
+                foreach (DirectoryInfo subDir in subDirs)
+                {
+                    if (subDir.CreationTime < TimeOldest)
+                    {
+                        TimeOldest = subDir.CreationTime;
+                        folderOldest = subDir.Name;
+                    }
+                }
+            }
+
+            result = "folder oldest = " + folderOldest + ", create time = " + TimeOldest.ToShortDateString();
+
+            return result;
+        }
         #endregion
 
-        #region ===Function hỗ trợ===
+        #region ===Function hỗ trợ===        
         //  =================================================================
         private static PgpPrivateKey FindSecretKey(PgpSecretKeyRingBundle pgpSec, long keyId, char[] pass)
         {
@@ -2791,8 +3738,16 @@ namespace WebCallLog.Controllers
 
             PgpEncryptionKeys keys = new PgpEncryptionKeys(pubPath, privPath, "123456a@");
             PgpEncrypt pgpEncrypt = new PgpEncrypt(keys);
-
-            string strDecrypt = Encoding.UTF8.GetString(Decrypt(Encoding.UTF8.GetBytes(p_Text), new FileStream(privPath, FileMode.Open, FileAccess.Read)));
+            // TuanNA89 - 06/08/2020 - Tối ưu lại 1 số Code liên quan đến TPBank
+            string strDecrypt = "";
+            try
+            {
+                strDecrypt = Encoding.UTF8.GetString(Decrypt(Encoding.UTF8.GetBytes(p_Text), new FileStream(privPath, FileMode.Open, FileAccess.Read)));
+            }
+            catch (Exception ex)
+            {
+                strDecrypt = p_Text;
+            }
             return strDecrypt;
         }
         int WriteLog(int IdLog, int IdApiDoiTacTraVe, string Title, string Content, string Error)
@@ -2800,62 +3755,6 @@ namespace WebCallLog.Controllers
             ServiceDataController service = new ServiceDataController();
             int result = service.WriteLogApi(IdLog, IdApiDoiTacTraVe, Title, Content, Error);
             return result;
-        }
-        public string CallApi_TPFico_GetCustData(string p_PathApi, string p_CardCode, string p_Authorization)
-        {
-            string l_data = "";
-            try
-            {
-                #region == Push data to TPFico ==
-
-                string l__ReqUriStr = ConfigurationManager.AppSettings["TPFico_Url"].ToString() + String.Format(Api_TPBank.LayThongTinDangKyKH, p_CardCode);//Customer id
-
-                var l__HttpWebReq = (HttpWebRequest)WebRequest.Create(l__ReqUriStr);
-
-                l__HttpWebReq.Method = "GET";
-
-                l__HttpWebReq.Headers.Add("Authorization", p_Authorization);
-
-                ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
-                System.Net.ServicePointManager.ServerCertificateValidationCallback +=
-                    delegate (object sender, System.Security.Cryptography.X509Certificates.X509Certificate certificate,
-                                            System.Security.Cryptography.X509Certificates.X509Chain chain,
-                                            System.Net.Security.SslPolicyErrors sslPolicyErrors)
-                    {
-                        return true; // **** Always accept
-                    };
-
-                HttpStatusCode StatusCode;
-                HttpWebResponse l__oResp = null;
-
-                try
-                {
-                    l__oResp = (HttpWebResponse)l__HttpWebReq.GetResponse();
-                }
-                catch (WebException we)
-                {
-                    l__oResp = (HttpWebResponse)we.Response;
-                }
-
-                StatusCode = l__oResp.StatusCode;
-                var statusCode = (int)StatusCode;
-                var statusName = StatusCode.ToString();
-
-                if (StatusCode == HttpStatusCode.OK)
-                {
-                    StreamReader l__StreamReader = new StreamReader(l__oResp.GetResponseStream());
-
-                    l_data = l__StreamReader.ReadToEnd();
-                    //var l__decryptData = PGPEncrypt_SignAndDecrypt(l_ResponseFromServer);
-                    ///l__result = new JavaScriptSerializer().Deserialize<TPFico_Customer_Result>(l__decryptData);                
-                }
-                #endregion
-            }
-            catch (Exception ex)
-            {
-                Logger.WriteLogError("RegistrationForm - " + MethodBase.GetCurrentMethod().Name + "()", ex.ToString());
-            }
-            return l_data;
         }
         public string MergeImages(List<string> p__FileNames, string p__Path_Folder, string p__Category)
         {
@@ -2865,6 +3764,7 @@ namespace WebCallLog.Controllers
             string l__Step = "";
             try
             {
+                #region == Get data hình ==
                 l_NewName = p__Category;
                 l__Step = "Lấy thời gian";
                 time1 = DateTime.Now.ToString("yyyyMMddHHmmss");
@@ -2916,7 +3816,74 @@ namespace WebCallLog.Controllers
                 }
 
                 files = tempList.ToArray();
-                CombineImages(files, l_NewPath, p__Category);
+                //TuanNA89 - 06/08/2020 - Tối ưu lại 1 số Code liên quan đến TPBank
+                #endregion
+                #region == Merge hình ==
+                string finalImage = l_NewPath;
+                List<int> imageWidths = new List<int>();
+                int nIndex = 0;
+                int width = 0;
+                int height = 0;
+
+                foreach (FileInfo file in files)
+                {
+                    Image img = Image.FromFile(file.FullName);
+
+                    imageWidths.Add(img.Width);
+                    height += img.Height;
+
+                    img.Dispose();
+                }
+
+                imageWidths.Sort();
+                width = imageWidths[imageWidths.Count - 1];
+                Bitmap img3 = new Bitmap(width, height);
+
+                Graphics g = Graphics.FromImage(img3);
+                g.Clear(SystemColors.AppWorkspace);
+                long l__byteAllImages = 0;
+
+                foreach (FileInfo file in files)
+                {
+                    Image img = Image.FromFile(file.FullName);
+                    l__byteAllImages += file.Length;
+                    if (nIndex == 0)
+                    {
+                        g.DrawImage(img, 0, 0, img.Width, img.Height);
+                        nIndex++;
+                        height = img.Height;
+                    }
+                    else
+                    {
+                        g.DrawImage(img, 0, height, img.Width, img.Height);
+                        height += img.Height;
+                    }
+                    img.Dispose();
+                }
+                g.Dispose();
+
+                //int l__Quality = GetQualityNewImageWithRule(l__byteAllImages, p__Category);                
+                #region == Tính toán độ phân giải độ phân giải ==
+                int l__Quality = 90;
+                double l__MaxSize = 1.5 * 1024 * 1024;
+                if (p__Category == "Signature")
+                {
+                    l__MaxSize = 0.6 * 1024 * 1024;
+                }
+
+                if (l__byteAllImages > l__MaxSize)
+                    l__Quality = (int)(l__MaxSize * 100 / l__byteAllImages);
+
+                if (l__Quality > 90)
+                    l__Quality = 90;
+                #endregion
+                Image l__img = (Image)img3;
+                SaveJpeg(finalImage, l__img, l__Quality);
+
+                img3.Dispose();
+                #endregion
+                //CombineImages(files, l_NewPath, p__Category);
+
             }
             catch (Exception ex)
             {
@@ -2996,14 +3963,7 @@ namespace WebCallLog.Controllers
                 int l__Quality = GetQualityNewImageWithRule(l__byteAllImages, p__Category);
                 Image l__img = (Image)img3;
                 SaveJpeg(finalImage, l__img, l__Quality);
-                //// Encoder parameter for image quality 
-                //EncoderParameter qualityParam = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, l__Quality);
-                //// JPEG image codec 
-                //ImageCodecInfo jpegCodec = GetEncoderInfo("image/jpeg");
-                //EncoderParameters encoderParams = new EncoderParameters(1);
-                //encoderParams.Param[0] = qualityParam;
-                ////img3.Save(finalImage, System.Drawing.Imaging.ImageFormat.Jpeg);
-                //img3.Save(finalImage, jpegCodec, encoderParams);
+
                 img3.Dispose();
             }
             catch (Exception ex)
@@ -3088,6 +4048,190 @@ namespace WebCallLog.Controllers
             }
             return base64;
         }
+        // TuanNA89 - 06/08/2020 - Tối ưu lại 1 số Code liên quan đến TPBank
+        #region Code mới
+        // Function gọi API
+        public string CallApiTPBank(string p_FunctionCall, string p_Method, string p_Api, string p_Auth, string p_CustId, string l__jsData)
+        {
+            var l__Step = "";
+            HttpWebResponse l__oResp = null;
+            var result = new TPFico_Customer_Result();
+            string l_Url = "";
+
+            var l_urlmoiFwd = "";
+            if (g__isUseFwd == "1") // Sử dụng domain Fwd TPBank nếu isUseFwd = 1
+            {
+                l_Url = g__UrlFwd;
+                l_urlmoiFwd = g__Url;
+            }
+            else
+            {
+                l_Url = g__Url;
+                ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
+                System.Net.ServicePointManager.ServerCertificateValidationCallback +=
+                    delegate (object sender, System.Security.Cryptography.X509Certificates.X509Certificate certificate,
+                                            System.Security.Cryptography.X509Certificates.X509Chain chain,
+                                            System.Net.Security.SslPolicyErrors sslPolicyErrors)
+                    {
+                        return true; // **** Always accept
+                    };
+                System.Net.ServicePointManager.Expect100Continue = false;
+            }
+
+            #region == Push data ==
+            try
+            {
+
+                p_FunctionCall = MethodBase.GetCurrentMethod().Name + "-" + p_FunctionCall;
+                string l__ReqUriStr = l_Url + p_Api;
+                l__Step = "Lấy link bước 1";
+                var l__HttpWebReq = WebRequest.Create(l__ReqUriStr) as HttpWebRequest;
+                l__HttpWebReq.KeepAlive = false;
+                l__HttpWebReq.Method = p_Method;
+                l__HttpWebReq.Headers.Add("Authorization", p_Auth);
+                if (g__isUseFwd == "1")
+                {
+                    l__HttpWebReq.Headers.Add("urlmoi", g__Url);
+                }
+                l__Step = "Bắt đầu gọi API";
+                if (p_Method == "POST" || p_Method == "PUT")
+                {
+                    l__Step = "Mã hoá data";
+                    var l__encryptData = PGPEncrypt_SignAndEncrypt(l__jsData);
+                    l__HttpWebReq.ContentType = "application/json";
+
+                    WriteLog_TPBank(p_FunctionCall, p_Method, l_Url, l__encryptData, p_CustId, l__Step);
+                    using (Stream stm = l__HttpWebReq.GetRequestStream())
+                    {
+                        using (StreamWriter stmw = new StreamWriter(stm))
+                        {
+                            stmw.Write(l__encryptData);
+                        }
+                    }
+                }
+                HttpStatusCode? StatusCode = new HttpStatusCode();
+                int statusCode;
+                string statusName;
+                l__Step = "Lấy chuỗi response";
+                try
+                {
+                    l__Step = "Chạy GetResponse()";
+                    l__oResp = (HttpWebResponse)l__HttpWebReq.GetResponse();
+                }
+                catch (WebException we)
+                {
+                    l__Step = "Nhảy vào WebException";
+                    l__oResp = (HttpWebResponse)we.Response;
+                    WriteLog_TPBank(p_FunctionCall, p_Method, l_Url, l__jsData, p_CustId, "WebException: " + we.ToString());
+                }
+                l__Step = "Check Response";
+                if (l__oResp != null)
+                {
+                    l__Step = "Có Response -> Check StatusCode";
+                    StatusCode = l__oResp.StatusCode;
+                    string l_data = null;
+                    if (StatusCode != null)
+                    {
+                        l__Step = "Có StatusCode -> Lấy status + stream reader";
+                        statusCode = (int)StatusCode;
+                        statusName = StatusCode.ToString();
+                        using (StreamReader l__StreamReader = new StreamReader(l__oResp.GetResponseStream()))
+                        {
+                            l_data = l__StreamReader.ReadToEnd();
+                        }
+                    }
+
+                    l__Step = "Giải mã chuỗi stream Reader";
+                    string decryptResult = "", l__Json_Decrypt = "";
+                    WriteLog_TPBank(p_FunctionCall, p_Method, l_Url, l_data, p_CustId, "Response chưa mã hóa");
+                    if (p_FunctionCall.Contains("InstallmentTPBank_TPFico_GetAuthorization"))
+                    {
+                        decryptResult = l_data;
+                    }
+                    else
+                    {
+                        l__Json_Decrypt = PGPEncrypt_SignAndDecrypt(l_data);
+                        decryptResult = l__Json_Decrypt;
+                    }
+
+                    if ((new List<HttpStatusCode?> { HttpStatusCode.Created, HttpStatusCode.OK }.IndexOf(StatusCode) > -1)
+                        || decryptResult.Contains("Lỗi gọi dịch vụ web cust id"))
+                    {
+                        result = new TPFico_Customer_Result()
+                        {
+                            status = "1",
+                            messages = "Thành công",
+                            dataResponse = decryptResult
+                        };
+                    }
+                    else if (StatusCode == HttpStatusCode.InternalServerError)
+                    {
+                        l__Step = "Gán vào list lỗi";
+                        WriteLog_TPBank(p_FunctionCall, p_Method, l_Url, l__jsData, p_CustId, "Lỗi 500 InternalServerError");
+                        result.status = "0";
+                        result.messages = "Lỗi không kết nối được TPBank (Error 500)";
+                        result.StatusCode = StatusCode;
+                    }
+                    else
+                    {
+                        l__Step = "Gán vào list lỗi";
+                        WriteLog_TPBank(p_FunctionCall, p_Method, l_Url, l__jsData, p_CustId, l__Json_Decrypt);
+                        result.status = "0";
+                        result.messages = "Lỗi TPBank trả về: " + decryptResult;
+                        result.StatusCode = StatusCode;
+                    }
+                }
+                else
+                {
+                    result = new TPFico_Customer_Result()
+                    {
+                        status = "0",
+                        messages = "Không nhận được chuỗi response"
+                    };
+                    WriteLog_TPBank(p_FunctionCall, p_Method, l_Url, l__jsData, p_CustId, "Không nhận được chuỗi response");
+                }
+            }
+            catch (Exception ex)
+            {
+                string l__error = "- Bước bị lỗi: " + l__Step + "- Lỗi: " + ex.ToString();
+                Logger.WriteLogError("RegistrationForm - " + MethodBase.GetCurrentMethod().Name + "()", l__error);
+                string msgError = "";
+                if (ex.ToString().Contains("Unable to connect to the remote server"))
+                {
+                    msgError = "Không kết nối được tới TPBank";
+                }
+                else
+                {
+                    msgError = ex.ToString();
+                }
+
+                result = new TPFico_Customer_Result()
+                {
+                    status = "0",
+                    messages = msgError
+                };
+                WriteLog_TPBank(p_FunctionCall, p_Method, l_Url, l__jsData, p_CustId, l__error);
+            }
+            if (l__oResp != null)
+            {
+                l__oResp.Close();
+            }
+            #endregion
+
+            return new JavaScriptSerializer().Serialize(result);
+        }
+        void WriteLog_TPBank(string p_Function, string p_Method, string p_Url, string p_ObjectData, string p_IdFinal, string p_Error)
+        {
+            g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_WriteLog", CommandType.StoredProcedure, new SqlParameter[] {
+                new SqlParameter("@Function", p_Function),
+                new SqlParameter("@Method", p_Method),
+                new SqlParameter("@Url", p_Url),
+                new SqlParameter("@ObjectData", p_ObjectData),
+                new SqlParameter("@IdFinal", p_IdFinal),
+                new SqlParameter("@Error", p_Error),
+            });
+        }
+        #endregion
         #endregion
 
         #region ===Function app gọi===
@@ -3280,6 +4424,9 @@ namespace WebCallLog.Controllers
     {
         public string status { get; set; }
         public string messages { get; set; }
+        // TuanNA89 - 06/08/2020 - Tối ưu lại 1 số Code liên quan đến TPBank
+        public HttpStatusCode? StatusCode { get; set; }
+        public string dataResponse { get; set; }
     }
     #endregion
 
@@ -3353,7 +4500,8 @@ namespace WebCallLog.Controllers
         CANCELLED = 4,
         REJECTED = 5,
         RETURNED = 6,
-        SUPPLEMENT = 7
+        SUPPLEMENT = 7,
+        WaitingDiburse = 8
     }
     enum MaritalStatus
     {
@@ -3366,12 +4514,21 @@ namespace WebCallLog.Controllers
     public sealed class Api_TPBank
     {
         private Api_TPBank() { }
-
+        // TuanNA89 - 06/08/2020 - Tối ưu lại 1 số Code liên quan đến TPBank
+        /*
         public static readonly string GuiThongTinKH = "/api/fpt/customers_pgp";
         public static readonly string LayThongTinDangKyKH = "/api/fpt/customers_pgp/{0}/acca";
         public static readonly string GuiThongTinGiaiNgan = "/api/fpt/customers_pgp/{0}/doc_post_approved";
         public static readonly string GuiThongTinKH_BiLoi = "/api/fpt/customers_pgp/{0}/returned_for_data_pre_approved";
         public static readonly string GuiThongTinGiaiNgan_BiLoi = "/api/fpt/customers_pgp/{0}/supplement_for_document_post_approved";
+        */
+        // TuanNA89 - 19/06/2020 - TPBank đổi link Api
+        public static readonly string LayToken = "/auth/oauth/token";
+        public static readonly string GuiThongTinKH = "/fpt/customers_pgp";
+        public static readonly string LayThongTinDangKyKH = "/fpt/customers_pgp/{0}/acca";
+        public static readonly string GuiThongTinGiaiNgan = "/fpt/customers_pgp/{0}/doc_post_approved";
+        public static readonly string GuiThongTinKH_BiLoi = "/fpt/customers_pgp/{0}/returned_for_data_pre_approved";
+        public static readonly string GuiThongTinGiaiNgan_BiLoi = "/fpt/customers_pgp/{0}/supplement_for_document_post_approved";
     }
 
     #endregion

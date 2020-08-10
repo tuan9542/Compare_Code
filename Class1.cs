@@ -21,6 +21,7 @@ using System.Web.Script.Serialization;
 using System.Xml.Serialization;
 using WebCallLog.Helpers;
 using WebCallLog.Models;
+
 namespace WebCallLog.Controllers
 {
     #region ======ConfigController======
@@ -999,10 +1000,10 @@ namespace WebCallLog.Controllers
                     };
 
                     DataTable l_DataTable = g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_UpdateData", System.Data.CommandType.StoredProcedure, new SqlParameter[]{
-                        new SqlParameter("@CustId", l__IDFinal),
-                        new SqlParameter("@strFieldUpdate", l__xmlErrors ),
-                        new SqlParameter("@User", UserManager.CurrentUser.InsideCode)
-                    });
+                    new SqlParameter("@CustId", l__IDFinal),
+                    new SqlParameter("@strFieldUpdate", l__xmlErrors ),
+                    new SqlParameter("@User", UserManager.CurrentUser.InsideCode)
+                });
                     if (l_DataTable != null && l_DataTable.Rows.Count > 0)
                     {
                         #region ===PUSH API TPFico===
@@ -1154,16 +1155,16 @@ namespace WebCallLog.Controllers
             if (UserManager.CurrentUser != null)
             {
                 SqlParameter[] l_SqlParameter = new SqlParameter[] {
-                    new SqlParameter("@User", UserManager.CurrentUser.InsideCode),
-                    new SqlParameter("@DateTime", p_Date)
-                };
-                DataTable l_DataTable = g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_MonitorProfile", CommandType.StoredProcedure, l_SqlParameter);
-                if (l_DataTable != null && l_DataTable.Rows.Count > 0)
-                {
-                    var l_JsonResult = Json(l_DataTable.EParseToObjects(), JsonRequestBehavior.AllowGet);
-                    l_JsonResult.MaxJsonLength = int.MaxValue;
-                    return l_JsonResult;
-                }
+                new SqlParameter("@User", UserManager.CurrentUser.InsideCode),
+                new SqlParameter("@DateTime", p_Date)
+            };
+            DataTable l_DataTable = g_SqlDBHelper.ExecuteCommand("sp_InstallmentTPBank_MonitorProfile", CommandType.StoredProcedure, l_SqlParameter);
+            if (l_DataTable != null && l_DataTable.Rows.Count > 0)
+            {
+                var l_JsonResult = Json(l_DataTable.EParseToObjects(), JsonRequestBehavior.AllowGet);
+                l_JsonResult.MaxJsonLength = int.MaxValue;
+                return l_JsonResult;
+            }
             }
             return null;
         }
@@ -3630,7 +3631,7 @@ namespace WebCallLog.Controllers
         }
         #endregion
 
-        #region ===Function hỗ trợ===        
+        #region ===Function hỗ trợ===
         //  =================================================================
         private static PgpPrivateKey FindSecretKey(PgpSecretKeyRingBundle pgpSec, long keyId, char[] pass)
         {
@@ -3747,7 +3748,7 @@ namespace WebCallLog.Controllers
             catch (Exception ex)
             {
                 strDecrypt = p_Text;
-            }
+            }            
             return strDecrypt;
         }
         int WriteLog(int IdLog, int IdApiDoiTacTraVe, string Title, string Content, string Error)

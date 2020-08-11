@@ -1,5 +1,5 @@
-﻿SET QUOTED_IDENTIFIER ON;
-SET ANSI_NULLS ON;
+﻿SET QUOTED_IDENTIFIER ON
+SET ANSI_NULLS ON
 GO
 -- =============================================
 -- Author:		BacVT - VietMXH
@@ -27,16 +27,14 @@ AS
             DECLARE
                 @ShopCode VARCHAR(40)
               , @OfficeCode VARCHAR(40)
-              , @Job VARCHAR(40)
-              , @RegionHierachyCode VARCHAR(50);
+              , @Job VARCHAR(40);
 
             SELECT
                 @ShopCode = WarehouseCode
               , @OfficeCode = OrganizationHierachyCode
               , @Job = JobTitle
-              , @RegionHierachyCode = RegionHierachyCode
             FROM
-                [10.96.254.143].FRTInsideV2.dbo.F03_Employees WITH ( NOLOCK )
+                [SV_THUC_FRT_INSIDE].FRTInsideV2.dbo.F03_Employees WITH ( NOLOCK )
             WHERE
                 EmployeeCode = @EmpCode;
 
@@ -46,17 +44,13 @@ AS
                 R.Id
             FROM
                 dbo.Requests ( NOLOCK ) R
-                LEFT JOIN [10.96.254.143].FRTInsideV2.dbo.F03_Employees E WITH ( NOLOCK )
-                    ON R.Sender = E.EmployeeCode
             WHERE
                 R.TypeId = @TypeId
                 AND DATEPART(MONTH, R.TimeCreate) = @Month
                 AND DATEPART(YEAR, R.TimeCreate) = @Year
                 AND R.Status < 3
                 AND ( R.FromShop = @ShopCode OR @ShopCode = '' )
-                AND (( R.FromOffice = @OfficeCode OR @OfficeCode = '' )
-                     AND ( @RegionHierachyCode = E.RegionHierachyCode )
-                    )
+                AND ( R.FromOffice = @OfficeCode OR @OfficeCode = '' )
                 AND @Job NOT IN (   '00002'
                                   , '00241' --
                                   , '00304' -- ▶	Edit - VietMXH - 19/11/2019 - OanhNTN7 cf Thêm chức danh==================================================
@@ -65,7 +59,7 @@ AS
         BEGIN CATCH
             DECLARE @ErrorMessage NVARCHAR(2000);
             SELECT
-                @ErrorMessage = N'Lỗi: [Request_GetSimilar] @TypeId=''' + ISNULL(CONVERT(NVARCHAR, @TypeId), 'NULL') + N''', @EmpCode=''' + ISNULL(CONVERT(NVARCHAR, @EmpCode), 'NULL') + N''', @Month=''' + ISNULL(CONVERT(NVARCHAR, @Month), 'NULL') + N''', @Year=''' + ISNULL(CONVERT(NVARCHAR, @Year), 'NULL') + N''' - ' + ERROR_MESSAGE();
+                @ErrorMessage = N'Lỗi: [Request_GetSimilar] @TypeId=''' + ISNULL(CONVERT(NVARCHAR, @TypeId), 'NULL') + ''', @EmpCode=''' + ISNULL(CONVERT(NVARCHAR, @EmpCode), 'NULL') + ''', @Month=''' + ISNULL(CONVERT(NVARCHAR, @Month), 'NULL') + ''', @Year=''' + ISNULL(CONVERT(NVARCHAR, @Year), 'NULL') + ''' - ' + ERROR_MESSAGE();
 
             --	===Ghi Log===
             INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )

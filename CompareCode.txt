@@ -1,76 +1,159 @@
-﻿SET QUOTED_IDENTIFIER ON
-SET ANSI_NULLS ON
+﻿SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;
 GO
--- =============================================
--- Author:		BacVT - VietMXH
--- Create date: ? - 19/11/2019 11:42
--- Description:	<Description,,>
--- Note:		Chưa tối ưu
--- Request_GetSimilar 23,'16550'
--- =============================================
-ALTER PROCEDURE dbo.Request_GetSimilar
-    @TypeId INT
-  , @EmpCode VARCHAR(40)
-  , @Month INT = 0
-  , @Year INT = 0
+ALTER PROCEDURE dbo.QuetViPhamGQKN_19 @RequestId BIGINT = 0
 AS
     BEGIN
-        BEGIN TRY
+        CREATE TABLE #Tam_Requests
+        (
+            STT INT IDENTITY(1, 1)
+          , R_Id BIGINT
+          , R_TimeCreate DATE
+          , RD_Proprety12 NVARCHAR(500)
+          , RD_Proprety13 NVARCHAR(500)
+          , RD_Property10 NVARCHAR(500) --ChuongNT3 - 22/10/2018 - fix mã nhân viên
+          , RD_Property6 NVARCHAR(500) -- Edit - TuanNA89 - 07/11/2019 - fix rule phạt đối với CL chưa được xử lý
+        );
 
-            SET NOCOUNT ON;
+        --▼ Edit - TuanNA89 - 07/11/2019 - fix rule phạt đối với CL chưa được xử lý
+        CREATE TABLE #Tam_Shops ( ShopCode VARCHAR(50));
 
-            IF ( @Month = 0 )
-                SET @Month = DATEPART(MONTH, GETDATE());
-            IF ( @Year = 0 )
-                SET @Year = DATEPART(YEAR, GETDATE());
+        SELECT
+            FE.EmployeeCode AS EmployeeCode
+          , FE.WarehouseCode AS WarehouseCode
+        INTO
+            #tmp_NV_SM_PSM
+        FROM
+            [10.96.254.143].FRTInsideV2.dbo.F03_Employees AS FE ( NOLOCK )
+        WHERE
+            FE.Status = 'A'
+            AND FE.JobTitle IN ( '00004', '00005' );
+        --▲ Edit - TuanNA89 - 07/11/2019 - fix rule phạt đối với CL chưa được xử lý
 
-            DECLARE
-                @ShopCode VARCHAR(40)
-              , @OfficeCode VARCHAR(40)
-              , @Job VARCHAR(40);
+        DECLARE
+            @R_TimeCreate DATETIME
+          , @R_Id BIGINT = 0
+          , @Count_Request INT = 0
+          , @Index_Request INT = 1
+          , @Nhan_Vien NVARCHAR(500) = N''
+          , @Er NVARCHAR(100) = N''
+          , @DSShop NVARCHAR(500) = N''; --ChuongNT3 - 22/10/2018 - fix mã nhân viên
 
-            SELECT
-                @ShopCode = WarehouseCode
-              , @OfficeCode = OrganizationHierachyCode
-              , @Job = JobTitle
-            FROM
-                [SV_THUC_FRT_INSIDE].FRTInsideV2.dbo.F03_Employees WITH ( NOLOCK )
-            WHERE
-                EmployeeCode = @EmpCode;
+        DECLARE
+            @Mouth INT = MONTH(GETDATE())
+          , @Year INT = YEAR(GETDATE());
 
-            PRINT CONCAT(N'@Job: ', @Job);
+        INSERT INTO #Tam_Requests
+        (
+            R_Id
+          , R_TimeCreate
+          , RD_Proprety12
+          , RD_Proprety13
+          , RD_Property10 --ChuongNT3 - 22/10/2018 - fix mã nhân viên
+          , RD_Property6 -- Edit - TuanNA89 - 07/11/2019 - fix rule phạt đối với CL chưa được xử lý
+        )
+        SELECT
+            R.Id AS R_Id
+          , R.TimeCreate AS R_TimeCreate
+          , RD.Property12
+          , RD.Property13
+          , RD.Property10 --ChuongNT3 - 22/10/2018 - fix mã nhân viên
+          , RD.Property6 -- Edit - TuanNA89 - 07/11/2019 - fix rule phạt đối với CL chưa được xử lý
+        FROM
+            dbo.Requests R ( NOLOCK )
+            INNER JOIN dbo.RequestDetails RD ( NOLOCK )
+                ON RD.RequestId = R.Id
+        WHERE
+            R.TypeId = 19
+            AND R.Status < 4
+            AND R.TimeCreate > '2018-08-31' -- Ngày GoLive
+            AND DATEDIFF(HOUR, R.TimeCreate, GETDATE()) BETWEEN 48 AND 72
+            AND RD.Status = 1
+            AND RD.Property1 = N'Thái độ'
+            AND RD.Property3 IN ( N'Thái độ', N'Công nghệ' ) -- Edit - TuanNA89 - 05/05/2020 - thêm giá trị Công Nghệ
+            --▼ Edit - TuanNA89 - 07/11/2019 - fix rule phạt đối với CL chưa được xử lý
+            AND ( ISNULL(RD.Property12, '') <> '' -- ChuongNT3 - 31/08/2018 - p9 -> p12
+                --      OR ISNULL(RD.Property13, '') <> '' --ChuongNT3 - 22/10/2018 - fix mã nhân viên
+                )
+            AND RD.Quantity1 = 0 -- ChuongNT3 - 10/23/2018 - thêm nhánh		
+            AND ( ISNULL(@RequestId, 0) = 0 OR R.Id = @RequestId );
+        --▲ Edit - TuanNA89 - 07/11/2019 - fix rule phạt đối với CL chưa được xử lý
 
-            SELECT
-                R.Id
-            FROM
-                dbo.Requests ( NOLOCK ) R
-            WHERE
-                R.TypeId = @TypeId
-                AND DATEPART(MONTH, R.TimeCreate) = @Month
-                AND DATEPART(YEAR, R.TimeCreate) = @Year
-                AND R.Status < 3
-                AND ( R.FromShop = @ShopCode OR @ShopCode = '' )
-                AND ( R.FromOffice = @OfficeCode OR @OfficeCode = '' )
-                AND @Job NOT IN (   '00002'
-                                  , '00241' --
-                                  , '00304' -- ▶	Edit - VietMXH - 19/11/2019 - OanhNTN7 cf Thêm chức danh==================================================
-                                ); --- Hien.Doan 01.03.2017 Bo bat doi voi 2 chuc danh nay
-        END TRY
-        BEGIN CATCH
-            DECLARE @ErrorMessage NVARCHAR(2000);
-            SELECT
-                @ErrorMessage = N'Lỗi: [Request_GetSimilar] @TypeId=''' + ISNULL(CONVERT(NVARCHAR, @TypeId), 'NULL') + ''', @EmpCode=''' + ISNULL(CONVERT(NVARCHAR, @EmpCode), 'NULL') + ''', @Month=''' + ISNULL(CONVERT(NVARCHAR, @Month), 'NULL') + ''', @Year=''' + ISNULL(CONVERT(NVARCHAR, @Year), 'NULL') + ''' - ' + ERROR_MESSAGE();
+        SET @Count_Request = ( SELECT COUNT(1)FROM #Tam_Requests );
 
-            --	===Ghi Log===
-            INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
-            VALUES (
-                       N'Request_GetSimilar' -- Title - nvarchar(300)
-                     , @ErrorMessage -- Error - nvarchar(max)
-                     , 1 -- Status - tinyint
-                     , GETDATE() -- TimeCreate - datetime
-                   );
-        END CATCH;
+        IF ( @Count_Request > 0 )
+            BEGIN
+                WHILE ( @Index_Request <= @Count_Request )
+                    BEGIN
+                        SELECT TOP 1
+                               @R_Id = R_Id
+                             , @R_TimeCreate = R_TimeCreate
+                             , @Nhan_Vien = ISNULL(RD_Proprety13, '') -- Edit - TuanNA89 - 07/11/2019 - fix rule phạt đối với CL chưa được xử lý
+                             , @Er = ISNULL(RD_Property10, 'error') --ChuongNT3 - 22/10/2018 - fix mã nhân viên
+                             , @DSShop = RD_Property6 -- Edit - TuanNA89 - 07/11/2019 - fix rule phạt đối với CL chưa được xử lý
+                        FROM
+                            #Tam_Requests
+                        WHERE
+                            STT = @Index_Request;
+
+                        UPDATE
+                            dbo.Requests
+                        SET
+                            Status = 4
+                          , Assigner = '-1'
+                          , TimeFinish = GETDATE()
+                          , TimeClose = GETDATE()
+                          , Remark = ISNULL(Remark, '') + N'Quét vi phạm 48h(' + CONVERT(NVARCHAR(50), GETDATE(), 121) + ')' --ChuongNT3 - 22/10/2018 - fix mã nhân viên
+                        WHERE
+                            Id = @R_Id;
+
+                        --ChuongNT3 - 22/10/2018 - fix mã nhân viên
+                        IF ( @Er = 'error' )
+                            BEGIN
+                                --▼ Edit - TuanNA89 - 07/11/2019 - fix rule phạt đối với CL chưa được xử lý
+                                IF ( @Nhan_Vien = '' )
+                                    BEGIN
+                                        INSERT INTO #Tam_Shops ( ShopCode )
+                                        SELECT GiaTri FROM dbo.ufn_SplitStringToTable(@DSShop, ',', 0);
+
+                                        SELECT
+                                            @Nhan_Vien = COALESCE(@Nhan_Vien, '') + TNSP.EmployeeCode + N','
+                                        FROM
+                                            #tmp_NV_SM_PSM AS TNSP ( NOLOCK )
+                                        WHERE
+                                            TNSP.WarehouseCode IN ( SELECT TS.ShopCode FROM #Tam_Shops AS TS );
+                                    END;
+
+                                DECLARE @remark NVARCHAR(500) = N'';
+                                SELECT TOP 1
+                                       @remark = LEFT(C.Message, 500)
+                                FROM
+                                    dbo.Conversations AS C ( NOLOCK )
+                                WHERE
+                                    C.RequestId = @R_Id
+                                    AND C.Type = 6
+                                    AND C.Status = 1;
+
+                                EXEC dbo.SinhPhieuViPham_19
+                                    @MonthRecord = @Mouth
+                                  , @YearRecord = @Year
+                                  , @EmpViolation = @Nhan_Vien
+                                  , @ViolationContentID = 771 --771:BETA ; 214:GOLIVE
+                                  , @CallLogID = @R_Id
+                                  , @Remark = @remark
+                                  , @HeSoPhat = 1; -- float
+                            --▲ Edit - TuanNA89 - 07/11/2019 - fix rule phạt đối với CL chưa được xử lý
+                            END;
+
+                        DELETE FROM #Tam_Shops;
+                        SELECT @Index_Request = @Index_Request + 1;
+                    END;
+            END;
+
+        DROP TABLE
+            #Tam_Requests
+          , #Tam_Shops
+          , #tmp_NV_SM_PSM;
     END;
-
 GO
 

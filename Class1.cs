@@ -12207,7 +12207,7 @@ namespace WebCallLog.Models
                         //▼ Add - NghiaTV5 - 10/04/2018 - Loại 205 - claim nhà bảo hiểm
                         else if (request.TypeId == 205)
                         {
-                            #region
+                            #region NghiaTV5 - 16/04/2018 - Loại 205 - claim nhà bảo hiểm
                             #endregion
                         }
                         //▲ Add - NghiaTV5 - 10/04/2018 - Loại 205 - claim nhà bảo hiểm
@@ -13471,42 +13471,6 @@ namespace WebCallLog.Models
                         else if (request.TypeId == 24)
                         {
                             #region Automatic
-                            if (objects != null && objects.ToString() != "[]")
-                            {
-
-                                foreach (var item in objects)
-                                {
-                                    int id = item.Id;
-                                    RequestDetail requestdetail = new RequestDetail();
-                                    using (var t = new TransactionScope(TransactionScopeOption.Required, new TransactionOptions
-                                    {
-                                        IsolationLevel = System.Transactions.IsolationLevel.ReadUncommitted
-                                    }))
-                                    {
-                                        requestdetail = db.RequestDetails.FirstOrDefault(x => x.Id == id);
-                                    }
-                                    if (requestdetail != null)
-                                    {
-                                        requestdetail.Property1 = item.Nhomhangmuc;
-                                        requestdetail.Property2 = item.Chitiethangmuc;
-                                        if (item.Ngaydukien.ToString() != "" && item.Ngaydukien.ToString() != null)
-                                        {
-                                            requestdetail.Time1 = DateTime.ParseExact(item.Ngaydukien.ToString(), "dd/MM/yyyy", CultureInfo.InvariantCulture);
-                                        }
-                                        requestdetail.Property3 = item.Donvi;
-                                        requestdetail.Quantity = item.Soluong;
-                                        requestdetail.Quantity1 = item.Dongia;
-                                        requestdetail.Quantity2 = item.DongiaThuc;
-                                        requestdetail.Quantity3 = item.Soluong * item.DongiaThuc;
-                                        requestdetail.Quantity4 = item.Soluong * item.Dongia;
-                                        requestdetail.Approved = item.isShop;
-                                        requestdetail.Quantity5 = item.Type;
-                                        requestdetail.Note = item.Ghichu;
-                                        requestdetail.Property4 = item.idNhomHangmuc;
-                                    }
-                                }
-                                db.SaveChanges();
-                            }
                             #endregion
                         }
                         //▲ Add - LuanNT44 - 03/12/2019 - Loại 24 - CSVC  -- LuanNT44 - 11/04/2020 - 24 - edit
@@ -15764,7 +15728,7 @@ namespace WebCallLog.Models
                             #endregion
 
                         }
-                        //▲ Add - LuanNT44 -14/03/2018 - Loại 204 - Chốt CR qua Calllog                        
+                        //▲ Add - LuanNT44 -14/03/2018 - Loại 204 - Chốt CR qua Calllog
                         else if (request.TypeId == 205)
                         {
                             #region Automatic
@@ -17401,8 +17365,8 @@ namespace WebCallLog.Models
                                     request.StepStatus = Key.StatusRequest.Waitting;
                                     DataTable table = sql.ExecuteCommand("Assigners_InsertForRequest", CommandType.StoredProcedure, new SqlParameter[]
                                 {
-                                    new SqlParameter("@RequestId",request.Id),
-                                    new SqlParameter("@StepNo",request.StepNo)
+                                                      new SqlParameter("@RequestId",request.Id),
+                                                      new SqlParameter("@StepNo",request.StepNo)
                                 });
                                     if (table != null && table.Rows.Count > 0)
                                         request.Assigner = table.Rows[0]["Assigner"].ToString();
@@ -18955,40 +18919,6 @@ namespace WebCallLog.Models
                         //▼  Add - LuanNT44 - 03/12/2019 - Loại 24 - CSVC -- LuanNT44 - 11/04/2020 - 24 - edit
                         case 24:
                             #region Automatic
-                            if (objects != null && objects.ToString() != "[]")
-                            {
-                                foreach (var item in objects)
-                                {
-                                    int id = item.Id;
-                                    RequestDetail requestdetail = new RequestDetail();
-                                    using (var t = new TransactionScope(TransactionScopeOption.Required, new TransactionOptions
-                                    {
-                                        IsolationLevel = System.Transactions.IsolationLevel.ReadUncommitted
-                                    }))
-                                    {
-                                        requestdetail = db.RequestDetails.FirstOrDefault(x => x.Id == id);
-                                    }
-                                    if (requestdetail != null)
-                                    {
-                                        requestdetail.Property1 = item.Nhomhangmuc;
-                                        requestdetail.Property2 = item.Chitiethangmuc;
-                                        if (item.Ngaydukien.ToString() != "" && item.Ngaydukien.ToString() != null)
-                                        {
-                                            requestdetail.Time1 = DateTime.ParseExact(item.Ngaydukien.ToString(), "dd/MM/yyyy", CultureInfo.InvariantCulture);
-                                        }
-                                        requestdetail.Property3 = item.Donvi;
-                                        requestdetail.Quantity = item.Soluong;
-                                        requestdetail.Quantity1 = item.Dongia;
-                                        requestdetail.Quantity2 = item.DongiaThuc;
-                                        requestdetail.Quantity3 = item.Soluong * item.DongiaThuc;
-                                        requestdetail.Quantity4 = item.Soluong * item.Dongia;
-                                        requestdetail.Approved = item.isShop;
-                                        requestdetail.Quantity5 = item.Type;
-                                        requestdetail.Note = item.Ghichu;
-                                        requestdetail.Property4 = item.idNhomHangmuc;
-                                    }
-                                }
-                            }
                             #endregion
                             break;
                         //▲  Add - LuanNT44 - 03/12/2019 - Loại 24 - CSVC -- LuanNT44 - 11/04/2020 - 24 - edit
@@ -22201,7 +22131,7 @@ namespace WebCallLog.Models
                                 {
                                     requestdetail.Approved = item.TinhTrangDuyet;
                                     requestdetail.Property8 = item.LyDoKhongDuyet;
-                                    if (item.TinhTrangDuyet == "0")
+                                    if (requestdetail.Approved == false)
                                     {
                                         isComplete = false;
                                     }
@@ -22218,8 +22148,7 @@ namespace WebCallLog.Models
                                 }
                                 DataTable tbl_229 = sql.ExecuteCommand("CallLogPOSM_DuyetHinhAnh_Type229_XuLy", CommandType.StoredProcedure, new SqlParameter[]
                                 {
-                                new SqlParameter("@RequestId",request.Id),
-                                new SqlParameter("@StepNo",request.StepNo)
+                                    new SqlParameter("@RequestId",request.Id)
                                 });
                                 if (tbl_229 != null && tbl_229.Rows.Count > 0)
                                 {
@@ -22227,7 +22156,7 @@ namespace WebCallLog.Models
                                     {
                                         if (tbl_229.Rows[0]["Message"].ToString() != "")
                                         {
-                                            TempData["Message"] = "Yêu cầu có hình bị từ chối. Yêu cầu shop up hình lại!";
+                                            TempData["Message"] = tbl_229.Rows[0]["Message"].ToString();
                                         }
                                         return RedirectToAction("Index", "Home");
                                     }
@@ -28532,30 +28461,18 @@ namespace WebCallLog.Models
         {
             try
             {
-                #region Cập nhật lại trao đổi sang inside loại 48 Xử lý vi phạm
-
-                Models.Request req = new Models.Request();
-                using (var t = new TransactionScope(TransactionScopeOption.Required, new TransactionOptions
-                {
-                    IsolationLevel = System.Transactions.IsolationLevel.ReadUncommitted
-                }))
+                Request req = new Request();
+                using (var t = new TransactionScope(TransactionScopeOption.Required, new TransactionOptions { IsolationLevel = System.Transactions.IsolationLevel.ReadUncommitted }))
                 {
                     req = db.Requests.FirstOrDefault(x => x.Id == request);
                 }
-
                 if (req.TypeId == 48)
                 {
-                    SqlParameter[] param = new SqlParameter[] {
-                        new SqlParameter("@RequestDetailId", requestDetail),
-                        new SqlParameter("@Content", message),
-                        new SqlParameter("@Sender", UserManager.CurrentUser.InsideCode),
-                    };
-                    DataTable table = sql.ExecuteCommand("INS_Insert_Request_CommentCallLog", CommandType.StoredProcedure, param);
-                    if (table == null || table.Rows[0][0].ToString() == "0")
-                    {
-                        return 0;
-                    }
-                    return 1;
+                    //▼	Edit - VietMXH - 18/06/2020 - OneApp Inside User Info==================================================
+                    //  NOTE: Chuyển sang /Requests/ViolationRequest__DetailConversation__Insert
+                    //  Liên hệ: VietMXH hướng dẫn
+                    return 0;
+                    //▲	Edit - VietMXH - 18/06/2020 - OneApp Inside User Info==================================================
                 }
                 else
                 {
@@ -28572,8 +28489,6 @@ namespace WebCallLog.Models
                     db.SaveChanges();
                     return 1;
                 }
-                #endregion
-
             }
             catch (Exception ex)
             {
@@ -34684,7 +34599,519 @@ namespace WebCallLog.Models
             return Json(new { Message = "", error = 0 }, JsonRequestBehavior.AllowGet);
         }
         //▲  Add - LuanNT44 - 15/07/2019 - Loại 213 - Duyệt lỗi DOA
+        //▼  Add - LuanNT44 - 28/07/2020 - Loại 24 - CSVC
+        [HttpPost]
+        public ActionResult CreateCalllogCSVC_24(Request request, FormCollection form)
+        {
+            if (ModelState.IsValid)
+            {
+                if (UserManager.CurrentUser == null)
+                    return Redirect("/Users/Login?u=" + Request.RawUrl);
+                Dictionary<string, Request> requestDics = new Dictionary<string, Request>();
+                try
+                {
+                    #region Info
+                    string cc = Convert.ToString(form["Cc"]);
+                    string sender = Convert.ToString(form["sender"]);
+                    string message = Convert.ToString(form["Message"]);
 
+                    var strdetails = form["Details"].ToString();
+                    var details = JsonConvert.DeserializeObject<dynamic>(strdetails);
+
+                    #endregion
+
+                    ShopDAL shopDal = new ShopDAL();
+                    var shopUserSent = shopDal.Get(UserManager.CurrentUser.WarehouseCode);
+                    EmployeeDAL emlDal = new EmployeeDAL();
+
+                    string[] stringCc = new string[] { };
+                    if (cc != null && cc != "")
+                        stringCc = cc.Split(',');
+
+                    if (sender != null && sender != "")
+                    {
+                        request.Sender = sender;
+                        var empSender = emlDal.Get(request.Sender);
+                        if (empSender != null)
+                            shopUserSent = shopDal.Get(empSender.WarehouseCode);
+                    }
+                    else
+                        request.Sender = UserManager.CurrentUser.InsideCode;
+
+                    #region Tao calllog
+
+                    request.StepNo = 1;
+                    request.Title = Convert.ToString(form["TitleRequest"]);
+                    request.StepStatus = Key.StatusRequest.Waitting;
+                    request.TimeCreate = DateTime.Now;
+                    request.TimeAppear = DateTime.Now;
+                    request.isHighlight = false;
+                    request.isParent = false;
+                    request.Status = Key.Status.Available;
+                    request.CreateBy = UserManager.CurrentUser.InsideCode;
+                    request.TimeLastUpdate = DateTime.Now;
+                    request.UpdateBy = UserManager.CurrentUser.InsideCode;
+                    if (shopUserSent != null)
+                    {
+                        request.FromShop = shopUserSent.WarehouseCode;
+                    }
+                    else
+                        request.FromShop = UserManager.CurrentUser.WarehouseCode;
+                    request.FromOffice = UserManager.CurrentUser.OrganizationHierachyCode;
+
+                    db.Requests.Add(request);
+                    #endregion
+                    db.SaveChanges();
+                    requestDics.Add("single", request);
+
+                    #region Conversation create
+                    var converstation = new Conversation();
+                    converstation.RequestId = request.Id;
+                    converstation.Sender = UserManager.CurrentUser.InsideCode;
+                    converstation.CreateBy = UserManager.CurrentUser.InsideCode;
+                    converstation.Status = Key.Status.Available;
+                    converstation.StepNo = 0;
+                    converstation.TimeCreate = DateTime.Now;
+                    converstation.Type = Key.Conversation.Create;
+                    converstation.Message = message;
+                    db.Conversations.Add(converstation);
+                    #endregion
+
+                    #region Tao chi tiet
+                    foreach (var item in details)
+                    {
+                        RequestDetail detail = new RequestDetail();
+                        detail.RequestId = request.Id;
+                        detail.Status = Key.Status.Available;
+
+                        detail.Property1 = item.Nhomhangmuc;
+                        detail.Property2 = item.Chitiethangmuc;
+                        if (item.Ngaydukien.ToString() != "" && item.Ngaydukien.ToString() != null)
+                        {
+                            detail.Time1 = DateTime.ParseExact(item.Ngaydukien.ToString(), "dd/MM/yyyy", CultureInfo.InvariantCulture);
+                        }
+                        detail.Property3 = item.Donvi;
+                        detail.Quantity = item.Soluong;
+                        if (item.Dongia > 0)
+                        {
+                            detail.Quantity1 = item.Dongia;
+                            detail.Quantity4 = item.Soluong * item.Dongia;
+                        }
+                        if (item.Dongia_Min > 0)
+                        {
+                            detail.Money1 = item.Dongia_Min;
+                        }
+                        if (item.Dongia_Max > 0)
+                        {
+                            detail.Money2 = item.Dongia_Max;
+                        }
+                        if (item.DongiaThuc > 0)
+                        {
+                            detail.Quantity2 = item.DongiaThuc;
+                            detail.Quantity3 = item.Soluong * item.DongiaThuc;
+                        }
+                        detail.Property7 = item.Ghichu_BD;
+                        detail.Property8 = item.Ghichu_ThiCong;
+                        detail.Property9 = item.Ghichu_NghiemThu;
+                        detail.Approved = item.isCSVC;
+                        detail.Quantity5 = item.Type;
+                        detail.Property4 = item.idNhomHangmuc;
+                        detail.Property5 = item.NCC;
+                        detail.Property6 = item.SDT_NCC;
+                        db.RequestDetails.Add(detail);
+                        db.SaveChanges();
+                        if (detail.Id != 0)
+                        {
+                            string fNames1 = Convert.ToString(item.ListNameFile1);
+                            if (fNames1 != null && fNames1 != "")
+                            {
+                                FileAttach fileAttach = new FileAttach();
+                                fileAttach.Uri = fNames1;
+                                fileAttach.StepNo = request.StepNo;
+                                fileAttach.RequestId = request.Id;
+                                fileAttach.RequestDetailId = detail.Id;
+                                fileAttach.TimeCreate = DateTime.Now;
+                                fileAttach.Status = Key.Status.Available;
+                                fileAttach.Domain = "Hinh_BD";
+                                db.FileAttachs.Add(fileAttach);
+                            }
+
+                            string fNames2 = Convert.ToString(item.ListNameFile2);
+                            if (fNames2 != null && fNames2 != "")
+                            {
+                                FileAttach fileAttach = new FileAttach();
+                                fileAttach.Uri = fNames2;
+                                fileAttach.StepNo = request.StepNo;
+                                fileAttach.RequestId = request.Id;
+                                fileAttach.RequestDetailId = detail.Id;
+                                fileAttach.TimeCreate = DateTime.Now;
+                                fileAttach.Status = Key.Status.Available;
+                                fileAttach.Domain = "Hinh_ThiCong";
+                                db.FileAttachs.Add(fileAttach);
+                            }
+
+                            string fNames3 = Convert.ToString(item.ListNameFile3);
+                            if (fNames3 != null && fNames3 != "")
+                            {
+                                FileAttach fileAttach = new FileAttach();
+                                fileAttach.Uri = fNames3;
+                                fileAttach.StepNo = request.StepNo;
+                                fileAttach.RequestId = request.Id;
+                                fileAttach.RequestDetailId = detail.Id;
+                                fileAttach.TimeCreate = DateTime.Now;
+                                fileAttach.Status = Key.Status.Available;
+                                fileAttach.Domain = "Hinh_NghiemThu";
+                                db.FileAttachs.Add(fileAttach);
+                            }
+                        }
+                    }
+                    #endregion
+
+                    db.SaveChanges();
+
+                    #region Gán người xử lý và gọi Notification
+
+                    string ListAssigner = string.Empty;
+
+                    SqlParameter[] param = new SqlParameter[] { new SqlParameter("@RequestId", request.Id) };
+                    DataTable table = sql.ExecuteCommand("Assigners_InsertForRequest", CommandType.StoredProcedure, param);
+                    if (table != null && table.Rows.Count > 0)
+                    {
+                        RequestHub requestHub = new RequestHub();
+                        requestHub.id = request.Id;
+                        requestHub.title = request.Title;
+                        requestHub.description = form["Description"].ToString();
+                        requestHub.date = request.TimeCreate.ToShortDateString() + " " + request.TimeCreate.ToLongTimeString();
+                        requestHub.assiner = "Chờ xử lý<br/>" + table.Rows[0][1].ToString() + "-" + table.Rows[0][3].ToString();
+                        NotificationManager nf = new NotificationManager();
+                        List<string> assigners = new List<string>();
+                        for (int i = 0; i < table.Rows.Count; i++)
+                        {
+                            ListAssigner += table.Rows[i]["Assigner"] + "-" + table.Rows[i]["EmployeeName"] + "<br/> ";
+                            assigners.Add(table.Rows[i]["EmailShort"].ToString());
+                        }
+                        nf.Send(assigners, "Bạn có yêu cầu mới : " + request.Id, request.Id);
+                        nf.RequestInsert(assigners, requestHub);
+                    }
+                    #endregion
+
+                    #region Cc
+                    foreach (var item in stringCc)
+                    {
+                        var AssignerCc = new Assigner();
+                        AssignerCc.RequestId = request.Id;
+                        AssignerCc.EmployeeCode = item.ToString();
+                        AssignerCc.StepNo = 1;
+                        AssignerCc.Type = Key.TypeAssigner.Cc;
+                        AssignerCc.TimeCreate = DateTime.Now;
+                        AssignerCc.Status = Key.StatusRequest.Waitting;
+                        db.Assigners.Add(AssignerCc);
+                    }
+                    #endregion
+
+                    #region Lưu ảnh
+                    string fName = string.Empty;
+
+                    try
+                    {
+                        foreach (string fileName in Request.Files)
+                        {
+                            HttpPostedFileBase file = Request.Files[fileName];
+                            fName = fileName;
+                            if (file != null && file.ContentLength > 0)
+                            {
+                                // Save file
+                                var originalDirectory = new DirectoryInfo(Server.MapPath(Keyword.FolderFileAttach));
+                                string pathString = System.IO.Path.Combine(originalDirectory.ToString(), "");
+                                var path = string.Format("{0}\\{1}", pathString, fName);
+                                file.SaveAs(path);
+                                // Save file attach fo database
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.WriteLogError("RequestController Create(Request)", ex.ToString());
+                    }
+                    #endregion
+
+                    db.SaveChanges();
+
+                    string strReturn = string.Empty;
+
+                    #region Trả về
+                    strReturn = "Tạo Request " + Convert.ToString(request.Id) + " thành công! <br/>";
+                    if (ListAssigner != null && ListAssigner != "" && ListAssigner != string.Empty)
+                        strReturn += "Người xử lý là : <br/>" + ListAssigner;
+                    else
+                        strReturn += "Không gán đươc người xử lý! <br/>";
+                    #endregion
+
+                    // gửi email :
+                    XMail.Send(request.Id, "[CallLog] - " + request.Title, XMail.ProcessType.Create);
+                    TempData["Message"] = strReturn;
+                }
+                catch (Exception ex)
+                {
+                    db = new CallLogDbContext();
+                    foreach (var itemRequest in requestDics)
+                    {
+                        var requestCancel = db.Requests.FirstOrDefault(x => x.Id == itemRequest.Value.Id);
+                        if (requestCancel != null)
+                        {
+                            requestCancel.Remark = "Create request fail details";
+                            requestCancel.Status = Key.StatusRequest.Cancel;
+                        }
+                    }
+                    db.SaveChanges();
+                    Logger.WriteLogError("RequestController Create(Request)", ex.ToString());
+                    ViewBag.Message = "Có lỗi xảy ra khi tạo Request! <br/>Xin vui lòng thử lại! <br/> " + ex.Message;
+                    TempData["Message"] = "Có lỗi xảy ra khi tạo Request! <br/>Xin vui lòng thử lại! <br/>";
+                }
+            }
+            else
+            {
+                TempData["Message"] = "Có lỗi xảy ra khi tạo Request! <br/>Xin vui lòng thử lại! <br/>";
+            }
+            return null;
+        }
+
+        [WebMethod(EnableSession = true)]
+        public ActionResult SaveUploadedFileDetailMultipleCol_24(FormCollection form)
+        {
+            var details = Convert.ToString(form["Details"]);
+            var objects = JsonConvert.DeserializeObject<dynamic>(details);
+            int requestId = form["RequestId"].EParseToInt();
+            var request = db.Requests.FirstOrDefault(x => x.Id == requestId);
+            if (request.Status < Key.StatusRequest.Complete)
+            {
+                bool isSavedSuccessfully = true;
+                string fName = string.Empty;
+                List<string> myCollection = new List<string>();
+                try
+                {
+                    if (request != null)
+                    {
+                        var File1 = from f in db.FileAttachs
+                                    where f.RequestId == request.Id && f.Status == 1 && f.Domain == "Hinh_BD"
+                                    select f;
+                        foreach (FileAttach f in File1)
+                        {
+                            f.Status = 0; //xóa hình cũ
+                        }
+
+                        var File2 = from f in db.FileAttachs
+                                    where f.RequestId == request.Id && f.Status == 1 && f.Domain == "Hinh_ThiCong"
+                                    select f;
+                        foreach (FileAttach f in File2)
+                        {
+                            f.Status = 0; //xóa hình cũ
+                        }
+
+                        var File3 = from f in db.FileAttachs
+                                    where f.RequestId == request.Id && f.Status == 1 && f.Domain == "Hinh_NghiemThu"
+                                    select f;
+                        foreach (FileAttach f in File3)
+                        {
+                            f.Status = 0; //xóa hình cũ
+                        }
+                        if (request.StepNo == 1) //lưu details new
+                        {
+                            var detail_old = from d in db.RequestDetails
+                                             where d.RequestId == request.Id && d.Status == 1
+                                             select d;
+                            foreach (RequestDetail d in detail_old)
+                            {
+                                d.Status = 0; //xóa details cũ
+                            }
+                            foreach (var item in objects)
+                            {
+                                RequestDetail detail = new RequestDetail();
+                                detail.RequestId = request.Id;
+                                detail.Status = Key.Status.Available;
+
+                                detail.Property1 = item.Nhomhangmuc;
+                                detail.Property2 = item.Chitiethangmuc;
+                                if (item.Ngaydukien.ToString() != "" && item.Ngaydukien.ToString() != null)
+                                {
+                                    detail.Time1 = DateTime.ParseExact(item.Ngaydukien.ToString(), "dd/MM/yyyy", CultureInfo.InvariantCulture);
+                                }
+                                detail.Property3 = item.Donvi;
+                                detail.Quantity = item.Soluong;
+                                if (item.Dongia > 0)
+                                {
+                                    detail.Quantity1 = item.Dongia;
+                                    detail.Quantity4 = item.Soluong * item.Dongia;
+                                }
+                                if (item.Dongia_Min > 0)
+                                {
+                                    detail.Money1 = item.Dongia_Min;
+                                }
+                                if (item.Dongia_Max > 0)
+                                {
+                                    detail.Money2 = item.Dongia_Max;
+                                }
+                                if (item.DongiaThuc > 0)
+                                {
+                                    detail.Quantity2 = item.DongiaThuc;
+                                    detail.Quantity3 = item.Soluong * item.DongiaThuc;
+                                }
+                                detail.Property7 = item.Ghichu_BD;
+                                detail.Property8 = item.Ghichu_ThiCong;
+                                detail.Property9 = item.Ghichu_NghiemThu;
+                                detail.Approved = item.isCSVC;
+                                detail.Quantity5 = item.Type;
+                                detail.Note = item.Ghichu;
+                                detail.Property4 = item.idNhomHangmuc;
+                                detail.Property5 = item.NCC;
+                                detail.Property6 = item.SDT_NCC;
+                                db.RequestDetails.Add(detail);
+                                db.SaveChanges();
+                                if (detail.Id != 0)
+                                {
+                                    string fNames1 = Convert.ToString(item.ListNameFile1);
+                                    if (fNames1 != null && fNames1 != "")
+                                    {
+                                        FileAttach fileAttach = new FileAttach();
+                                        fileAttach.Uri = fNames1;
+                                        fileAttach.StepNo = request.StepNo;
+                                        fileAttach.RequestId = request.Id;
+                                        fileAttach.RequestDetailId = detail.Id;
+                                        fileAttach.TimeCreate = DateTime.Now;
+                                        fileAttach.Status = Key.Status.Available;
+                                        fileAttach.Domain = "Hinh_BD";
+                                        db.FileAttachs.Add(fileAttach);
+                                    }
+
+                                    string fNames2 = Convert.ToString(item.ListNameFile2);
+                                    if (fNames2 != null && fNames2 != "")
+                                    {
+                                        FileAttach fileAttach = new FileAttach();
+                                        fileAttach.Uri = fNames2;
+                                        fileAttach.StepNo = request.StepNo;
+                                        fileAttach.RequestId = request.Id;
+                                        fileAttach.RequestDetailId = detail.Id;
+                                        fileAttach.TimeCreate = DateTime.Now;
+                                        fileAttach.Status = Key.Status.Available;
+                                        fileAttach.Domain = "Hinh_ThiCong";
+                                        db.FileAttachs.Add(fileAttach);
+                                    }
+
+                                    string fNames3 = Convert.ToString(item.ListNameFile3);
+                                    if (fNames3 != null && fNames3 != "")
+                                    {
+                                        FileAttach fileAttach = new FileAttach();
+                                        fileAttach.Uri = fNames3;
+                                        fileAttach.StepNo = request.StepNo;
+                                        fileAttach.RequestId = request.Id;
+                                        fileAttach.RequestDetailId = detail.Id;
+                                        fileAttach.TimeCreate = DateTime.Now;
+                                        fileAttach.Status = Key.Status.Available;
+                                        fileAttach.Domain = "Hinh_NghiemThu";
+                                        db.FileAttachs.Add(fileAttach);
+                                    }
+                                }
+                            }
+                        }
+                        if (request.StepNo == 2 || request.StepNo == 3)
+                        {
+                            foreach (var item in objects)
+                            {
+                                long id = item.Id;
+                                var detail = db.RequestDetails.FirstOrDefault(x => x.Id == id);
+                                if (detail != null)
+                                {
+                                    string fNames1 = Convert.ToString(item.ListNameFile1);
+                                    if (fNames1 != null && fNames1 != "")
+                                    {
+                                        FileAttach fileAttach = new FileAttach();
+                                        fileAttach.Uri = fNames1;
+                                        fileAttach.StepNo = request.StepNo;
+                                        fileAttach.RequestId = request.Id;
+                                        fileAttach.RequestDetailId = item.Id;
+                                        fileAttach.TimeCreate = DateTime.Now;
+                                        fileAttach.Status = Key.Status.Available;
+                                        fileAttach.Domain = "Hinh_BD";
+                                        db.FileAttachs.Add(fileAttach);
+                                    }
+
+                                    string fNames2 = Convert.ToString(item.ListNameFile2);
+                                    if (fNames2 != null && fNames2 != "")
+                                    {
+                                        FileAttach fileAttach = new FileAttach();
+                                        fileAttach.Uri = fNames2;
+                                        fileAttach.StepNo = request.StepNo;
+                                        fileAttach.RequestId = request.Id;
+                                        fileAttach.RequestDetailId = item.Id;
+                                        fileAttach.TimeCreate = DateTime.Now;
+                                        fileAttach.Status = Key.Status.Available;
+                                        fileAttach.Domain = "Hinh_ThiCong";
+                                        db.FileAttachs.Add(fileAttach);
+                                    }
+
+                                    string fNames3 = Convert.ToString(item.ListNameFile3);
+                                    if (fNames3 != null && fNames3 != "")
+                                    {
+                                        FileAttach fileAttach = new FileAttach();
+                                        fileAttach.Uri = fNames3;
+                                        fileAttach.StepNo = request.StepNo;
+                                        fileAttach.RequestId = request.Id;
+                                        fileAttach.RequestDetailId = item.Id;
+                                        fileAttach.TimeCreate = DateTime.Now;
+                                        fileAttach.Status = Key.Status.Available;
+                                        fileAttach.Domain = "Hinh_NghiemThu";
+                                        db.FileAttachs.Add(fileAttach);
+                                    }
+                                }
+                            }
+                        }
+                        #region Lưu ảnh
+                        try
+                        {
+                            foreach (string fileName in Request.Files)
+                            {
+                                HttpPostedFileBase file = Request.Files[fileName];
+                                fName = fileName;
+                                if (file != null && file.ContentLength > 0)
+                                {
+                                    // Save file
+                                    var originalDirectory = new DirectoryInfo(Server.MapPath(Keyword.FolderFileAttach));
+                                    string pathString = System.IO.Path.Combine(originalDirectory.ToString(), "");
+                                    var path = string.Format("{0}\\{1}", pathString, fName);
+                                    file.SaveAs(path);
+                                    // Save file attach fo database
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.WriteLogError("RequestController Create(Request)", ex.ToString());
+                        }
+                        #endregion
+                        db.SaveChanges();
+                    }
+
+                }
+                catch (Exception ex)
+                {
+                    isSavedSuccessfully = false;
+                    TempData["Message"] = ex.Message;
+                    Logger.WriteLogError("RequestsController - " + MethodBase.GetCurrentMethod().Name + "()", String.Format("{0} - Id:{1}", ex.ToString(), requestId));
+                }
+                if (isSavedSuccessfully)
+                {
+                    string json = JsonConvert.SerializeObject(myCollection);
+                    return Json(new { Message = json, error = 0 }, JsonRequestBehavior.AllowGet);
+                }
+                else
+                {
+                    string json = JsonConvert.SerializeObject(myCollection);
+                    return Json(new { Message = "Error in saving file", error = 1 }, JsonRequestBehavior.AllowGet);
+                }
+            }
+            return Json(new { Message = "", error = 0 }, JsonRequestBehavior.AllowGet);
+        }
+        //▲  Add - LuanNT44 - 28/07/2020 - Loại 24 - CSVC
         #region NghiaTV5 - 08/05/2018 - 205 claim bảo hiểm
         public ActionResult CreateCalllogClaimNhaBaoHiem_Type205(Request request, FormCollection form)
         {
@@ -35489,48 +35916,58 @@ namespace WebCallLog.Models
         }
         //▲  Add - LuanNT44 - 19/09/2019 - Loại 150 - Giám sát hình ảnh Camera
         //▼  Add - LuanNT44 - 11/04/2020 - 24 - edit
-        public ActionResult CallApiCSVC_Hangmuc()
+        public ActionResult CallApiCSVC_24_NCC(string param)
         {
             //string url = "http://10.96.254.178:1337/Categories";
             //string authen = "Bearer " + "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjVlNzMyZmRiNzU5ZWNjMWQ5ZGE0NDIzYyIsImlhdCI6MTU4NDYwNzI0OCwiZXhwIjoxNTg3MTk5MjQ4fQ._gYmkC4ueAVdA2LEDDez9lye4-Mee1ZJi5vGbJUO0IU";
-            string url = ConfigurationManager.AppSettings["ApiHangMuc_24"];
+            string url = ConfigurationManager.AppSettings["ApiHangMuc_24"] + param;
             string authen = ConfigurationManager.AppSettings["Api_authen_24"];
             CallApiHelper api = new CallApiHelper();
-            var result = api.CallAPI_GET_Authen<List<reponseApi_csvc>>(authen, url);
+            var result = api.CallAPI_GET_Authen<List<reponseApi_csvc_ncc>>(authen, url);
             return Json(result, JsonRequestBehavior.AllowGet);
         }
-        public ActionResult CallApiCSVC_ChitietHangmuc(string id)
+        public ActionResult CallApiCSVC_ChitietHangmuc(string param)
         {
-            //string url = "http://10.96.254.178:1337/Subcategories?category.id="+ id;
+            //string url = "http://10.96.254.178:1337/Subcategories;
             //string authen = "Bearer " + "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjVlNzMyZmRiNzU5ZWNjMWQ5ZGE0NDIzYyIsImlhdCI6MTU4NDYwNzI0OCwiZXhwIjoxNTg3MTk5MjQ4fQ._gYmkC4ueAVdA2LEDDez9lye4-Mee1ZJi5vGbJUO0IU";
-            string url = ConfigurationManager.AppSettings["ApiHangMucChiTiet_24"] + id;
+            string url = ConfigurationManager.AppSettings["ApiHangMucChiTiet_24"] + param;
             string authen = ConfigurationManager.AppSettings["Api_authen_24_2"];
             CallApiHelper api = new CallApiHelper();
             var result = api.CallAPI_GET_Authen<List<reponseApi_csvc_chitiethangmuc>>(authen, url);
             return Json(result, JsonRequestBehavior.AllowGet);
         }
-        public class reponseApi_csvc
+        public class reponseApi_csvc_ncc
         {
+            public string nccCode { get; set; }
             public string _id { get; set; }
-            public string name { get; set; }
+            public string nccName { get; set; }
+            public string groupCategory1 { get; set; }
             public string createdAt { get; set; }
             public string updatedAt { get; set; }
-            public string __v { get; set; }
+            public int __v { get; set; }
             public string id { get; set; }
-            public bool isShopApprove { get; set; }
         }
         public class reponseApi_csvc_chitiethangmuc
         {
-            public string _id { get; set; }
-            public string name { get; set; }
+            public bool isCsvc { get; set; }
+            public bool isNcc { get; set; }
             public string unit { get; set; }
-            public decimal per { get; set; }
-            public decimal price { get; set; }
+            public string constructionType { get; set; }
+            public string _id { get; set; }
+            public decimal maxPrice { get; set; }
+            public string categoryName { get; set; }
+            public string categoryCode { get; set; }
+            public int quantity { get; set; }
+            public decimal standardPrice { get; set; }
+            public string groupCategory1 { get; set; }
+            public string groupCategory2 { get; set; }
+            public string groupCategory3 { get; set; }
+            public decimal minPrice { get; set; }
             public string createdAt { get; set; }
             public string updatedAt { get; set; }
-            public string __v { get; set; }
+            public int __v { get; set; }
             public string id { get; set; }
-            public bool isShopApprove { get; set; }
+            public string note { get; set; }
             //public reponseApi_csvc category { get; set; }
         }
         //▲  Add - LuanNT44 - 11/04/2020 - 24 - edit
@@ -41203,23 +41640,6 @@ namespace WebCallLog.Models
 
             return l__JsonResult;
         }
-
-        public JsonResult LoadEmpByShop_205(string ShopInside)
-        {
-            JsonResult l__JsonResult = null;
-            SqlParameter[] l__SqlParameter =
-                {
-                    new SqlParameter("@ShopCode", ShopInside),
-                };
-            DataTable l__DataTable = sql.ExecuteCommand("Get_EmployeeByShop", CommandType.StoredProcedure, l__SqlParameter);
-            if (l__DataTable != null && l__DataTable.Rows.Count > 0)
-            {
-                l__JsonResult = Json(l__DataTable.EParseToObjects(), JsonRequestBehavior.AllowGet);
-                l__JsonResult.MaxJsonLength = int.MaxValue;
-            }
-            return l__JsonResult;
-        }
-
         [XmlRoot("DataCapNhatHXLNB")]
         public class DataCapNhatHXLNB
         {
@@ -42009,6 +42429,27 @@ namespace WebCallLog.Models
             return jr;
         }
         #endregion ===Xác nhận vi phạm Quỹ===
+
+        #region ===Xử lý vi phạm===
+        //▼	Edit - VietMXH - 18/06/2020 - OneApp Inside User Info==================================================
+        /// <summary>GET: /Requests/ViolationRequest__DetailConversation__Insert</summary>
+        public ActionResult ViolationRequest__DetailConversation__Insert(int RequestId, int RequestDetailId, string Content, bool IsLimit = true)
+        {
+            DataTable l__DataTable = sql.ExecuteCommand("sp__ViolationRequest__DetailConversation__Insert", CommandType.StoredProcedure, new SqlParameter[] {
+                new SqlParameter("@RequestId", RequestId),
+                new SqlParameter("@RequestDetailId", RequestDetailId),
+                new SqlParameter("@Content", Content),
+                new SqlParameter("@Sender", UserManager.CurrentUser.InsideCode),
+                new SqlParameter("@IsLimit", IsLimit)
+            });
+            if (l__DataTable != null && l__DataTable.Rows.Count > 0)
+            {
+                return Json(l__DataTable.EParseToObjects(), JsonRequestBehavior.AllowGet);
+            }
+            return null;
+        }
+        //▲	Edit - VietMXH - 18/06/2020 - OneApp Inside User Info==================================================
+        #endregion ===Xử lý vi phạm===
 
     }
 

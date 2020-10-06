@@ -1,159 +1,414 @@
 ﻿SET QUOTED_IDENTIFIER ON;
 SET ANSI_NULLS ON;
 GO
-ALTER PROCEDURE dbo.QuetViPhamGQKN_19 @RequestId BIGINT = 0
+/*
+-- =============================================
+-- Author:		? - VietMXH
+-- Create date: ? - 13/05/2020 16:04
+-- Description:	<Description,,>
+-- Note:		Chưa tối ưu
+-- =============================================
+EXEC Request_GetPermission
+	@RequestId = 5892445
+  , @EmpCode = '22312'
+*/
+ALTER PROCEDURE dbo.Request_GetPermission
+    @RequestId BIGINT
+  , @EmpCode VARCHAR(40)
 AS
     BEGIN
-        CREATE TABLE #Tam_Requests
-        (
-            STT INT IDENTITY(1, 1)
-          , R_Id BIGINT
-          , R_TimeCreate DATE
-          , RD_Proprety12 NVARCHAR(500)
-          , RD_Proprety13 NVARCHAR(500)
-          , RD_Property10 NVARCHAR(500) --ChuongNT3 - 22/10/2018 - fix mã nhân viên
-          , RD_Property6 NVARCHAR(500) -- Edit - TuanNA89 - 07/11/2019 - fix rule phạt đối với CL chưa được xử lý
-        );
+        BEGIN TRY
 
-        --▼ Edit - TuanNA89 - 07/11/2019 - fix rule phạt đối với CL chưa được xử lý
-        CREATE TABLE #Tam_Shops ( ShopCode VARCHAR(50));
+            SET NOCOUNT ON;
 
-        SELECT
-            FE.EmployeeCode AS EmployeeCode
-          , FE.WarehouseCode AS WarehouseCode
-        INTO
-            #tmp_NV_SM_PSM
-        FROM
-            [10.96.254.143].FRTInsideV2.dbo.F03_Employees AS FE ( NOLOCK )
-        WHERE
-            FE.Status = 'A'
-            AND FE.JobTitle IN ( '00004', '00005' );
-        --▲ Edit - TuanNA89 - 07/11/2019 - fix rule phạt đối với CL chưa được xử lý
+            DECLARE
+                @typeId INT
+              , @step INT
+              , @FromShop NVARCHAR(100);
 
-        DECLARE
-            @R_TimeCreate DATETIME
-          , @R_Id BIGINT = 0
-          , @Count_Request INT = 0
-          , @Index_Request INT = 1
-          , @Nhan_Vien NVARCHAR(500) = N''
-          , @Er NVARCHAR(100) = N''
-          , @DSShop NVARCHAR(500) = N''; --ChuongNT3 - 22/10/2018 - fix mã nhân viên
+            IF EXISTS ( SELECT 1 FROM dbo.Requests ( NOLOCK ) WHERE Id = @RequestId )
+                BEGIN
+                    SELECT TOP 1
+                           @typeId = TypeId
+                         , @step = StepNo
+                         , @FromShop = FromShop
+                    FROM
+                        dbo.Requests ( NOLOCK )
+                    WHERE
+                        Id = @RequestId;
+                END;
+            ELSE
+                BEGIN
+                    SELECT TOP 1
+                           @typeId = TypeId
+                         , @step = StepNo
+                         , @FromShop = FromShop
+                    FROM
+                        dbo.Requests_ARCH ( NOLOCK )
+                    WHERE
+                        Id = @RequestId;
+                END;
 
-        DECLARE
-            @Mouth INT = MONTH(GETDATE())
-          , @Year INT = YEAR(GETDATE());
+            CREATE TABLE #Tmp_Return ( Per INT );
 
-        INSERT INTO #Tam_Requests
-        (
-            R_Id
-          , R_TimeCreate
-          , RD_Proprety12
-          , RD_Proprety13
-          , RD_Property10 --ChuongNT3 - 22/10/2018 - fix mã nhân viên
-          , RD_Property6 -- Edit - TuanNA89 - 07/11/2019 - fix rule phạt đối với CL chưa được xử lý
-        )
-        SELECT
-            R.Id AS R_Id
-          , R.TimeCreate AS R_TimeCreate
-          , RD.Property12
-          , RD.Property13
-          , RD.Property10 --ChuongNT3 - 22/10/2018 - fix mã nhân viên
-          , RD.Property6 -- Edit - TuanNA89 - 07/11/2019 - fix rule phạt đối với CL chưa được xử lý
-        FROM
-            dbo.Requests R ( NOLOCK )
-            INNER JOIN dbo.RequestDetails RD ( NOLOCK )
-                ON RD.RequestId = R.Id
-        WHERE
-            R.TypeId = 19
-            AND R.Status < 4
-            AND R.TimeCreate > '2018-08-31' -- Ngày GoLive
-            AND DATEDIFF(HOUR, R.TimeCreate, GETDATE()) BETWEEN 48 AND 72
-            AND RD.Status = 1
-            AND RD.Property1 = N'Thái độ'
-            AND RD.Property3 IN ( N'Thái độ', N'Công nghệ' ) -- Edit - TuanNA89 - 05/05/2020 - thêm giá trị Công Nghệ
-            --▼ Edit - TuanNA89 - 07/11/2019 - fix rule phạt đối với CL chưa được xử lý
-            AND ( ISNULL(RD.Property12, '') <> '' -- ChuongNT3 - 31/08/2018 - p9 -> p12
-                --      OR ISNULL(RD.Property13, '') <> '' --ChuongNT3 - 22/10/2018 - fix mã nhân viên
-                )
-            AND RD.Quantity1 = 0 -- ChuongNT3 - 10/23/2018 - thêm nhánh		
-            AND ( ISNULL(@RequestId, 0) = 0 OR R.Id = @RequestId );
-        --▲ Edit - TuanNA89 - 07/11/2019 - fix rule phạt đối với CL chưa được xử lý
+            -- Group , Admin, Supper Admin
+            SELECT
+                P.Jobtitle
+              , P.PermissionType
+              , P.FollowAssignment
+            INTO
+                #Tmp_Permissions
+            FROM
+                dbo.Permissions ( NOLOCK ) P
+            WHERE
+                P.Status = 1
+                AND P.StepNo = @step
+                AND P.TypeId = @typeId;
 
-        SET @Count_Request = ( SELECT COUNT(1)FROM #Tam_Requests );
+            --	===Lấy DL F03_EmployeeJobTitles===
+            SELECT
+                ID
+              , EmployeeCode
+              , JobTitleCode
+              , WarehouseCode
+            INTO
+                #Tmp_EmployeeJobTitles
+            FROM
+                dbo.F03_EmployeeJobTitles WITH ( NOLOCK )
+            WHERE
+                Status = 'A';
 
-        IF ( @Count_Request > 0 )
-            BEGIN
-                WHILE ( @Index_Request <= @Count_Request )
-                    BEGIN
-                        SELECT TOP 1
-                               @R_Id = R_Id
-                             , @R_TimeCreate = R_TimeCreate
-                             , @Nhan_Vien = ISNULL(RD_Proprety13, '') -- Edit - TuanNA89 - 07/11/2019 - fix rule phạt đối với CL chưa được xử lý
-                             , @Er = ISNULL(RD_Property10, 'error') --ChuongNT3 - 22/10/2018 - fix mã nhân viên
-                             , @DSShop = RD_Property6 -- Edit - TuanNA89 - 07/11/2019 - fix rule phạt đối với CL chưa được xử lý
-                        FROM
-                            #Tam_Requests
-                        WHERE
-                            STT = @Index_Request;
+            IF ( @typeId = 24 )
+                BEGIN
+                    DECLARE @isshop INT = (
+                                              SELECT TOP 1
+                                                     RD.Quantity5
+                                              FROM
+                                                  dbo.RequestDetails RD ( NOLOCK )
+                                              WHERE
+                                                  RD.RequestId = @RequestId
+                                                  AND RD.Status = 1
+                                          );
+                    IF ( @step = 1 OR @step = 3 OR @step = 4 OR @step = 5 )
+                        BEGIN
+                            IF ( @isshop = 1 ) -- shop
+                                BEGIN
+                                    IF ( EXISTS (
+                                                    SELECT TOP 1
+                                                           EJ.JobTitleCode
+                                                    FROM
+                                                        #Tmp_EmployeeJobTitles AS EJ
+                                                    WHERE
+                                                        EJ.EmployeeCode = @EmpCode
+                                                        AND EJ.JobTitleCode IN (
+                                                                                   SELECT
+                                                                                       P.Jobtitle
+                                                                                   FROM
+                                                                                       #Tmp_Permissions P
+                                                                                   WHERE
+                                                                                       P.PermissionType = 0
+                                                                                       AND P.FollowAssignment = 0
+                                                                               )
+                                                )
+                                       )
+                                        BEGIN
+                                            INSERT #Tmp_Return VALUES ( 0 );
+                                        END;
+                                    ELSE IF ( EXISTS (
+                                                         SELECT TOP 1
+                                                                EJ.JobTitleCode
+                                                         FROM
+                                                             #Tmp_EmployeeJobTitles AS EJ
+                                                         WHERE
+                                                             EJ.EmployeeCode = @EmpCode
+                                                             AND EJ.JobTitleCode IN (
+                                                                                        SELECT
+                                                                                            P.Jobtitle
+                                                                                        FROM
+                                                                                            #Tmp_Permissions P
+                                                                                        WHERE
+                                                                                            P.PermissionType = 1
+                                                                                            AND P.FollowAssignment = 0
+                                                                                    )
+                                                     )
+                                            )
+                                             BEGIN
+                                                 INSERT #Tmp_Return VALUES ( 1 );
+                                             END;
+                                    ELSE IF ( EXISTS (
+                                                         SELECT TOP 1
+                                                                EJ.JobTitleCode
+                                                         FROM
+                                                             #Tmp_EmployeeJobTitles AS EJ
+                                                         WHERE
+                                                             EJ.EmployeeCode = @EmpCode
+                                                             AND EJ.JobTitleCode IN (
+                                                                                        SELECT
+                                                                                            P.Jobtitle
+                                                                                        FROM
+                                                                                            #Tmp_Permissions P
+                                                                                        WHERE
+                                                                                            P.PermissionType = 2
+                                                                                            AND P.FollowAssignment = 0
+                                                                                    )
+                                                     )
+                                            )
+                                             BEGIN
+                                                 INSERT #Tmp_Return VALUES ( 2 );
+                                             END;
+                                END;
+                            ELSE
+                                BEGIN
+                                    IF ( EXISTS (
+                                                    SELECT TOP 1
+                                                           EJ.JobTitleCode
+                                                    FROM
+                                                        #Tmp_EmployeeJobTitles AS EJ
+                                                    WHERE
+                                                        EJ.EmployeeCode = @EmpCode
+                                                        AND EJ.JobTitleCode IN (
+                                                                                   SELECT
+                                                                                       P.Jobtitle
+                                                                                   FROM
+                                                                                       #Tmp_Permissions P
+                                                                                   WHERE
+                                                                                       P.PermissionType = 0
+                                                                                       AND P.FollowAssignment = 1
+                                                                               )
+                                                )
+                                       )
+                                        BEGIN
+                                            INSERT #Tmp_Return VALUES ( 0 );
+                                        END;
+                                    ELSE IF ( EXISTS (
+                                                         SELECT TOP 1
+                                                                EJ.JobTitleCode
+                                                         FROM
+                                                             #Tmp_EmployeeJobTitles AS EJ
+                                                         WHERE
+                                                             EJ.EmployeeCode = @EmpCode
+                                                             AND EJ.JobTitleCode IN (
+                                                                                        SELECT
+                                                                                            P.Jobtitle
+                                                                                        FROM
+                                                                                            #Tmp_Permissions P
+                                                                                        WHERE
+                                                                                            P.PermissionType = 1
+                                                                                            AND P.FollowAssignment = 1
+                                                                                    )
+                                                     )
+                                            )
+                                             BEGIN
+                                                 INSERT #Tmp_Return VALUES ( 1 );
+                                             END;
+                                    ELSE IF ( EXISTS (
+                                                         SELECT TOP 1
+                                                                EJ.JobTitleCode
+                                                         FROM
+                                                             #Tmp_EmployeeJobTitles AS EJ
+                                                         WHERE
+                                                             EJ.EmployeeCode = @EmpCode
+                                                             AND EJ.JobTitleCode IN (
+                                                                                        SELECT
+                                                                                            P.Jobtitle
+                                                                                        FROM
+                                                                                            #Tmp_Permissions P
+                                                                                        WHERE
+                                                                                            P.PermissionType = 2
+                                                                                            AND P.FollowAssignment = 1
+                                                                                    )
+                                                     )
+                                            )
+                                             BEGIN
+                                                 INSERT #Tmp_Return VALUES ( 2 );
+                                             END;
+                                END;
+                        END;
+                    ELSE
+                        BEGIN
+                            --bước 2 RSM/ASM
+                            IF ( EXISTS (
+                                            SELECT TOP 1
+                                                   EJ.JobTitleCode
+                                            FROM
+                                                #Tmp_EmployeeJobTitles AS EJ
+                                            WHERE
+                                                EJ.EmployeeCode = @EmpCode
+                                                AND EJ.JobTitleCode IN (
+                                                                           SELECT
+                                                                               P.Jobtitle
+                                                                           FROM
+                                                                               #Tmp_Permissions P
+                                                                           WHERE
+                                                                               P.PermissionType = 0
+                                                                               AND P.FollowAssignment = 0
+                                                                       )
+                                        )
+                               )
+                                BEGIN
+                                    INSERT #Tmp_Return VALUES ( 0 );
+                                END;
+                            ELSE IF ( EXISTS (
+                                                 SELECT TOP 1
+                                                        EJ.JobTitleCode
+                                                 FROM
+                                                     #Tmp_EmployeeJobTitles AS EJ
+                                                 WHERE
+                                                     EJ.EmployeeCode = @EmpCode
+                                                     AND EJ.JobTitleCode IN (
+                                                                                SELECT
+                                                                                    P.Jobtitle
+                                                                                FROM
+                                                                                    #Tmp_Permissions P
+                                                                                WHERE
+                                                                                    P.PermissionType = 1
+                                                                                    AND P.FollowAssignment = 0
+                                                                            )
+                                             )
+                                    )
+                                     BEGIN
+                                         INSERT #Tmp_Return VALUES ( 1 );
+                                     END;
+                            ELSE IF ( EXISTS (
+                                                 SELECT TOP 1
+                                                        EJ.JobTitleCode
+                                                 FROM
+                                                     #Tmp_EmployeeJobTitles AS EJ
+                                                 WHERE
+                                                     EJ.EmployeeCode = @EmpCode
+                                                     AND EJ.JobTitleCode IN (
+                                                                                SELECT
+                                                                                    P.Jobtitle
+                                                                                FROM
+                                                                                    #Tmp_Permissions P
+                                                                                WHERE
+                                                                                    P.PermissionType = 2
+                                                                                    AND P.FollowAssignment = 0
+                                                                            )
+                                             )
+                                    )
+                                     BEGIN
+                                         INSERT #Tmp_Return VALUES ( 2 );
+                                     END;
+                        END;
 
-                        UPDATE
-                            dbo.Requests
-                        SET
-                            Status = 4
-                          , Assigner = '-1'
-                          , TimeFinish = GETDATE()
-                          , TimeClose = GETDATE()
-                          , Remark = ISNULL(Remark, '') + N'Quét vi phạm 48h(' + CONVERT(NVARCHAR(50), GETDATE(), 121) + ')' --ChuongNT3 - 22/10/2018 - fix mã nhân viên
-                        WHERE
-                            Id = @R_Id;
+                END;
+            ELSE IF ( @typeId = 45 OR @typeId = 213 )
+                     BEGIN
+                         IF ( EXISTS (
+                                         SELECT TOP 1
+                                                EJ.JobTitleCode
+                                         FROM
+                                             #Tmp_EmployeeJobTitles AS EJ
+                                         WHERE
+                                             EJ.EmployeeCode = @EmpCode
+                                             AND EJ.WarehouseCode = @FromShop
+                                             AND EJ.JobTitleCode IN ( SELECT Jobtitle FROM #Tmp_Permissions WHERE PermissionType = 0 )
+                                     )
+                            )
+                             BEGIN
+                                 INSERT #Tmp_Return VALUES ( 0 );
+                             END;
+                         ELSE IF ( EXISTS (
+                                              SELECT TOP 1
+                                                     EJ.JobTitleCode
+                                              FROM
+                                                  #Tmp_EmployeeJobTitles AS EJ
+                                              WHERE
+                                                  EJ.EmployeeCode = @EmpCode
+                                                  AND EJ.WarehouseCode = @FromShop
+                                                  AND EJ.JobTitleCode IN ( SELECT Jobtitle FROM #Tmp_Permissions WHERE PermissionType = 1 )
+                                          )
+                                 )
+                                  BEGIN
+                                      INSERT #Tmp_Return VALUES ( 1 );
+                                  END;
+                         ELSE IF ( EXISTS (
+                                              SELECT TOP 1
+                                                     EJ.JobTitleCode
+                                              FROM
+                                                  #Tmp_EmployeeJobTitles AS EJ
+                                              WHERE
+                                                  EJ.EmployeeCode = @EmpCode
+                                                  AND EJ.WarehouseCode = @FromShop
+                                                  AND EJ.JobTitleCode IN ( SELECT Jobtitle FROM #Tmp_Permissions WHERE PermissionType = 2 )
+                                          )
+                                 )
+                                  BEGIN
+                                      INSERT #Tmp_Return VALUES ( 2 );
+                                  END;
+                     END;
+            ELSE
+                     BEGIN
+                         IF ( EXISTS (
+                                         SELECT TOP 1
+                                                EJ.JobTitleCode
+                                         FROM
+                                             #Tmp_EmployeeJobTitles AS EJ
+                                         WHERE
+                                             EJ.EmployeeCode = @EmpCode
+                                             AND EJ.JobTitleCode IN ( SELECT Jobtitle FROM #Tmp_Permissions WHERE PermissionType = 0 )
+                                     )
+                            )
+                             BEGIN
+                                 INSERT #Tmp_Return VALUES ( 0 );
+                             END;
+                         ELSE IF ( EXISTS (
+                                              SELECT TOP 1
+                                                     EJ.JobTitleCode
+                                              FROM
+                                                  #Tmp_EmployeeJobTitles AS EJ
+                                              WHERE
+                                                  EJ.EmployeeCode = @EmpCode
+                                                  AND EJ.JobTitleCode IN ( SELECT Jobtitle FROM #Tmp_Permissions WHERE PermissionType = 1 )
+                                          )
+                                 )
+                                  BEGIN
+                                      INSERT #Tmp_Return VALUES ( 1 );
+                                  END;
+                         ELSE IF ( EXISTS (
+                                              SELECT TOP 1
+                                                     EJ.JobTitleCode
+                                              FROM
+                                                  #Tmp_EmployeeJobTitles AS EJ
+                                              WHERE
+                                                  EJ.EmployeeCode = @EmpCode
+                                                  AND EJ.JobTitleCode IN ( SELECT Jobtitle FROM #Tmp_Permissions WHERE PermissionType = 2 )
+                                          )
+                                 )
+                                  BEGIN
+                                      INSERT #Tmp_Return VALUES ( 2 );
+                                  END;
+                     END;
 
-                        --ChuongNT3 - 22/10/2018 - fix mã nhân viên
-                        IF ( @Er = 'error' )
-                            BEGIN
-                                --▼ Edit - TuanNA89 - 07/11/2019 - fix rule phạt đối với CL chưa được xử lý
-                                IF ( @Nhan_Vien = '' )
-                                    BEGIN
-                                        INSERT INTO #Tam_Shops ( ShopCode )
-                                        SELECT GiaTri FROM dbo.ufn_SplitStringToTable(@DSShop, ',', 0);
+            SELECT R.Per AS Per FROM #Tmp_Return AS R;
 
-                                        SELECT
-                                            @Nhan_Vien = COALESCE(@Nhan_Vien, '') + TNSP.EmployeeCode + N','
-                                        FROM
-                                            #tmp_NV_SM_PSM AS TNSP ( NOLOCK )
-                                        WHERE
-                                            TNSP.WarehouseCode IN ( SELECT TS.ShopCode FROM #Tam_Shops AS TS );
-                                    END;
+            DROP TABLE
+                #Tmp_Return
+              , #Tmp_Permissions
+              , #Tmp_EmployeeJobTitles;
+        END TRY
+        BEGIN CATCH
+            DECLARE @ErrorMessage NVARCHAR(MAX) = N'';
+            SET @ErrorMessage = N'Lỗi: [Request_GetPermission]';
+            SET @ErrorMessage += N', @RequestId=N''' + ISNULL(CONVERT(NVARCHAR(50), @RequestId), 'NULL') + N'''';
+            SET @ErrorMessage += N', @EmpCode=N''' + ISNULL(CONVERT(NVARCHAR(50), @EmpCode), 'NULL') + N'''';
+            SET @ErrorMessage += N' - ERROR_MESSAGE: ' + ERROR_MESSAGE() + N' - ERROR_LINE: ' + CONVERT(NVARCHAR, ERROR_LINE());
 
-                                DECLARE @remark NVARCHAR(500) = N'';
-                                SELECT TOP 1
-                                       @remark = LEFT(C.Message, 500)
-                                FROM
-                                    dbo.Conversations AS C ( NOLOCK )
-                                WHERE
-                                    C.RequestId = @R_Id
-                                    AND C.Type = 6
-                                    AND C.Status = 1;
-
-                                EXEC dbo.SinhPhieuViPham_19
-                                    @MonthRecord = @Mouth
-                                  , @YearRecord = @Year
-                                  , @EmpViolation = @Nhan_Vien
-                                  , @ViolationContentID = 771 --771:BETA ; 214:GOLIVE
-                                  , @CallLogID = @R_Id
-                                  , @Remark = @remark
-                                  , @HeSoPhat = 1; -- float
-                            --▲ Edit - TuanNA89 - 07/11/2019 - fix rule phạt đối với CL chưa được xử lý
-                            END;
-
-                        DELETE FROM #Tam_Shops;
-                        SELECT @Index_Request = @Index_Request + 1;
-                    END;
-            END;
-
-        DROP TABLE
-            #Tam_Requests
-          , #Tam_Shops
-          , #tmp_NV_SM_PSM;
+            --	===Ghi Log===
+            INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+            VALUES (
+                       N'Request_GetPermission' -- Title - nvarchar(300)
+                     , @ErrorMessage -- Error - nvarchar(max)
+                     , 1 -- Status - tinyint
+                     , GETDATE() -- TimeCreate - datetime
+                   );
+        END CATCH;
     END;
+
+
+
+
+
 GO
 

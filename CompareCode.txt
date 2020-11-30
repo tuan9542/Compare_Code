@@ -1,5 +1,5 @@
-﻿SET QUOTED_IDENTIFIER ON
-SET ANSI_NULLS ON
+﻿SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;
 GO
 /*
 ==================================================
@@ -10,238 +10,205 @@ Note			:
 ==================================================
 */
 ALTER PROCEDURE dbo.mpos_sp_BackToSchool_InsertData_SinhVienFPT
-		@HoTen NVARCHAR(255) = ''
-	  , @CMND VARCHAR(20) = ''
-	  , @SDT NVARCHAR(12) = ''
-	  , @User VARCHAR(50) = ''
-	  , @Type INT = 0 -- 1: SV FPT, 2: SV đặc biệt
+    @HoTen NVARCHAR(255) = ''
+  , @CMND VARCHAR(20) = ''
+  , @SDT NVARCHAR(12) = ''
+  , @User VARCHAR(50) = ''
+  , @Type INT = 0 -- 1: SV FPT, 2: SV đặc biệt
 AS
 BEGIN
-		DECLARE
-				@StoreName VARCHAR(50) = OBJECT_NAME(@@PROCID)
-			  , @ErrorMessage NVARCHAR(MAX) = N''
-			  , @Result INT = 0
-			  , @Msg NVARCHAR(MAX) = N'Thất bại'
-			  , @Id_BackToSchool INT = 0;
-		BEGIN TRY
-				SET @ErrorMessage = N'[' + @StoreName + N']';
-				SET @ErrorMessage = CONCAT(@ErrorMessage, N' @HoTen =N''', ISNULL(@HoTen, NULL), '''');
-				SET @ErrorMessage = CONCAT(@ErrorMessage, N' @CMND =N''', ISNULL(@CMND, NULL), '''');
-				SET @ErrorMessage = CONCAT(@ErrorMessage, N' @SDT =N''', ISNULL(@SDT, NULL), '''');
-				SET @ErrorMessage = CONCAT(@ErrorMessage, N' @User =N''', ISNULL(@User, NULL), '''');
+    DECLARE
+        @StoreName       VARCHAR(50)   = OBJECT_NAME(@@PROCID)
+      , @ErrorMessage    NVARCHAR(MAX) = N''
+      , @Result          INT           = 0
+      , @Msg             NVARCHAR(MAX) = N'Thất bại'
+      , @Id_BackToSchool INT           = 0;
+    BEGIN TRY
+        SET @ErrorMessage = N'[' + @StoreName + N']';
+        SET @ErrorMessage = CONCAT(@ErrorMessage, N' @HoTen =N''', ISNULL(@HoTen, NULL), '''');
+        SET @ErrorMessage = CONCAT(@ErrorMessage, N' @CMND =N''', ISNULL(@CMND, NULL), '''');
+        SET @ErrorMessage = CONCAT(@ErrorMessage, N' @SDT =N''', ISNULL(@SDT, NULL), '''');
+        SET @ErrorMessage = CONCAT(@ErrorMessage, N' @User =N''', ISNULL(@User, NULL), '''');
 
 
-				INSERT	INTO dbo.Logs
-						(
-						  Title
-						, Error
-						, Status
-						, TimeCreate
-						)
-				VALUES
-						(
-						  @StoreName -- Title - nvarchar(300)
-						, @ErrorMessage -- Error - nvarchar(max)
-						, 0 -- Status - tinyint
-						, GETDATE() -- TimeCreate - datetime
-						);
-				DECLARE	@NamDuThi INT = DATEPART(YEAR, GETDATE());
+        INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+        VALUES (
+                   @StoreName -- Title - nvarchar(300)
+                 , @ErrorMessage -- Error - nvarchar(max)
+                 , 0 -- Status - tinyint
+                 , GETDATE() -- TimeCreate - datetime
+               );
+        DECLARE @NamDuThi INT = DATEPART(YEAR, GETDATE());
 
-				DECLARE	@Id_Trung BIGINT = 0;
+        DECLARE @Id_Trung BIGINT = 0;
 
-				SELECT
-						B.Id
-					  , ISNULL(B.UpdateBy, B.CreateBy) AS UpdateBy
-					  , ISNULL(B.UpdateDate, B.CreateDate) AS UpdateDate
-					  , B.CMND
-					  , B.SDT
-					  , B.TinhTrangVoucher
-				INTO
-						#tmp_DaHoanTat
-				FROM
-						dbo.FRT_Calllog_BackToSchool AS B ( NOLOCK )
-				WHERE
-						B.NamDuThi = @NamDuThi
-						AND (
-							  B.CMND = @CMND
-							  OR B.SDT = @SDT
-							)
-						AND B.Status IN ( 2, 4 );
+        SELECT
+            B.Id
+          , ISNULL(B.UpdateBy, B.CreateBy) AS UpdateBy
+          , ISNULL(B.UpdateDate, B.CreateDate) AS UpdateDate
+          , B.CMND
+          , B.SDT
+          , B.TinhTrangVoucher
+        INTO
+            #tmp_DaHoanTat
+        FROM
+            dbo.FRT_Calllog_BackToSchool AS B ( NOLOCK )
+        WHERE
+            B.NamDuThi = @NamDuThi
+            AND ( B.CMND = @CMND OR B.SDT = @SDT )
+            AND B.Status IN (2, 4);
 
-				IF EXISTS ( SELECT TOP 1
-								1
-							FROM
-								#tmp_DaHoanTat )
-						BEGIN
-								DECLARE
-										@TinhTrangVoucher VARCHAR(10) = ''
-									  , @UserCode VARCHAR(50) = ''
-									  , @UserName NVARCHAR(500) = N''
-									  , @ShopCode VARCHAR(50) = ''
-									  , @ShopName NVARCHAR(MAX) = N''
-									  , @NgayHoanTat DATETIME
-									  , @LoaiDataTrung VARCHAR(50) = '';
+        IF EXISTS ( SELECT TOP 1 1 FROM #tmp_DaHoanTat )
+        BEGIN
+            DECLARE
+                @TinhTrangVoucher VARCHAR(10)   = ''
+              , @UserCode         VARCHAR(50)   = ''
+              , @UserName         NVARCHAR(500) = N''
+              , @ShopCode         VARCHAR(50)   = ''
+              , @ShopName         NVARCHAR(MAX) = N''
+              , @NgayHoanTat      DATETIME
+              , @LoaiDataTrung    VARCHAR(50)   = '';
 
-								SELECT TOP 1
-										@TinhTrangVoucher = ISNULL(B.TinhTrangVoucher, '')
-									  , @UserCode = B.UpdateBy
-									  , @NgayHoanTat = B.UpdateDate
-									  , @LoaiDataTrung = CASE WHEN B.CMND = @CMND THEN N'CMND'
-															  WHEN B.SDT = @SDT THEN 'SDT'
-														 END
-								FROM
-										#tmp_DaHoanTat AS B;
+            SELECT TOP 1
+                   @TinhTrangVoucher = ISNULL(B.TinhTrangVoucher, '')
+                 , @UserCode = B.UpdateBy
+                 , @NgayHoanTat = B.UpdateDate
+                 , @LoaiDataTrung = CASE WHEN B.CMND = @CMND THEN N'CMND' WHEN B.SDT = @SDT THEN 'SDT' END
+            FROM
+                #tmp_DaHoanTat AS B;
 
-								SELECT TOP 1
-										@UserName = CONCAT(FE.EmployeeCode, '-', FE.EmployeeName)
-									  , @ShopCode = FE.WarehouseCode
-								FROM
-										dbo.F03_Employees AS FE ( NOLOCK )
-								WHERE
-										FE.EmployeeCode = @UserCode;
+            SELECT TOP 1
+                   @UserName = CONCAT(FE.EmployeeCode, '-', FE.EmployeeName)
+                 , @ShopCode = FE.WarehouseCode
+            FROM
+                dbo.F03_Employees AS FE ( NOLOCK )
+            WHERE
+                FE.EmployeeCode = @UserCode;
 
-								SELECT TOP 1
-										@ShopName = W.WarehouseName
-								FROM
-										dbo.Warehouse AS W ( NOLOCK )
-								WHERE
-										W.WarehouseCode = @ShopCode;
+            SELECT TOP 1
+                   @ShopName = W.WarehouseName
+            FROM
+                dbo.Warehouse AS W ( NOLOCK )
+            WHERE
+                W.WarehouseCode = @ShopCode;
 
-								IF ( @TinhTrangVoucher <> '' )
-										BEGIN
-												IF ( @LoaiDataTrung = 'CMND' )
-														BEGIN
-																SELECT
-																		@Result = 0
-																	  , @Msg = CONCAT(N'CMND ', @CMND, N' đã được hoàn tất đăng ký bởi User: ', @UserName, N' của Shop ', @ShopName, N' ngày ', FORMAT(@NgayHoanTat, 'dd/MM/yyyy'));
-														END;
-												IF ( @LoaiDataTrung = 'SDT' )
-														BEGIN
-																SELECT
-																		@Result = 0
-																	  , @Msg = CONCAT(N'SDT ', @SDT, N' đã được hoàn tất đăng ký bởi User: ', @UserName, N' của Shop ', @ShopName, N' ngày ', FORMAT(@NgayHoanTat, 'dd/MM/yyyy'));
-														END;
+            IF ( @TinhTrangVoucher <> '' )
+            BEGIN
+                IF ( @LoaiDataTrung = 'CMND' )
+                BEGIN
+                    SELECT
+                        @Result = 0
+                      , @Msg = CONCAT(N'CMND ', @CMND, N' đã được hoàn tất đăng ký bởi User: ', @UserName, N' của Shop ', @ShopName, N' ngày ', FORMAT(@NgayHoanTat, 'dd/MM/yyyy'));
+                END;
+                IF ( @LoaiDataTrung = 'SDT' )
+                BEGIN
+                    SELECT
+                        @Result = 0
+                      , @Msg = CONCAT(N'SDT ', @SDT, N' đã được hoàn tất đăng ký bởi User: ', @UserName, N' của Shop ', @ShopName, N' ngày ', FORMAT(@NgayHoanTat, 'dd/MM/yyyy'));
+                END;
 
-										END;
-								GOTO _Return;
-						END;
+            END;
+            GOTO _Return;
+        END;
 
-				IF ( CHARINDEX(' ', @SDT, 0) > 0 )
-						BEGIN
-								SELECT
-										@Result = 0
-									  , @Msg = N'SĐT có chứa khoảng trắng';
+        IF ( CHARINDEX(' ', @SDT, 0) > 0 )
+        BEGIN
+            SELECT @Result = 0, @Msg = N'SĐT có chứa khoảng trắng';
 
-								GOTO _Return;
-						END;
+            GOTO _Return;
+        END;
 
-				IF ( CHARINDEX(' ', @CMND, 0) > 0 )
-						BEGIN
-								SELECT
-										@Result = 0
-									  , @Msg = N'CMND có chứa khoảng trắng';
+        IF ( CHARINDEX(' ', @CMND, 0) > 0 )
+        BEGIN
+            SELECT @Result = 0, @Msg = N'CMND có chứa khoảng trắng';
 
-								GOTO _Return;
-						END;
+            GOTO _Return;
+        END;
 
-				DECLARE	@PhanTramGiamGia NUMERIC(19, 2) = 0;
+        DECLARE @PhanTramGiamGia NUMERIC(19, 2) = 0;
 
-				SET @PhanTramGiamGia = 6;
+        SET @PhanTramGiamGia = 6;
 
-				SET @SDT = REPLACE(@SDT, '?', '');
+        SET @SDT = REPLACE(@SDT, '?', '');
 
-				IF EXISTS ( SELECT TOP 1
-								1
-							FROM
-								dbo.FRT_Calllog_BackToSchool AS F ( NOLOCK )
-							WHERE
-								F.NamDuThi = @NamDuThi
-								AND F.CMND = @CMND )
-						BEGIN
-								UPDATE
-										dbo.FRT_Calllog_BackToSchool
-								SET		
-										SDT = @SDT
-									  , HoTen = @HoTen
-									  , UpdateDate = GETDATE()
-									  , UpdateBy = @User
-								WHERE
-										NamDuThi = @NamDuThi
-										AND CMND = @CMND;
+        IF EXISTS (
+                      SELECT TOP 1
+                             1
+                      FROM
+                          dbo.FRT_Calllog_BackToSchool AS F ( NOLOCK )
+                      WHERE
+                          F.NamDuThi = @NamDuThi
+                          AND F.CMND = @CMND
+                  )
+        BEGIN
+            UPDATE
+                dbo.FRT_Calllog_BackToSchool
+            SET
+                SDT = @SDT
+              , HoTen = @HoTen
+              , UpdateDate = GETDATE()
+              , UpdateBy = @User
+            WHERE
+                NamDuThi = @NamDuThi
+                AND CMND = @CMND;
 
-								SELECT TOP 1
-										@Id_BackToSchool = Id
-								FROM
-										dbo.FRT_Calllog_BackToSchool AS B ( NOLOCK )
-								WHERE
-										B.CMND = @CMND;
-						END;
-				ELSE
-						BEGIN
-								INSERT	INTO dbo.FRT_Calllog_BackToSchool
-										(
-										  CreateDate
-										, CreateBy
-										, HoTen
-										, CMND
-										, SDT
-										, PhanTramGiamGia
-										, Remark
-										, LoaiSinhVien
-										, Status
-										, NamDuThi
-										, InsertFrom
-										)
-								SELECT
-										GETDATE()
-									  , @User
-									  , @HoTen
-									  , @CMND
-									  , @SDT
-									  , CASE WHEN @Type = 2 THEN 10
-											 ELSE @PhanTramGiamGia
-										END
-									  , CONCAT('- (', FORMAT(GETDATE(), 'dd/MM/yyyy hh:mm:ss:tttt'), N'):', @User, N' tạo mới SV FPT.')
-									  , @Type
-									  , 1
-									  , @NamDuThi
-									  , 'ONEAPP';
-								SET @Id_BackToSchool = SCOPE_IDENTITY();
-						END;
+            SELECT TOP 1
+                   @Id_BackToSchool = Id
+            FROM
+                dbo.FRT_Calllog_BackToSchool AS B ( NOLOCK )
+            WHERE
+                B.CMND = @CMND;
+        END;
+        ELSE
+        BEGIN
+            INSERT INTO dbo.FRT_Calllog_BackToSchool
+            (
+                CreateDate
+              , CreateBy
+              , HoTen
+              , CMND
+              , SDT
+              , PhanTramGiamGia
+              , Remark
+              , LoaiSinhVien
+              , Status
+              , NamDuThi
+              , InsertFrom
+            )
+            SELECT
+                GETDATE()
+              , @User
+              , @HoTen
+              , @CMND
+              , @SDT
+              , CASE WHEN @Type = 2 THEN 10 ELSE @PhanTramGiamGia END
+              , CONCAT('- (', FORMAT(GETDATE(), 'dd/MM/yyyy hh:mm:ss:tttt'), N'):', @User, N' tạo mới SV FPT.')
+              , @Type
+              , 1
+              , @NamDuThi
+              , 'ONEAPP';
+            SET @Id_BackToSchool = SCOPE_IDENTITY();
+        END;
 
-				SELECT
-						@Result = 1
-					  , @Msg = N'Thành công!';
+        SELECT @Result = 1, @Msg = N'Thành công!';
 
-		END TRY
-		BEGIN CATCH
-				SET @ErrorMessage += N' - ERROR_MESSAGE: ' + ERROR_MESSAGE() + N' - ERROR_LINE: ' + CONVERT(NVARCHAR, ERROR_LINE());
+    END TRY
+    BEGIN CATCH
+        SET @ErrorMessage += N' - ERROR_MESSAGE: ' + ERROR_MESSAGE() + N' - ERROR_LINE: ' + CONVERT(NVARCHAR, ERROR_LINE());
 
-            --	===Ghi Log===
-				INSERT	INTO dbo.Logs
-						(
-						  Title
-						, Error
-						, Status
-						, TimeCreate
-						)
-				VALUES
-						(
-						  @StoreName -- Title - nvarchar(300)
-						, CONCAT(N'Lỗi ', @ErrorMessage) -- Error - nvarchar(max)
-						, 1 -- Status - tinyint
-						, GETDATE() -- TimeCreate - datetime
-						);
-				SELECT
-						@Result = 0
-					  , @Msg = N'Lỗi cập nhật dữ liệu';
-		END CATCH;
+        --	===Ghi Log===
+        INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+        VALUES (
+                   @StoreName -- Title - nvarchar(300)
+                 , CONCAT(N'Lỗi ', @ErrorMessage) -- Error - nvarchar(max)
+                 , 1 -- Status - tinyint
+                 , GETDATE() -- TimeCreate - datetime
+               );
+        SELECT @Result = 0, @Msg = N'Lỗi cập nhật dữ liệu';
+    END CATCH;
 END;
 _Return:
-SELECT
-		@Result AS Result
-	  , @Msg AS Msg
-	  , @Id_BackToSchool AS Id_BackToSchool;
+SELECT @Result AS Result, @Msg AS Msg, @Id_BackToSchool AS Id_BackToSchool;
 ----SELECT * FROM dbo.Logs(NOLOCK) WHERE Title=N'mpos_sp_BackToSchool_UpdateThongTinKhachHang' AND CHARINDEX(N'', Error)>0 ORDER BY Id DESC
 GO
 

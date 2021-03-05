@@ -1,917 +1,439 @@
-﻿/*
-EXEC sp_GetReportDetailLamp
-    @RequestId = 2624338
-  , @RequestName = ''
-  , @TimeCreateStart = '2018-06-01'
-  , @TimeCreateEnd = '2018-06-30'
-  , @Status = ''
-  , @Sender = ''
-  , @Assigner = ''
-  , @Region = ''
-*/
-ALTER PROCEDURE dbo.sp_GetReportDetailLamp
-    @RequestId BIGINT = 0
-  , @RequestName NVARCHAR(250) = ''
-  , @TimeCreateStart DATETIME = NULL
-  , @TimeCreateEnd DATETIME = NULL
-  , @Status NVARCHAR(100) = ''
-  , @Sender NVARCHAR(200) = ''
-  , @Assigner NVARCHAR(200) = ''
-  , @Region NVARCHAR(MAX) = ''
-  , @TimeStartApprove_CLGoc DATETIME = NULL
-  , @TimeEndApprove_CLGoc DATETIME = NULL
-  , @TimeStartApprove_CLTach DATETIME = NULL
-  , @TimeEndApprove_CLTach DATETIME = NULL
-AS
-    BEGIN
-        CREATE TABLE #ItemTmp
-        (
-            MaNhom INT
-          , TenNhom NVARCHAR(500)
-          , MaThietBi INT
-          , TenThietBi NVARCHAR(4000)
-          , GiaThietBi FLOAT
-          , DonVi NVARCHAR(100)
-          , HinhThucXuat NVARCHAR(100)
-          , Loai INT
-          , ItemCode NVARCHAR(32)
-          , MaNhomSP NVARCHAR(50)
-          , TenNhomSP NVARCHAR(200)
-        );
-
-        CREATE TABLE #Temp_Request_Main
-        (
-            Id BIGINT
-          , Sender VARCHAR(50)
-          , Assigner VARCHAR(50)
-          , TypeId INT
-          , Title NVARCHAR(MAX)
-          , TimeCreate DATETIME
-          , StepNo INT
-          , StepStatus INT
-          , Status INT
-          , RequestIdRefer BIGINT
-          , CreateBy VARCHAR(50)
-          , FromShop VARCHAR(50)
-          , FromTable VARCHAR(50)
-        );
-        INSERT INTO #ItemTmp
-        (
-            MaNhom
-          , TenNhom
-          , MaThietBi
-          , TenThietBi
-          , GiaThietBi
-          , DonVi
-          , HinhThucXuat
-          , Loai
-          , ItemCode
-          , MaNhomSP
-          , TenNhomSP
-        )
-        EXEC [SV_THUC_FRT_BI].FRT_BW.dbo.FRT_Callog_DSThietBi @Loai = 1, @tyle = 0;
-
-        --	===Lấy DL F03_Employees===
-        SELECT
-            ID
-          , EmployeeCode
-          , EmployeeName
-          , WarehouseCode
-          , OrganizationHierachyCode
-        INTO
-            #Tmp_Employees
-        FROM
-            dbo.F03_Employees WITH ( NOLOCK );
-
-        --	===Lấy DL Warehouse===
-        SELECT
-            ID
-          , WarehouseCode
-          , WarehouseName
-          , RegionL2
-          , RegionL3
-          , RegionL4
-          , QuanHuyen
-          , WarehouseCodeB1 -- Add - TuanNA89 - 26/09/2019 - Chuyển sang lấy mã shop B1
-        INTO
-            #Tmp_Warehouse
-        FROM
-            dbo.Warehouse WITH ( NOLOCK )
-        WHERE
-            Status = 'A';
-
-        --	===Lấy DL F03_RegionHierachies===
-        SELECT
-            RegionHierachyCode
-          , RegionHierachyName
-        INTO
-            #Temp_Regions
-        FROM
-            dbo.F03_RegionHierachies ( NOLOCK )
-        WHERE
-            Status = 'A';
-
-        --	===Lấy DL F03_OrganizationHierachies===
-        SELECT
-            ID
-          , OrganizationHierachyCode
-          , OrganizationHierachyName
-        INTO
-            #Tmp_OrganizationHierachies
-        FROM
-            dbo.F03_OrganizationHierachies WITH ( NOLOCK )
-        WHERE
-            Status = 'A';
-
-        SELECT
-            EM.EmployeeCode
-          , EM.EmployeeName
-          , W.WarehouseCode
-          , W.WarehouseName
-          , O.OrganizationHierachyCode
-          , O.OrganizationHierachyName
-        INTO
-            #Emp
-        FROM
-            #Tmp_Employees AS EM
-            LEFT JOIN #Tmp_Warehouse AS W
-                ON EM.WarehouseCode = W.WarehouseCode
-            LEFT JOIN #Tmp_OrganizationHierachies AS O
-                ON EM.OrganizationHierachyCode = O.OrganizationHierachyCode;
-
-        SELECT
-            GiaTri
-        INTO
-            #Assingers
-        FROM
-            dbo.ufn_SplitStringToTable(@Assigner, ',', 0);
-        SELECT
-            GiaTri
-        INTO
-            #Senders
-        FROM
-            dbo.ufn_SplitStringToTable(@Sender, ',', 0);
-        SELECT
-            GiaTri
-        INTO
-            #Status
-        FROM
-            dbo.ufn_SplitStringToTable(@Status, ',', 0);
-        SELECT
-            GiaTri
-        INTO
-            #Region
-        FROM
-            dbo.ufn_SplitStringToTable(@Region, ',', 0);
-
-        IF @TimeCreateStart <> ''
-            SET @TimeCreateStart = CONVERT(DATETIME, @TimeCreateStart);
-        IF @TimeCreateEnd <> ''
-            SET @TimeCreateEnd = CONVERT(DATETIME, @TimeCreateEnd + 1);
-        IF @TimeStartApprove_CLGoc <> ''
-            SET @TimeStartApprove_CLGoc = CONVERT(DATETIME, @TimeStartApprove_CLGoc);
-        IF @TimeEndApprove_CLGoc <> ''
-            SET @TimeEndApprove_CLGoc = CONVERT(DATETIME, @TimeEndApprove_CLGoc + 1);
-        IF @TimeStartApprove_CLTach <> ''
-            SET @TimeStartApprove_CLTach = CONVERT(DATETIME, @TimeStartApprove_CLTach);
-        IF @TimeEndApprove_CLTach <> ''
-            SET @TimeEndApprove_CLTach = CONVERT(DATETIME, @TimeEndApprove_CLTach + 1);
-
-        IF ( @RequestId = 0 )
-            BEGIN
-                INSERT INTO #Temp_Request_Main
-                (
-                    Id
-                  , Sender
-                  , Assigner
-                  , TypeId
-                  , Title
-                  , TimeCreate
-                  , StepNo
-                  , StepStatus
-                  , Status
-                  , RequestIdRefer
-                  , CreateBy
-                  , FromShop
-                  , FromTable
-                )
-                SELECT
-                    R.Id
-                  , R.Sender
-                  , R.Assigner
-                  , R.TypeId
-                  , R.Title
-                  , R.TimeCreate
-                  , R.StepNo
-                  , R.StepStatus
-                  , R.Status
-                  , R.RequestIdRefer
-                  , R.CreateBy
-                  , R.FromShop
-                  , 'Main'
-                FROM
-                    dbo.Requests AS R ( NOLOCK )
-                WHERE
-                    R.TypeId IN ( 163, 164 )
-                    AND (
-                            @TimeCreateStart = ''
-                            OR @TimeCreateEnd = ''
-                            OR ( R.TimeCreate BETWEEN @TimeCreateStart AND @TimeCreateEnd )
-                        )
-                UNION ALL
-                SELECT
-                    R.Id
-                  , R.Sender
-                  , R.Assigner
-                  , R.TypeId
-                  , R.Title
-                  , R.TimeCreate
-                  , R.StepNo
-                  , R.StepStatus
-                  , R.Status
-                  , R.RequestIdRefer
-                  , R.CreateBy
-                  , R.FromShop
-                  , 'ARCH'
-                FROM
-                    dbo.Requests_ARCH AS R ( NOLOCK )
-                WHERE
-                    R.TypeId IN ( 163, 164 )
-                    AND (
-                            @TimeCreateStart = ''
-                            OR @TimeCreateEnd = ''
-                            OR ( R.TimeCreate BETWEEN @TimeCreateStart AND @TimeCreateEnd )
-                        );
-            END;
-        ELSE
-            BEGIN
-                INSERT INTO #Temp_Request_Main
-                (
-                    Id
-                  , Sender
-                  , Assigner
-                  , TypeId
-                  , Title
-                  , TimeCreate
-                  , StepNo
-                  , StepStatus
-                  , Status
-                  , RequestIdRefer
-                  , CreateBy
-                  , FromShop
-                  , FromTable
-                )
-                SELECT
-                    R.Id
-                  , R.Sender
-                  , R.Assigner
-                  , R.TypeId
-                  , R.Title
-                  , R.TimeCreate
-                  , R.StepNo
-                  , R.StepStatus
-                  , R.Status
-                  , R.RequestIdRefer
-                  , R.CreateBy
-                  , R.FromShop
-                  , 'Main'
-                FROM
-                    dbo.Requests AS R ( NOLOCK )
-                WHERE
-                    R.TypeId IN ( 163, 164 )
-                    AND R.Id = @RequestId
-                    AND (
-                            @TimeCreateStart = ''
-                            OR @TimeCreateEnd = ''
-                            OR ( R.TimeCreate BETWEEN @TimeCreateStart AND @TimeCreateEnd )
-                        );
-
-                IF NOT EXISTS ( SELECT 1 FROM #Temp_Request_Main AS R ( NOLOCK ))
-                    BEGIN
-                        INSERT INTO #Temp_Request_Main
-                        (
-                            Id
-                          , Sender
-                          , Assigner
-                          , TypeId
-                          , Title
-                          , TimeCreate
-                          , StepNo
-                          , StepStatus
-                          , Status
-                          , RequestIdRefer
-                          , CreateBy
-                          , FromShop
-                          , FromTable
-                        )
-                        SELECT
-                            R.Id
-                          , R.Sender
-                          , R.Assigner
-                          , R.TypeId
-                          , R.Title
-                          , R.TimeCreate
-                          , R.StepNo
-                          , R.StepStatus
-                          , R.Status
-                          , R.RequestIdRefer
-                          , R.CreateBy
-                          , R.FromShop
-                          , 'ARCH'
-                        FROM
-                            dbo.Requests_ARCH AS R ( NOLOCK )
-                        WHERE
-                            R.TypeId IN ( 163, 164 )
-                            AND R.Id = @RequestId
-                            AND (
-                                    @TimeCreateStart = ''
-                                    OR @TimeCreateEnd = ''
-                                    OR ( R.TimeCreate BETWEEN @TimeCreateStart AND @TimeCreateEnd )
-                                );
-                    END;
-
-                IF EXISTS ( SELECT 1 FROM #Temp_Request_Main AS R ( NOLOCK ) WHERE R.TypeId = 163 )
-                    BEGIN
-                        IF EXISTS ( SELECT 1 FROM #Temp_Request_Main AS R ( NOLOCK ) WHERE R.FromTable = 'ARCH' )
-                            BEGIN
-                                INSERT INTO #Temp_Request_Main
-                                (
-                                    Id
-                                  , Sender
-                                  , Assigner
-                                  , TypeId
-                                  , Title
-                                  , TimeCreate
-                                  , StepNo
-                                  , StepStatus
-                                  , Status
-                                  , RequestIdRefer
-                                  , CreateBy
-                                  , FromShop
-                                  , FromTable
-                                )
-                                SELECT
-                                    R.Id
-                                  , R.Sender
-                                  , R.Assigner
-                                  , R.TypeId
-                                  , R.Title
-                                  , R.TimeCreate
-                                  , R.StepNo
-                                  , R.StepStatus
-                                  , R.Status
-                                  , R.RequestIdRefer
-                                  , R.CreateBy
-                                  , R.FromShop
-                                  , 'ARCH'
-                                FROM
-                                    dbo.Requests_ARCH AS R ( NOLOCK )
-                                WHERE
-                                    R.TypeId = 164
-                                    AND R.RequestIdRefer = @RequestId;
-                            END;
-                        ELSE
-                            BEGIN
-                                INSERT INTO #Temp_Request_Main
-                                (
-                                    Id
-                                  , Sender
-                                  , Assigner
-                                  , TypeId
-                                  , Title
-                                  , TimeCreate
-                                  , StepNo
-                                  , StepStatus
-                                  , Status
-                                  , RequestIdRefer
-                                  , CreateBy
-                                  , FromShop
-                                  , FromTable
-                                )
-                                SELECT
-                                    R.Id
-                                  , R.Sender
-                                  , R.Assigner
-                                  , R.TypeId
-                                  , R.Title
-                                  , R.TimeCreate
-                                  , R.StepNo
-                                  , R.StepStatus
-                                  , R.Status
-                                  , R.RequestIdRefer
-                                  , R.CreateBy
-                                  , R.FromShop
-                                  , 'Main'
-                                FROM
-                                    dbo.Requests AS R ( NOLOCK )
-                                WHERE
-                                    R.TypeId = 164
-                                    AND R.RequestIdRefer = @RequestId;
-                            END;
-                    END;
-                ELSE IF EXISTS ( SELECT 1 FROM #Temp_Request_Main AS R ( NOLOCK ) WHERE R.TypeId = 164 )
-                         BEGIN
-                             IF EXISTS ( SELECT 1 FROM #Temp_Request_Main AS R ( NOLOCK ) WHERE R.FromTable = 'ARCH' )
-                                 BEGIN
-                                     INSERT INTO #Temp_Request_Main
-                                     (
-                                         Id
-                                       , Sender
-                                       , Assigner
-                                       , TypeId
-                                       , Title
-                                       , TimeCreate
-                                       , StepNo
-                                       , StepStatus
-                                       , Status
-                                       , RequestIdRefer
-                                       , CreateBy
-                                       , FromShop
-                                       , FromTable
-                                     )
-                                     SELECT
-                                         R.Id
-                                       , R.Sender
-                                       , R.Assigner
-                                       , R.TypeId
-                                       , R.Title
-                                       , R.TimeCreate
-                                       , R.StepNo
-                                       , R.StepStatus
-                                       , R.Status
-                                       , R.RequestIdRefer
-                                       , R.CreateBy
-                                       , R.FromShop
-                                       , 'ARCH'
-                                     FROM
-                                         dbo.Requests_ARCH AS R ( NOLOCK )
-                                     WHERE
-                                         R.TypeId = 163
-                                         AND R.Id IN ( SELECT RequestIdRefer FROM #Temp_Request_Main ( NOLOCK ));
-                                 END;
-                             ELSE
-                                 BEGIN
-                                     INSERT INTO #Temp_Request_Main
-                                     (
-                                         Id
-                                       , Sender
-                                       , Assigner
-                                       , TypeId
-                                       , Title
-                                       , TimeCreate
-                                       , StepNo
-                                       , StepStatus
-                                       , Status
-                                       , RequestIdRefer
-                                       , CreateBy
-                                       , FromShop
-                                       , FromTable
-                                     )
-                                     SELECT
-                                         R.Id
-                                       , R.Sender
-                                       , R.Assigner
-                                       , R.TypeId
-                                       , R.Title
-                                       , R.TimeCreate
-                                       , R.StepNo
-                                       , R.StepStatus
-                                       , R.Status
-                                       , R.RequestIdRefer
-                                       , R.CreateBy
-                                       , R.FromShop
-                                       , 'Main'
-                                     FROM
-                                         dbo.Requests AS R ( NOLOCK )
-                                     WHERE
-                                         R.TypeId = 163
-                                         AND R.Id IN ( SELECT RequestIdRefer FROM #Temp_Request_Main ( NOLOCK ));
-                                 END;
-                         END;
-            END;
-
-        -- Lấy detail bảng RequestDetails
-        SELECT
-            rd.ItemId
-          , rd.Quantity
-          , rd.Quantity1
-          , rd.Quantity2
-          , rd.Quantity3
-          , rd.Quantity4
-          , rd.Quantity5
-          , rd.Property5
-          , rd.Property10
-          , rd.Note
-          , rd.RequestId
-        INTO
-            #tmp_requestDetails
-        FROM
-            dbo.RequestDetails rd ( NOLOCK )
-        WHERE
-            rd.RequestId IN ( SELECT r.Id FROM #Temp_Request_Main r )
-            AND rd.Status = 1;
-
-        SELECT
-            C.RequestId
-          , REPLACE(SUBSTRING(C.Message, CHARINDEX('>', C.Message) + 1, LEN(C.Message)), '</a>', '') CLBill
-          , CONVERT(VARCHAR(50), '') AS MaBill
-        INTO
-            #tmp_requestBillVC
-        FROM
-            dbo.Conversations AS C ( NOLOCK )
-        WHERE
-            C.RequestId IN ( SELECT R.Id FROM #Temp_Request_Main AS R )
-            AND C.Type = 2
-            AND C.Status = 1
-            AND C.Message LIKE N'Hệ thống đã auto sinh ra số calllog bill vận chuyển%';
-
-        UPDATE
-            B
-        SET
-            B.MaBill = RD.ProductCode
-        FROM
-            #tmp_requestBillVC AS B
-            INNER JOIN dbo.RequestDetails AS RD ( NOLOCK )
-                ON RD.RequestId = B.CLBill;
-
-        SELECT
-            RS.RequestId
-          , RS.StepNo
-          , RS.TimeEnd
-          , R.TypeId
-        INTO
-            #Temp_RequestSteps
-        FROM
-            #Temp_Request_Main AS R ( NOLOCK )
-            INNER JOIN dbo.RequestSteps AS RS ( NOLOCK )
-                ON RS.RequestId = R.Id
-        WHERE
-            RS.Status = 1;
-
-        -- Lấy detail bảng RequestDetails_ARCH (nếu có)
-        IF EXISTS (
-                      SELECT
-                          1
-                      FROM
-                          #Temp_Request_Main AS R ( NOLOCK )
-                      WHERE
-                          R.[FromTable] = 'ARCH'
-                  )
-            BEGIN
-                INSERT INTO #tmp_requestDetails
-                (
-                    ItemId
-                  , Quantity
-                  , Quantity1
-                  , Quantity2
-                  , Quantity3
-                  , Quantity4
-                  , Quantity5
-                  , Property5
-                  , Property10
-                  , Note
-                  , RequestId
-                )
-                SELECT
-                    rd.ItemId
-                  , rd.Quantity
-                  , rd.Quantity1
-                  , rd.Quantity2
-                  , rd.Quantity3
-                  , rd.Quantity4
-                  , rd.Quantity5
-                  , rd.Property5
-                  , rd.Property10
-                  , rd.Note
-                  , rd.RequestId
-                FROM
-                    dbo.RequestDetails_ARCH rd ( NOLOCK )
-                WHERE
-                    rd.RequestId IN ( SELECT r.Id FROM #Temp_Request_Main r WHERE r.[Table] = 'ARCH' )
-                    AND rd.Status = 1;
-
-                INSERT INTO #tmp_requestBillVC ( RequestId, CLBill )
-                SELECT
-                    C.RequestId
-                  , REPLACE(SUBSTRING(C.Message, CHARINDEX('>', C.Message) + 1, LEN(C.Message)), '</a>', '') CLGoc
-                FROM
-                    dbo.Conversations_ARCH AS C ( NOLOCK )
-                WHERE
-                    C.RequestId IN ( SELECT R.Id FROM #Temp_Request_Main AS R WHERE R.[FromTable] = 'ARCH' )
-                    AND C.Type = 2
-                    AND C.Status = 1
-                    AND C.Message LIKE N'Hệ thống đã auto sinh ra số calllog bill vận chuyển%';
-
-                INSERT INTO #Temp_RequestSteps ( RequestId, StepNo, TimeEnd, TypeId )
-                SELECT
-                    RS.RequestId
-                  , R.StepNo
-                  , RS.TimeEnd
-                  , R.TypeId
-                FROM
-                    #Temp_Request_Main AS R ( NOLOCK )
-                    INNER JOIN dbo.RequestSteps_ARCH AS RS ( NOLOCK )
-                        ON RS.RequestId = R.Id
-                WHERE
-                    RS.Status = 1;
-
-                UPDATE
-                    B
-                SET
-                    B.MaBill = RD.ProductCode
-                FROM
-                    #tmp_requestBillVC AS B
-                    INNER JOIN dbo.RequestDetails_ARCH AS RD ( NOLOCK )
-                        ON RD.RequestId = B.CLBill;
-            END;
-
-        -- lấy mã CL bill VC
-
-        SELECT
-            M.Code
-          , M.Name
-        INTO
-            #Tmp__MD__Status
-        FROM
-            dbo.MasterDatas AS M ( NOLOCK )
-        WHERE
-            M.[Group] = 'RequestStatus';
-
-        --Lấy calllog Tách
-        SELECT
-            R.Id AS IdTach
-          , R.Sender
-          , R.Assigner
-          , R.TimeCreate
-          , R.Title
-          , R.StepNo
-          , R.StepStatus
-          , R.Status
-          , R.RequestIdRefer
-          , R.CreateBy
-          , R.FromShop
-          , M.Name AS StatusCLTach
-          , RD.ItemId
-          , RD.Quantity1 AS SLVo
-          , RD.Quantity2 AS SLHetHanBH
-          , RD.Quantity3 AS SLKhac
-          , RD.Quantity4 AS SLBHDuoc
-          , RD.Quantity5 AS SLTruyThu
-          , RD.Property5 AS NguyenNhanTruyThu
-          , RD.Note AS GhiChuShop
-          , ISNULL(C.MaBill, R.Id) AS MaBillTach
-          , RS.TimeEnd AS NgayDuyetCLTach
-        INTO
-            #Temp_RequestsTach
-        FROM
-            #Temp_Request_Main R
-            LEFT JOIN #tmp_requestDetails RD
-                ON R.Id = RD.RequestId
-            LEFT JOIN #Tmp__MD__Status AS M
-                ON R.Status = M.Code
-            LEFT JOIN #ItemTmp I
-                ON I.MaThietBi = RD.ItemId
-            LEFT JOIN #tmp_requestBillVC AS C
-                ON C.RequestId = R.Id
-            LEFT JOIN #Temp_RequestSteps AS RS
-                ON R.Id = RS.RequestId
-                   AND RS.StepNo = 1
-        WHERE
-            R.TypeId = 164
-            AND (( @TimeStartApprove_CLTach = '' OR RS.TimeEnd >= @TimeStartApprove_CLTach )
-                 AND ( @TimeEndApprove_CLTach = '' OR RS.TimeEnd <= @TimeEndApprove_CLTach )
-                );
-
-        --Lấy calllog Gốc
-        SELECT
-            R.Id AS IdGoc
-          , M.Name AS StatusCLGoc
-          , RD.ItemId
-          , RD.Quantity
-          , RD.Quantity1 AS SLTuKhoBaoHanhHC
-          , RD.Quantity2 AS SLTuNCC
-          --RD.Property10 AS  MaBillGoc,
-          , ISNULL(C.MaBill, R.Id) AS MaBillGoc
-          , I.MaThietBi
-          , I.TenThietBi
-          , R.StepNo AS StepNoGoc
-          , RS.TimeEnd AS NgayDuyetCLGoc
-        INTO
-            #Temp_RequestsGoc
-        FROM
-            #Temp_Request_Main R
-            LEFT JOIN #tmp_requestDetails RD
-                ON R.Id = RD.RequestId
-            LEFT JOIN #Tmp__MD__Status AS M
-                ON R.Status = M.Code
-            LEFT JOIN #ItemTmp I
-                ON I.MaThietBi = RD.ItemId
-            LEFT JOIN #tmp_requestBillVC AS C
-                ON C.RequestId = R.Id
-            LEFT JOIN #Temp_RequestSteps AS RS
-                ON R.Id = RS.RequestId
-                   AND RS.StepNo = 1
-        WHERE
-            R.TypeId = 163
-            AND R.Status < 5
-            AND ( @Status = '' OR R.Status IN ( SELECT GiaTri FROM #Status ))
-            AND ( ISNULL(@RequestName, '') = '' OR R.Title LIKE N'%' + @RequestName + '%' )
-            AND ( @Assigner = '' OR R.Assigner IN ( SELECT GiaTri FROM #Assingers ))
-            AND ( @Sender = '' OR R.Sender IN ( SELECT GiaTri FROM #Senders ))
-            AND (( @TimeStartApprove_CLGoc = '' OR RS.TimeEnd >= @TimeStartApprove_CLGoc )
-                 AND ( @TimeEndApprove_CLGoc = '' OR RS.TimeEnd <= @TimeEndApprove_CLGoc )
-                );
-
-        SELECT
-            st.RequestId
-          , st.StepNo
-          , st.TimeEnd
-        INTO
-            #Temp_RequestSteps_HC
-        FROM
-            #Temp_RequestSteps st ( NOLOCK )
-        WHERE
-            st.TypeId = 163
-            AND st.StepNo = 2;
-
-        --SELECT DISTINCT
-        --    WAA.Assigner
-        --  , R.FromShop
-        --INTO
-        --    #Temp_Warranty_Lamp
-        --FROM
-        --    #Temp_RequestsTach R
-        --    LEFT JOIN dbo.WarrantyAssignment ( NOLOCK ) WAA
-        --        ON R.FromShop IN ( SELECT GiaTri FROM dbo.ufn_SplitStringToTable(WAA.Shop, ',', 0) );
-		SELECT Assigner, Shop
-		INTO #tmp_WarrantyAssignment
-		FROM dbo.WarrantyAssignment (NOLOCK)
-
-		SELECT T.Assigner, sp.GiaTri AS Shop
-		INTO #tmp_WarrantyAssignment_split
-		FROM #tmp_WarrantyAssignment T
-		OUTER APPLY dbo.ufn_SplitStringToTable(T.Shop,',',0) AS sp
-
-        SELECT DISTINCT
-            WAA.Assigner
-          , R.FromShop
-        INTO
-            #Temp_Warranty_Lamp
-        FROM
-            #Temp_RequestsTach R
-            LEFT JOIN #tmp_WarrantyAssignment_split ( NOLOCK ) WAA
-                ON R.FromShop = WAA.Shop
-
-		DROP TABLE #tmp_WarrantyAssignment, #tmp_WarrantyAssignment_split
-
-        SELECT
-            T.IdTach
-          , T.Sender
-          , T.Assigner
-          , T.TimeCreate
-          , T.Title
-          , T.StepNo
-          , T.StepStatus
-          , T.Status
-          , T.RequestIdRefer
-          , T.CreateBy
-          , T.FromShop
-          , T.StatusCLTach
-          , T.ItemId
-          , T.SLVo
-          , T.SLHetHanBH
-          , T.SLKhac
-          , T.SLBHDuoc
-          , T.SLTruyThu
-          , T.NguyenNhanTruyThu
-          , T.GhiChuShop
-          , G.IdGoc
-          , G.StatusCLGoc
-          , G.Quantity
-          , G.SLTuKhoBaoHanhHC
-          , G.SLTuNCC
-          , G.MaThietBi
-          , G.TenThietBi
-          , G.MaBillGoc
-          , T.MaBillTach
-          , G.StepNoGoc
-          , G.NgayDuyetCLGoc
-          , T.NgayDuyetCLTach
-        INTO
-            #Temp_Main
-        FROM
-            #Temp_RequestsGoc G
-            INNER JOIN #Temp_RequestsTach T
-                ON G.IdGoc = T.RequestIdRefer
-                   AND T.ItemId = G.ItemId
-        WHERE
-            ( @Region = '' OR T.FromShop IN ( SELECT GiaTri FROM #Region ));
-
-        IF @TimeStartApprove_CLGoc <> ''
-           OR @TimeEndApprove_CLGoc <> ''
-            BEGIN
-                SELECT
-                    M.IdGoc
-                INTO
-                    #tmp_FilterTimeApprove_CLGoc
-                FROM
-                    #Temp_Main AS M ( NOLOCK )
-                    INNER JOIN dbo.RequestSteps AS RS ( NOLOCK )
-                        ON M.IdGoc = RS.RequestId
-                           AND RS.StepNo = 1
-                           AND RS.Status = 1
-                WHERE
-                    ( @TimeStartApprove_CLGoc = '' OR RS.TimeEnd >= @TimeStartApprove_CLGoc )
-                    AND ( @TimeEndApprove_CLGoc = '' OR RS.TimeEnd <= @TimeEndApprove_CLGoc );
-
-                DELETE FROM
-                #Temp_Main
-                WHERE
-                    IdGoc NOT IN ( SELECT F.IdGoc FROM #tmp_FilterTimeApprove_CLGoc AS F );
-
-                DROP TABLE #tmp_FilterTimeApprove_CLGoc;
-            END;
-
-        SELECT
-            RG1.RegionHierachyCode + '--' + RG1.RegionHierachyName AS Region
-          , TT.Name AS Provine
-          , W.WarehouseCodeB1 + '--' + W.WarehouseName AS Warehouse
-          , I.MaThietBi AS ItemCode
-          , I.TenThietBi AS ItemName
-          , R.Quantity AS Quantity
-          , '' AS QuantityASMCF
-          , R.SLTuKhoBaoHanhHC AS QuantityFromHC
-          , R.SLTuNCC AS QuantityFromNCC
-          , R.MaBillGoc AS BBBGNoHC
-          , CONVERT(NVARCHAR(40), RS.TimeEnd, 103) AS TimeSendFromHC
-          , '' AS OrderNum
-          , R.SLVo AS QuantityVo
-          , R.SLHetHanBH AS QuantityHetHan
-          , R.SLKhac AS QuantityKhac
-          , R.SLBHDuoc AS QuantityBHDuoc
-          , R.MaBillTach AS BBBGNoShop
-          , R.SLTruyThu AS QuantityTruyThu
-          , I.GiaThietBi AS UnitPrice
-          , ( I.GiaThietBi * R.SLTruyThu ) AS Price
-          , R.NguyenNhanTruyThu AS NguyenNhanTruyThu
-          , R.GhiChuShop AS Note
-          , E.EmployeeCode + '--' + E.EmployeeName AS Sender
-          , CONVERT(NVARCHAR(40), R.TimeCreate, 103) AS TimeCreate
-          , R.IdGoc AS IdGoc
-          , R.IdTach AS IdTach
-          , R.StatusCLGoc AS StatusGoc
-          , R.StatusCLTach AS StatusTach
-          --E1.EmployeeCode + '--' + e1.EmployeeName AS 
-          , WAA.Assigner + '--' + E1.EmployeeName AS EmployeeHC
-          , CONVERT(NVARCHAR(40), R.NgayDuyetCLGoc, 103) AS NgayDuyetCLGoc
-          , CONVERT(NVARCHAR(40), R.NgayDuyetCLTach, 103) AS NgayDuyetCLTach
-        FROM
-            #Temp_Main R
-            LEFT JOIN #Tmp_Warehouse W
-                ON W.WarehouseCode = R.FromShop
-            LEFT JOIN #Temp_Regions RG1
-                ON W.RegionL2 = RG1.RegionHierachyCode
-            LEFT JOIN #Temp_Regions RG2
-                ON W.RegionL3 = RG2.RegionHierachyCode
-            LEFT JOIN dbo.F03_QuanHuyen Q
-                ON Q.ID = W.QuanHuyen
-            LEFT JOIN dbo.F03_TinhThanh TT
-                ON TT.ID = Q.CityID
-            LEFT JOIN #ItemTmp I
-                ON R.ItemId = I.MaThietBi
-            LEFT JOIN #Emp E
-                ON E.EmployeeCode = R.Sender
-            LEFT JOIN #Temp_Warranty_Lamp WAA
-                ON R.FromShop = WAA.FromShop
-            LEFT JOIN #Emp E1
-                ON E1.EmployeeCode = WAA.Assigner
-            LEFT JOIN #Temp_RequestSteps_HC RS
-                ON R.IdGoc = RS.RequestId
-                   AND ( RS.StepNo = 2 AND R.StepNoGoc = 2 );
-
-
-        DROP TABLE
-            #Assingers
-          , #Emp
-          , #ItemTmp
-          , #Region
-          , #Senders
-          , #Status
-          , #Temp_Main
-          , #Temp_Regions
-          , #Temp_RequestsGoc
-          , #Temp_RequestsTach
-          , #Tmp_Employees
-          , #Tmp_OrganizationHierachies
-          , #Tmp_Warehouse
-          , #Temp_Request_Main
-          , #Temp_RequestSteps
-          , #Temp_Warranty_Lamp
-          , #tmp_requestDetails
-          , #Tmp__MD__Status
-          , #Temp_RequestSteps_HC;
-    END;
-
-
-
-GO
+﻿{
+    "individual": [
+        {
+            "name": "Thông tin người mua",
+            "type": "splitter",
+            "value": "",
+            "id": -23000,
+            "position": 23000
+        },
+        {
+            "name": "Người mua máy tính",
+            "type": "master_data_frt_org",
+            "staticContent": "<p style='font-size: 12px; color: #f44842'><i></i>Nhập thông tin Email của người tạo yêu cầu, VD: AnNV</p>",
+            "valuefeeder": "ticketowner",
+            "disabled": false,
+            "conditions": {
+                "required": true,
+                "min-length": 1,
+                "max-length": 1000
+            },
+            "additionalDisplayClass": "left-info",
+            "id": -23004,
+            "position": 23004
+        },
+        {
+            "name": "Shop/Phòng ban",
+            "type": "master_data_frt_org_donvi",
+            "value": "",
+            "conditions": {
+                "required": false,
+                "min-length": 1,
+                "max-length": 1000
+            },
+            "additionalDisplayClass": "right-info",
+            "id": -23008,
+            "position": 23004,
+            "disabled": true
+        },
+        {
+            "name": "Chức danh",
+            "type": "master_data_frt_org_chucdanh",
+            "value": "",
+            "conditions": {
+                "required": true,
+                "min-length": 1,
+                "max-length": 1000
+            },
+            "additionalDisplayClass": "left-info",
+            "id": -23009,
+            "position": 23009,
+            "disabled": true
+        },
+        {
+            "name": "Inside",
+            "type": "master_data_frt_org_inside",
+            "value": "",
+            "conditions": {
+                "required": false,
+                "min-length": 1,
+                "max-length": 1000
+            },
+            "additionalDisplayClass": "right-info",
+            "id": -23010,
+            "position": 23009,
+            "disabled": true
+        },
+        {
+            "name": "Trưởng đơn vị (Phê duyệt)",
+            "type": "master_data_frt_org_quanly",
+            "value": "",
+            "display": true,
+            "conditions": {
+                "required": true,
+                "min-length": 1,
+                "max-length": 1000
+            },
+            "additionalDisplayClass": "left-info",
+            "id": -23011,
+            "position": 23011,
+            "disabled": true
+        },
+        {
+            "name": "Chức danh trưởng đơn vị",
+            "type": "master_data_frt_org_quanly_chucdanh",
+            "value": "",
+            "display": true,
+            "conditions": {
+                "required": false,
+                "min-length": 1,
+                "max-length": 1000
+            },
+            "additionalDisplayClass": "right-info",
+            "id": -23012,
+            "position": 23011,
+            "disabled": true
+        },
+        {
+            "name": "Ngày vào làm",
+            "type": "master_data_frt_org_ngaybatdaulamviec",
+            "value": "",
+            "display": true,
+            "conditions": {
+                "required": false,
+                "min-length": 1,
+                "max-length": 1000
+            },
+            "additionalDisplayClass": "left-info",
+            "id": -23013,
+            "position": 23013,
+            "disabled": true
+        },
+        {
+            "name": "Cấp nhân viên",
+            "type": "master_data_frt_org_joblevel",
+            "value": "",
+            "display": true,
+            "conditions": {
+                "required": false,
+                "min-length": 1,
+                "max-length": 1000
+            },
+            "additionalDisplayClass": "right-info",
+            "id": -23014,
+            "position": 23013,
+            "disabled": true
+        },
+        {
+            "name": "Thông tin giảm giá",
+            "type": "select",
+            "value": "1",
+            "display": true,
+            "conditions": {
+                "data": [
+                    {
+                        "text": "giảm 2 triệu",
+                        "value": "1"
+                    },
+                    {
+                        "text": "giảm 8 triệu",
+                        "value": "2"
+                    }
+                ],
+                "required": true,
+                "min-length": 1,
+                "max-length": 1000,
+                "multiple": false
+            },
+            "additionalDisplayClass": "left-info",
+            "id": -23015,
+            "position": 23015,
+            "disabled": false
+        },
+        {
+            "name": "Mã cấp nhân viên (Sẽ ẩn)",
+            "type": "master_data_frt_org_joblevel",
+            "value": "",
+            "display": true,
+            "conditions": {
+                "required": false,
+                "min-length": 1,
+                "max-length": 1000
+            },
+            "additionalDisplayClass": "right-info",
+            "id": -23016,
+            "position": 23015,
+            "disabled": true
+        },
+        {
+            "name": "IsTruongBoPhanTroLen (sẽ ẩn)",
+            "type": "master_data_frt_org_istruongbophantrolen",
+            "value": "",
+            "display": true,
+            "conditions": {
+                "required": false,
+                "min-length": 1,
+                "max-length": 1000
+            },
+            "additionalDisplayClass": "left-info",
+            "id": -23017,
+            "position": 23017,
+            "disabled": true
+        },
+        {
+            "name": "CheckDieuKienTaoTicket1 (sẽ ẩn)",
+            "type": "text",
+            "display": true,
+            "conditions": {
+                "required": true,
+                "min-length": 1,
+                "max-length": 1000
+            },
+            "dataFrom": [
+                -23014,
+                -23015
+            ],
+            "dataFromFunc": "feederData",
+            "dataFromCondition": [
+                {
+                    "conditions": {
+                        "operation": "or",
+                        "items": [
+                            {
+                                "operation": "equal",
+                                "compare-type": "number",
+                                "left-element": {
+                                    "dataset": "INDIVIDUAL",
+                                    "infoId": -23015
+                                },
+                                "right-element": {
+                                    "dataset": "value",
+                                    "value": "1"
+                                }
+                            },
+                            {
+                                "operation": "and",
+                                "items": [
+                                    {
+                                        "operation": "equal",
+                                        "compare-type": "number",
+                                        "left-element": {
+                                            "dataset": "INDIVIDUAL",
+                                            "infoId": -23015
+                                        },
+                                        "right-element": {
+                                            "dataset": "value",
+                                            "value": "2"
+                                        }
+                                    },
+                                    {
+                                        "operation": "equal",
+                                        "compare-type": "text",
+                                        "left-element": {
+                                            "dataset": "INDIVIDUAL",
+                                            "infoId": -23014
+                                        },
+                                        "right-element": {
+                                            "dataset": "value",
+                                            "value": "21N"
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    "value": {
+                        "dataset": "value",
+                        "value": "1"
+                    }
+                },
+                {
+                    "conditions": {
+                        "operation": "else"
+                    },
+                    "value": {
+                        "dataset": "value",
+                        "value": ""
+                    }
+                }
+            ],
+            "additionalDisplayClass": "right-info",
+            "id": -23018,
+            "position": 23017,
+            "disabled": true
+        },
+        {
+            "name": "LeaderAccountApprove (sẽ ẩn)",
+            "type": "text",
+            "value": "",
+            "display": true,
+            "conditions": {
+                "required": false,
+                "min-length": 1,
+                "max-length": 1000
+            },
+            "additionalDisplayClass": "left-info",
+            "id": -23019,
+            "position": 23019,
+            "disabled": true
+        },
+        {
+            "name": "Chưa dùng (sẽ ẩn)",
+            "type": "text",
+            "value": "",
+            "display": true,
+            "conditions": {
+                "required": false,
+                "min-length": 1,
+                "max-length": 1000
+            },
+            "additionalDisplayClass": "righ-info",
+            "id": -23020,
+            "position": 23019,
+            "disabled": true
+        },
+        {
+            "name": "Thông tin sản phẩm",
+            "type": "splitter",
+            "value": "",
+            "id": -23050,
+            "position": 23050
+        },
+        {
+            "name": "Tên sản phẩm đầy đủ",
+            "type": "master_data_frt_mtxt_sanpham_sp_loc_itemcodename",
+            "staticContent": "<p style='font-size: 12px; color: #0000ff'><i></i>Chọn sản phẩm cần mua</p>",
+            "value": "",
+            "display": true,
+            "conditions": {
+                "required": true,
+                "min-length": 1,
+                "max-length": 1000
+            },
+            "additionalDisplayClass": "left-info",
+            "id": -23051,
+            "position": 23051
+        },
+        {
+            "name": "Mã sản phẩm",
+            "type": "master_data_frt_mtxt_sanpham_sp_loc_itemcodename_lay_itemcode",
+            "staticContent": "<p style='font-size: 12px; color: #0000ff'><i></i></p>",
+            "value": "",
+            "display": true,
+            "conditions": {
+                "required": false,
+                "min-length": 1,
+                "max-length": 1000
+            },
+            "additionalDisplayClass": "right-info",
+            "id": -23052,
+            "position": 23051,
+            "disabled": true
+        },
+        {
+            "name": "Tên sản phẩm",
+            "type": "textarea",
+            "staticContent": "<p style='font-size: 12px; color: #0000ff'><i></i></p>",
+            "value": "",
+            "display": true,
+            "conditions": {
+                "required": false,
+                "min-length": 1,
+                "max-length": 1000
+            },
+            "additionalDisplayClass": "left-info",
+            "id": -23053,
+            "position": 23050,
+            "disabled": true,
+            "dataFrom": -23051,
+            "dataFromFunc": "feederData",
+            "dataFromCondition": [
+                {
+                    "conditions": {
+                        "operation": "else"
+                    },
+                    "value": {
+                        "dataset": "INDIVIDUAL",
+                        "infoId": -23052
+                    }
+                }
+            ]
+        },
+        {
+            "name": "master_data_frt_mtxt_sanpham_sp_loc_itemcodename_lay_itemname",
+            "type": "master_data_frt_mtxt_sanpham_sp_loc_itemcodename_lay_itemname",
+            "staticContent": "<p style='font-size: 12px; color: #0000ff'><i>master_data_frt_mtxt_sanpham_sp_loc_itemcodename_lay_itemname</i></p>",
+            "value": "",
+            "display": false,
+            "conditions": {
+                "required": false,
+                "min-length": 1,
+                "max-length": 1000
+            },
+            "additionalDisplayClass": "right-info",
+            "id": -23054,
+            "position": 23051,
+            "disabled": true
+        },
+        {
+            "name": "Lọc Phân cấp (CẤM BỎ)",
+            "type": "master_data_frt_warehouse_ict_loc_phancap",
+            "staticContent": "<p style='font-size: 12px; color: #0000ff'><i>Lọc Phân cấp (CẤM BỎ)</i></p>",
+            "value": "FPTSHOP",
+            "display": false,
+            "conditions": {
+                "required": false,
+                "min-length": 1,
+                "max-length": 1000
+            },
+            "additionalDisplayClass": "left-info",
+            "id": -23055,
+            "position": 23055,
+            "disabled": true
+        },
+        {
+            "name": "Shop bán",
+            "type": "master_data_frt_warehouse_ict_loc_tenshopb1",
+            "staticContent": "<p style='font-size: 12px; color: #0000ff'><i></i>Nơi bạn nhận hàng và xuất hóa đơn</p>",
+            "value": "",
+            "display": true,
+            "conditions": {
+                "required": true,
+                "min-length": 1,
+                "max-length": 1000
+            },
+            "additionalDisplayClass": "left-info",
+            "id": -23056,
+            "position": 23056
+        },
+        {
+            "name": "Mã Shop bán",
+            "type": "master_data_frt_warehouse_ict_lay_mashopb1",
+            "staticContent": "<p style='font-size: 12px; color: #0000ff'><i></i></p>",
+            "value": "",
+            "display": false,
+            "conditions": {
+                "required": false,
+                "min-length": 1,
+                "max-length": 1000
+            },
+            "additionalDisplayClass": "left-info",
+            "id": -23057,
+            "position": 23057,
+            "disabled": true
+        },
+        {
+            "name": "Ghi chú",
+            "type": "textarea",
+            "staticContent": "<p style='font-size: 12px; color: #0000ff'><i></i></p>",
+            "value": "",
+            "display": true,
+            "conditions": {
+                "required": false
+            },
+            "additionalDisplayClass": "right-info",
+            "id": -23058,
+            "position": 23056
+        }
+    ]
+} 

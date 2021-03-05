@@ -1,439 +1,243 @@
 ﻿{
-    "individual": [
+    "relatives": [
         {
-            "name": "Thông tin người mua",
-            "type": "splitter",
-            "value": "",
-            "id": -23000,
-            "position": 23000
-        },
-        {
-            "name": "Người mua máy tính",
-            "type": "master_data_frt_org",
-            "staticContent": "<p style='font-size: 12px; color: #f44842'><i></i>Nhập thông tin Email của người tạo yêu cầu, VD: AnNV</p>",
-            "valuefeeder": "ticketowner",
-            "disabled": false,
-            "conditions": {
-                "required": true,
-                "min-length": 1,
-                "max-length": 1000
+            "owner": "",
+            "summary": "Người tạo YC",
+            "roles": {
+                "assigner": [
+                    ""
+                ],
+                "implementer": []
             },
-            "additionalDisplayClass": "left-info",
-            "id": -23004,
-            "position": 23004
+            "id": -3,
+            "type": "ticket",
+            "isDone": false,
+            "status": "Opened"
         },
         {
-            "name": "Shop/Phòng ban",
-            "type": "master_data_frt_org_donvi",
-            "value": "",
-            "conditions": {
-                "required": false,
-                "min-length": 1,
-                "max-length": 1000
+            "owner": "System",
+            "summary": "Hệ thống xác định quy trình",
+            "roles": {
+                "implementer": [
+                    "TuanNA89"
+                ]
             },
-            "additionalDisplayClass": "right-info",
-            "id": -23008,
-            "position": 23004,
-            "disabled": true
-        },
-        {
-            "name": "Chức danh",
-            "type": "master_data_frt_org_chucdanh",
-            "value": "",
-            "conditions": {
-                "required": true,
-                "min-length": 1,
-                "max-length": 1000
+            "co-execution": true,
+            "sla": {
+                "res": 2,
+                "fix": 4
             },
-            "additionalDisplayClass": "left-info",
-            "id": -23009,
-            "position": 23009,
-            "disabled": true
-        },
-        {
-            "name": "Inside",
-            "type": "master_data_frt_org_inside",
-            "value": "",
-            "conditions": {
-                "required": false,
-                "min-length": 1,
-                "max-length": 1000
-            },
-            "additionalDisplayClass": "right-info",
-            "id": -23010,
-            "position": 23009,
-            "disabled": true
-        },
-        {
-            "name": "Trưởng đơn vị (Phê duyệt)",
-            "type": "master_data_frt_org_quanly",
-            "value": "",
-            "display": true,
-            "conditions": {
-                "required": true,
-                "min-length": 1,
-                "max-length": 1000
-            },
-            "additionalDisplayClass": "left-info",
-            "id": -23011,
-            "position": 23011,
-            "disabled": true
-        },
-        {
-            "name": "Chức danh trưởng đơn vị",
-            "type": "master_data_frt_org_quanly_chucdanh",
-            "value": "",
-            "display": true,
-            "conditions": {
-                "required": false,
-                "min-length": 1,
-                "max-length": 1000
-            },
-            "additionalDisplayClass": "right-info",
-            "id": -23012,
-            "position": 23011,
-            "disabled": true
-        },
-        {
-            "name": "Ngày vào làm",
-            "type": "master_data_frt_org_ngaybatdaulamviec",
-            "value": "",
-            "display": true,
-            "conditions": {
-                "required": false,
-                "min-length": 1,
-                "max-length": 1000
-            },
-            "additionalDisplayClass": "left-info",
-            "id": -23013,
-            "position": 23013,
-            "disabled": true
-        },
-        {
-            "name": "Cấp nhân viên",
-            "type": "master_data_frt_org_joblevel",
-            "value": "",
-            "display": true,
-            "conditions": {
-                "required": false,
-                "min-length": 1,
-                "max-length": 1000
-            },
-            "additionalDisplayClass": "right-info",
-            "id": -23014,
-            "position": 23013,
-            "disabled": true
-        },
-        {
-            "name": "Thông tin giảm giá",
-            "type": "select",
-            "value": "1",
-            "display": true,
-            "conditions": {
-                "data": [
+            "decisions": {
+                "auto": true,
+                "textDisp": "Hệ thống xác định quy trình",
+                "actions": [
                     {
-                        "text": "giảm 2 triệu",
-                        "value": "1"
+                        "workflow": {
+                            "relationships": [
+                                -1030
+                            ],
+                            "relatives": [
+                                -30
+                            ]
+                        },
+                        "name": "HR Duyệt",
+                        "id": -1,
+                        "conditions": {
+                            "operation": "or",
+                            "items": [
+                                {
+                                    "right-element": {
+                                        "dataset": "value",
+                                        "value": "1"
+                                    },
+                                    "compare-type": "text",
+                                    "operation": "equal",
+                                    "left-element": {
+                                        "inputId": -3,
+                                        "infoId": -23017,
+                                        "phaseId": -10,
+                                        "type": "select",
+                                        "dataset": "INDIVIDUAL"
+                                    }
+                                }
+                            ]
+                        }
                     },
                     {
-                        "text": "giảm 8 triệu",
-                        "value": "2"
+                        "workflow": {
+                            "relationships": [
+                                -1020
+                            ],
+                            "relatives": [
+                                -20
+                            ]
+                        },
+                        "name": "Trưởng bộ phận duyệt",
+                        "id": -2,
+                        "conditions": {
+                            "operation": "or",
+                            "items": [
+                                {
+                                    "right-element": {
+                                        "dataset": "value",
+                                        "value": "0"
+                                    },
+                                    "compare-type": "text",
+                                    "operation": "equal",
+                                    "left-element": {
+                                        "inputId": -3,
+                                        "infoId": -23017,
+                                        "phaseId": -10,
+                                        "type": "select",
+                                        "dataset": "INDIVIDUAL"
+                                    }
+                                }
+                            ]
+                        }
                     }
                 ],
-                "required": true,
-                "min-length": 1,
-                "max-length": 1000,
-                "multiple": false
+                "autoStartAfter": 1,
+                "status": "unfinished"
             },
-            "additionalDisplayClass": "left-info",
-            "id": -23015,
-            "position": 23015,
-            "disabled": false
+            "id": -20,
+            "type": "phase",
+            "isDone": false,
+            "phaseType": "Implement",
+            "role_config": {
+                "provider_id": []
+            },
+            "status": "Responding"
         },
         {
-            "name": "Mã cấp nhân viên (Sẽ ẩn)",
-            "type": "master_data_frt_org_joblevel",
-            "value": "",
-            "display": true,
-            "conditions": {
-                "required": false,
-                "min-length": 1,
-                "max-length": 1000
+            "owner": "",
+            "summary": "Trưởng đơn vị (Phê duyệt)",
+            "roles": {
+                "assigner": [],
+                "implementer": []
             },
-            "additionalDisplayClass": "right-info",
-            "id": -23016,
-            "position": 23015,
-            "disabled": true
+            "id": -20,
+            "type": "phase",
+            "isDone": false,
+            "phaseType": "Implement",
+            "status": "Responding"
         },
         {
-            "name": "IsTruongBoPhanTroLen (sẽ ẩn)",
-            "type": "master_data_frt_org_istruongbophantrolen",
-            "value": "",
-            "display": true,
-            "conditions": {
-                "required": false,
-                "min-length": 1,
-                "max-length": 1000
+            "owner": "",
+            "summary": "Nhân sự phê duyệt",
+            "autocreate": false,
+            "id": -30,
+            "type": "phase",
+            "isDone": false,
+            "phaseType": "Implement",
+            "role_config": {
+                "provider_id": 11
             },
-            "additionalDisplayClass": "left-info",
-            "id": -23017,
-            "position": 23017,
-            "disabled": true
+            "status": "Responding"
+        }
+    ],
+    "relationships": [
+        {
+            "autocreate": true,
+            "from": -3,
+            "id": -310,
+            "position": -100,
+            "to": -10,
+            "type": "default",
+            "status": "finished"
         },
         {
-            "name": "CheckDieuKienTaoTicket1 (sẽ ẩn)",
-            "type": "text",
-            "display": true,
-            "conditions": {
-                "required": true,
-                "min-length": 1,
-                "max-length": 1000
-            },
-            "dataFrom": [
-                -23014,
-                -23015
+            "autocreate": true,
+            "from": -10,
+            "to": -20,
+            "id": -1020,
+            "position": 10000,
+            "type": "approval",
+            "status": "waiting"
+        },
+        {
+            "autocreate": false,
+            "from": -10,
+            "to": -30,
+            "id": -1030,
+            "detail": {},
+            "position": 10100,
+            "type": "default",
+            "status": "waiting"
+        }
+    ],
+    "notification_config": {
+        "approvers_pending_mail_template": 15,
+        "ticket_response_mail_template": 3,
+        "comment_mail_template": 22,
+        "viewers_assignment_mail_template": 24,
+        "inform_bill_mail_template": 32,
+        "ticket_result_reject_mail_template": 10,
+        "watchers_ticket_rejection_mail_template": 21,
+        "creator_rejected_mail_template": 21,
+        "new_performer_phase_reassignment_mail_template": 12,
+        "ticket_share_mail_template": 27,
+        "ticket_creation_mail_template": 1,
+        "relationship_result_reject_mail_template": 11,
+        "creator_approved_mail_template": 23,
+        "co_execute_rejection_mail_template": 25,
+        "mention_mail_template": 9,
+        "implementation_reminder_mail_template": 19,
+        "creator_requested_update_mail_template": 14,
+        "ticket_cancellation_mail_template": 5,
+        "approval_input_finish_mail_template": 17,
+        "co_execute_request_to_update_mail_template": 26,
+        "old_performer_phase_reassignment_mail_template": 13,
+        "watchers_ticket_auto_closing_mail_template": 8,
+        "approval_reminder_no_token_mail_template": 29,
+        "watchers_ticket_creation_mail_template": 2,
+        "watchers_ticket_cancellation_mail_template": 6,
+        "inform_export_mail_template": 33,
+        "approval_reminder_mail_template": 18,
+        "confirmation_reminder_mail_template": 20,
+        "phase_input_finish_mail_template": 16,
+        "phase_finished_mail_template": 30,
+        "watchers_ticket_closing_mail_template": 7,
+        "watchers_ticket_response_mail_template": 4,
+        "phase_approve_finished_mail_template": 31
+    },
+    "display": [
+        {
+            "positions": [
+                200,
+                50
             ],
-            "dataFromFunc": "feederData",
-            "dataFromCondition": [
-                {
-                    "conditions": {
-                        "operation": "or",
-                        "items": [
-                            {
-                                "operation": "equal",
-                                "compare-type": "number",
-                                "left-element": {
-                                    "dataset": "INDIVIDUAL",
-                                    "infoId": -23015
-                                },
-                                "right-element": {
-                                    "dataset": "value",
-                                    "value": "1"
-                                }
-                            },
-                            {
-                                "operation": "and",
-                                "items": [
-                                    {
-                                        "operation": "equal",
-                                        "compare-type": "number",
-                                        "left-element": {
-                                            "dataset": "INDIVIDUAL",
-                                            "infoId": -23015
-                                        },
-                                        "right-element": {
-                                            "dataset": "value",
-                                            "value": "2"
-                                        }
-                                    },
-                                    {
-                                        "operation": "equal",
-                                        "compare-type": "text",
-                                        "left-element": {
-                                            "dataset": "INDIVIDUAL",
-                                            "infoId": -23014
-                                        },
-                                        "right-element": {
-                                            "dataset": "value",
-                                            "value": "21N"
-                                        }
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    "value": {
-                        "dataset": "value",
-                        "value": "1"
-                    }
-                },
-                {
-                    "conditions": {
-                        "operation": "else"
-                    },
-                    "value": {
-                        "dataset": "value",
-                        "value": ""
-                    }
-                }
+            "id": -3
+        },
+        {
+            "image": "/download/resources/vn.com.fsoft.tool.sms:fsoftsms_uiresource/images/workflowimage/User_male.png",
+            "positions": [
+                200,
+                150
             ],
-            "additionalDisplayClass": "right-info",
-            "id": -23018,
-            "position": 23017,
-            "disabled": true
+            "id": -10
         },
         {
-            "name": "LeaderAccountApprove (sẽ ẩn)",
-            "type": "text",
-            "value": "",
-            "display": true,
-            "conditions": {
-                "required": false,
-                "min-length": 1,
-                "max-length": 1000
-            },
-            "additionalDisplayClass": "left-info",
-            "id": -23019,
-            "position": 23019,
-            "disabled": true
+            "image": "/download/resources/vn.com.fsoft.tool.sms:fsoftsms_uiresource/images/workflowimage/HR.png",
+            "positions": [
+                100,
+                150
+            ],
+            "id": -20
         },
         {
-            "name": "Chưa dùng (sẽ ẩn)",
-            "type": "text",
-            "value": "",
-            "display": true,
-            "conditions": {
-                "required": false,
-                "min-length": 1,
-                "max-length": 1000
-            },
-            "additionalDisplayClass": "righ-info",
-            "id": -23020,
-            "position": 23019,
-            "disabled": true
+            "image": "/download/resources/vn.com.fsoft.tool.sms:fsoftsms_uiresource/images/workflowimage/User_male.png",
+            "positions": [
+                300,
+                150
+            ],
+            "id": -30
         },
         {
-            "name": "Thông tin sản phẩm",
-            "type": "splitter",
-            "value": "",
-            "id": -23050,
-            "position": 23050
-        },
-        {
-            "name": "Tên sản phẩm đầy đủ",
-            "type": "master_data_frt_mtxt_sanpham_sp_loc_itemcodename",
-            "staticContent": "<p style='font-size: 12px; color: #0000ff'><i></i>Chọn sản phẩm cần mua</p>",
-            "value": "",
-            "display": true,
-            "conditions": {
-                "required": true,
-                "min-length": 1,
-                "max-length": 1000
-            },
-            "additionalDisplayClass": "left-info",
-            "id": -23051,
-            "position": 23051
-        },
-        {
-            "name": "Mã sản phẩm",
-            "type": "master_data_frt_mtxt_sanpham_sp_loc_itemcodename_lay_itemcode",
-            "staticContent": "<p style='font-size: 12px; color: #0000ff'><i></i></p>",
-            "value": "",
-            "display": true,
-            "conditions": {
-                "required": false,
-                "min-length": 1,
-                "max-length": 1000
-            },
-            "additionalDisplayClass": "right-info",
-            "id": -23052,
-            "position": 23051,
-            "disabled": true
-        },
-        {
-            "name": "Tên sản phẩm",
-            "type": "textarea",
-            "staticContent": "<p style='font-size: 12px; color: #0000ff'><i></i></p>",
-            "value": "",
-            "display": true,
-            "conditions": {
-                "required": false,
-                "min-length": 1,
-                "max-length": 1000
-            },
-            "additionalDisplayClass": "left-info",
-            "id": -23053,
-            "position": 23050,
-            "disabled": true,
-            "dataFrom": -23051,
-            "dataFromFunc": "feederData",
-            "dataFromCondition": [
-                {
-                    "conditions": {
-                        "operation": "else"
-                    },
-                    "value": {
-                        "dataset": "INDIVIDUAL",
-                        "infoId": -23052
-                    }
-                }
-            ]
-        },
-        {
-            "name": "master_data_frt_mtxt_sanpham_sp_loc_itemcodename_lay_itemname",
-            "type": "master_data_frt_mtxt_sanpham_sp_loc_itemcodename_lay_itemname",
-            "staticContent": "<p style='font-size: 12px; color: #0000ff'><i>master_data_frt_mtxt_sanpham_sp_loc_itemcodename_lay_itemname</i></p>",
-            "value": "",
-            "display": false,
-            "conditions": {
-                "required": false,
-                "min-length": 1,
-                "max-length": 1000
-            },
-            "additionalDisplayClass": "right-info",
-            "id": -23054,
-            "position": 23051,
-            "disabled": true
-        },
-        {
-            "name": "Lọc Phân cấp (CẤM BỎ)",
-            "type": "master_data_frt_warehouse_ict_loc_phancap",
-            "staticContent": "<p style='font-size: 12px; color: #0000ff'><i>Lọc Phân cấp (CẤM BỎ)</i></p>",
-            "value": "FPTSHOP",
-            "display": false,
-            "conditions": {
-                "required": false,
-                "min-length": 1,
-                "max-length": 1000
-            },
-            "additionalDisplayClass": "left-info",
-            "id": -23055,
-            "position": 23055,
-            "disabled": true
-        },
-        {
-            "name": "Shop bán",
-            "type": "master_data_frt_warehouse_ict_loc_tenshopb1",
-            "staticContent": "<p style='font-size: 12px; color: #0000ff'><i></i>Nơi bạn nhận hàng và xuất hóa đơn</p>",
-            "value": "",
-            "display": true,
-            "conditions": {
-                "required": true,
-                "min-length": 1,
-                "max-length": 1000
-            },
-            "additionalDisplayClass": "left-info",
-            "id": -23056,
-            "position": 23056
-        },
-        {
-            "name": "Mã Shop bán",
-            "type": "master_data_frt_warehouse_ict_lay_mashopb1",
-            "staticContent": "<p style='font-size: 12px; color: #0000ff'><i></i></p>",
-            "value": "",
-            "display": false,
-            "conditions": {
-                "required": false,
-                "min-length": 1,
-                "max-length": 1000
-            },
-            "additionalDisplayClass": "left-info",
-            "id": -23057,
-            "position": 23057,
-            "disabled": true
-        },
-        {
-            "name": "Ghi chú",
-            "type": "textarea",
-            "staticContent": "<p style='font-size: 12px; color: #0000ff'><i></i></p>",
-            "value": "",
-            "display": true,
-            "conditions": {
-                "required": false
-            },
-            "additionalDisplayClass": "right-info",
-            "id": -23058,
-            "position": 23056
+            "positions": [
+                200,
+                250
+            ],
+            "id": -1
         }
     ]
-} 
+}

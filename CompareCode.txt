@@ -1,243 +1,372 @@
 ﻿{
-    "relatives": [
-        {
-            "owner": "",
-            "summary": "Người tạo YC",
-            "roles": {
-                "assigner": [
-                    ""
-                ],
-                "implementer": []
-            },
-            "id": -3,
-            "type": "ticket",
-            "isDone": false,
-            "status": "Opened"
-        },
-        {
-            "owner": "System",
-            "summary": "Hệ thống xác định quy trình",
-            "roles": {
-                "implementer": [
-                    "TuanNA89"
-                ]
-            },
-            "co-execution": true,
-            "sla": {
-                "res": 2,
-                "fix": 4
-            },
-            "decisions": {
-                "auto": true,
-                "textDisp": "Hệ thống xác định quy trình",
-                "actions": [
-                    {
-                        "workflow": {
-                            "relationships": [
-                                -1030
-                            ],
-                            "relatives": [
-                                -30
-                            ]
-                        },
-                        "name": "HR Duyệt",
-                        "id": -1,
-                        "conditions": {
-                            "operation": "or",
-                            "items": [
-                                {
-                                    "right-element": {
-                                        "dataset": "value",
-                                        "value": "1"
-                                    },
-                                    "compare-type": "text",
-                                    "operation": "equal",
-                                    "left-element": {
-                                        "inputId": -3,
-                                        "infoId": -23017,
-                                        "phaseId": -10,
-                                        "type": "select",
-                                        "dataset": "INDIVIDUAL"
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "workflow": {
-                            "relationships": [
-                                -1020
-                            ],
-                            "relatives": [
-                                -20
-                            ]
-                        },
-                        "name": "Trưởng bộ phận duyệt",
-                        "id": -2,
-                        "conditions": {
-                            "operation": "or",
-                            "items": [
-                                {
-                                    "right-element": {
-                                        "dataset": "value",
-                                        "value": "0"
-                                    },
-                                    "compare-type": "text",
-                                    "operation": "equal",
-                                    "left-element": {
-                                        "inputId": -3,
-                                        "infoId": -23017,
-                                        "phaseId": -10,
-                                        "type": "select",
-                                        "dataset": "INDIVIDUAL"
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                ],
-                "autoStartAfter": 1,
-                "status": "unfinished"
-            },
-            "id": -20,
-            "type": "phase",
-            "isDone": false,
-            "phaseType": "Implement",
-            "role_config": {
-                "provider_id": []
-            },
-            "status": "Responding"
-        },
-        {
-            "owner": "",
-            "summary": "Trưởng đơn vị (Phê duyệt)",
-            "roles": {
-                "assigner": [],
-                "implementer": []
-            },
-            "id": -20,
-            "type": "phase",
-            "isDone": false,
-            "phaseType": "Implement",
-            "status": "Responding"
-        },
-        {
-            "owner": "",
-            "summary": "Nhân sự phê duyệt",
-            "autocreate": false,
-            "id": -30,
-            "type": "phase",
-            "isDone": false,
-            "phaseType": "Implement",
-            "role_config": {
-                "provider_id": 11
-            },
-            "status": "Responding"
-        }
-    ],
-    "relationships": [
-        {
-            "autocreate": true,
-            "from": -3,
-            "id": -310,
-            "position": -100,
-            "to": -10,
-            "type": "default",
-            "status": "finished"
-        },
-        {
-            "autocreate": true,
-            "from": -10,
-            "to": -20,
-            "id": -1020,
-            "position": 10000,
-            "type": "approval",
-            "status": "waiting"
-        },
-        {
-            "autocreate": false,
-            "from": -10,
-            "to": -30,
-            "id": -1030,
-            "detail": {},
-            "position": 10100,
-            "type": "default",
-            "status": "waiting"
-        }
-    ],
-    "notification_config": {
-        "approvers_pending_mail_template": 15,
-        "ticket_response_mail_template": 3,
-        "comment_mail_template": 22,
-        "viewers_assignment_mail_template": 24,
-        "inform_bill_mail_template": 32,
-        "ticket_result_reject_mail_template": 10,
-        "watchers_ticket_rejection_mail_template": 21,
-        "creator_rejected_mail_template": 21,
-        "new_performer_phase_reassignment_mail_template": 12,
-        "ticket_share_mail_template": 27,
-        "ticket_creation_mail_template": 1,
-        "relationship_result_reject_mail_template": 11,
-        "creator_approved_mail_template": 23,
-        "co_execute_rejection_mail_template": 25,
-        "mention_mail_template": 9,
-        "implementation_reminder_mail_template": 19,
-        "creator_requested_update_mail_template": 14,
-        "ticket_cancellation_mail_template": 5,
-        "approval_input_finish_mail_template": 17,
-        "co_execute_request_to_update_mail_template": 26,
-        "old_performer_phase_reassignment_mail_template": 13,
-        "watchers_ticket_auto_closing_mail_template": 8,
-        "approval_reminder_no_token_mail_template": 29,
-        "watchers_ticket_creation_mail_template": 2,
-        "watchers_ticket_cancellation_mail_template": 6,
-        "inform_export_mail_template": 33,
-        "approval_reminder_mail_template": 18,
-        "confirmation_reminder_mail_template": 20,
-        "phase_input_finish_mail_template": 16,
-        "phase_finished_mail_template": 30,
-        "watchers_ticket_closing_mail_template": 7,
-        "watchers_ticket_response_mail_template": 4,
-        "phase_approve_finished_mail_template": 31
+  "relatives": [
+    {
+      "owner": "",
+      "summary": "Người tạo YC",
+      "id": -3,
+      "type": "ticket",
+      "isDone": false,
+      "status": "Opened"
     },
-    "display": [
-        {
-            "positions": [
-                200,
-                50
-            ],
-            "id": -3
-        },
-        {
-            "image": "/download/resources/vn.com.fsoft.tool.sms:fsoftsms_uiresource/images/workflowimage/User_male.png",
-            "positions": [
-                200,
-                150
-            ],
-            "id": -10
-        },
-        {
-            "image": "/download/resources/vn.com.fsoft.tool.sms:fsoftsms_uiresource/images/workflowimage/HR.png",
-            "positions": [
-                100,
-                150
-            ],
-            "id": -20
-        },
-        {
-            "image": "/download/resources/vn.com.fsoft.tool.sms:fsoftsms_uiresource/images/workflowimage/User_male.png",
-            "positions": [
-                300,
-                150
-            ],
-            "id": -30
-        },
-        {
-            "positions": [
-                200,
-                250
-            ],
-            "id": -1
+    {
+      "owner": "System",
+      "summary": "Hệ thống xác định quy trình",
+      "roles": {
+        "viewer": [
+          "TuanNA89"
+        ],
+        "assigner": [
+          "TuanNA89"
+        ],
+        "implementer": [
+          "TuanNA89"
+        ]
+      },
+      "co-execution": true,
+      "sla": {
+        "res": 2,
+        "fix": 4
+      },
+      "decisions": {
+        "auto": true,
+        "textDisp": "Hệ thống xác định quy trình",
+        "actions": [
+          {
+            "workflow": {
+              "relationships": [
+                -1020,
+                -2001
+              ],
+              "relatives": [
+                -20,
+                -1
+              ]
+            },
+            "name": "HR Duyệt",
+            "id": -1,
+            "conditions": {
+              "operation": "or",
+              "items": [
+                {
+                  "right-element": {
+                    "dataset": "value",
+                    "value": "1"
+                  },
+                  "compare-type": "text",
+                  "operation": "equal",
+                  "left-element": {
+                    "inputId": -3,
+                    "infoId": -23017,
+                    "phaseId": -10,
+                    "type": "select",
+                    "dataset": "INDIVIDUAL"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "workflow": {
+              "relationships": [
+                -1030,
+                -3001
+              ],
+              "relatives": [
+                -30,
+                -1
+              ]
+            },
+            "name": "Trưởng bộ phận duyệt",
+            "id": -2,
+            "conditions": {
+              "operation": "or",
+              "items": [
+                {
+                  "right-element": {
+                    "dataset": "value",
+                    "value": "0"
+                  },
+                  "compare-type": "text",
+                  "operation": "equal",
+                  "left-element": {
+                    "inputId": -3,
+                    "infoId": -23017,
+                    "phaseId": -10,
+                    "type": "select",
+                    "dataset": "INDIVIDUAL"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "autoStartAfter": 1,
+        "status": "unfinished"
+      },
+      "id": -10,
+      "type": "phase",
+      "isDone": false,
+      "phaseType": "Implement",
+      "role_config": {
+        "provider_id": []
+      },
+      "status": "Responding"
+    },
+    {
+      "owner": "",
+      "summary": "HR duyệt",
+      "roles": {
+        "assigner": [
+          "TuanNA89"
+        ]
+      },
+      "autocreate": true,
+      "co-execution": true,
+      "sla": {
+        "res": 2,
+        "fix": 4
+      },
+      "id": -20,
+      "type": "phase",
+      "isDone": false,
+      "phaseType": "Implement",
+      "role_config": {
+        "provider_id": []
+      },
+      "status": "Responding"
+    },
+    {
+      "owner": "",
+      "summary": "Trưởng bộ phận duyệt",
+      "roles": {
+        "assigner": [
+          "TuanNA89"
+        ]
+      },
+      "autocreate": true,
+      "co-execution": true,
+      "sla": {
+        "res": 2,
+        "fix": 4
+      },
+      "id": -30,
+      "type": "phase",
+      "isDone": false,
+      "phaseType": "Implement",
+      "role_config": {
+        "provider_id": []
+      },
+      "status": "Responding"
+    },
+    {
+      "summary": "Xác nhận hoàn thành",
+      "autocreate": true,
+      "id": -1,
+      "type": "phase",
+      "isDone": false,
+      "phaseType": "Close",
+      "status": "Waiting"
+    }
+  ],
+  "relationships": [
+    {
+      "from": -3,
+      "id": -310,
+      "position": -100,
+      "to": -10,
+      "type": "default",
+      "status": "finished"
+    },
+    {
+      "autocreate": false,
+      "from": -10,
+      "detail": {
+        "individual": [
+          {
+            "staticContent": "<p style='font-size: 12px; color: #3617FF'><i></i></p>",
+            "name": "Kết quả",
+            "additionalDisplayClass": "left-info",
+            "id": -10,
+            "position": 10,
+            "conditions": {
+              "max-length": 1000,
+              "required": false,
+              "min-length": 1
+            },
+            "type": "textarea",
+            "value": ""
+          }
+        ]
+      },
+      "id": -1020,
+      "to": -20,
+      "position": 10000,
+      "type": "approval",
+      "status": "waiting"
+    },
+    {
+      "autocreate": false,
+      "from": -10,
+      "detail": {
+        "individual": [
+          {
+            "staticContent": "<p style='font-size: 12px; color: #3617FF'><i></i></p>",
+            "name": "Kết quả",
+            "additionalDisplayClass": "left-info",
+            "id": -10,
+            "position": 10,
+            "conditions": {
+              "max-length": 1000,
+              "required": false,
+              "min-length": 1
+            },
+            "type": "textarea",
+            "value": ""
+          }
+        ]
+      },
+      "id": -1030,
+      "to": -30,
+      "position": 10100,
+      "type": "approval",
+      "status": "waiting"
+    },
+    {
+      "buttonConfig": {
+        "requestUpdate": {
+          "enable": false
         }
-    ]
-}
+      },
+      "autocreate": false,
+      "from": -30,
+      "detail": {
+        "individual": [
+          {
+            "staticContent": "<p style='font-size: 12px; color: #3617FF'><i></i></p>",
+            "name": "Kết quả",
+            "additionalDisplayClass": "left-info",
+            "id": -10,
+            "position": 10,
+            "conditions": {
+              "max-length": 1000,
+              "required": true,
+              "min-length": 1
+            },
+            "type": "textarea",
+            "value": ""
+          }
+        ]
+      },
+      "id": -3001,
+      "to": -1,
+      "type": "approval",
+      "status": "waiting"
+    },
+    {
+      "buttonConfig": {
+        "requestUpdate": {
+          "enable": false
+        }
+      },
+      "autocreate": false,
+      "from": -20,
+      "detail": {
+        "individual": [
+          {
+            "staticContent": "<p style='font-size: 12px; color: #3617FF'><i></i></p>",
+            "name": "Kết quả",
+            "additionalDisplayClass": "left-info",
+            "id": -10,
+            "position": 10,
+            "conditions": {
+              "max-length": 1000,
+              "required": true,
+              "min-length": 1
+            },
+            "type": "textarea",
+            "value": ""
+          }
+        ]
+      },
+      "id": -2001,
+      "to": -1,
+      "type": "approval",
+      "status": "waiting"
+    }
+  ],
+  "notification_config": {
+    "approvers_pending_mail_template": 15,
+    "ticket_response_mail_template": 3,
+    "comment_mail_template": 22,
+    "viewers_assignment_mail_template": 24,
+    "inform_bill_mail_template": 32,
+    "ticket_result_reject_mail_template": 10,
+    "watchers_ticket_rejection_mail_template": 21,
+    "creator_rejected_mail_template": 21,
+    "new_performer_phase_reassignment_mail_template": 12,
+    "ticket_share_mail_template": 27,
+    "ticket_creation_mail_template": 1,
+    "relationship_result_reject_mail_template": 11,
+    "creator_approved_mail_template": 23,
+    "co_execute_rejection_mail_template": 25,
+    "mention_mail_template": 9,
+    "implementation_reminder_mail_template": 19,
+    "creator_requested_update_mail_template": 14,
+    "ticket_cancellation_mail_template": 5,
+    "approval_input_finish_mail_template": 17,
+    "co_execute_request_to_update_mail_template": 26,
+    "old_performer_phase_reassignment_mail_template": 13,
+    "watchers_ticket_auto_closing_mail_template": 8,
+    "approval_reminder_no_token_mail_template": 29,
+    "watchers_ticket_creation_mail_template": 2,
+    "watchers_ticket_cancellation_mail_template": 6,
+    "inform_export_mail_template": 33,
+    "approval_reminder_mail_template": 18,
+    "confirmation_reminder_mail_template": 20,
+    "phase_input_finish_mail_template": 16,
+    "phase_finished_mail_template": 30,
+    "watchers_ticket_closing_mail_template": 7,
+    "watchers_ticket_response_mail_template": 4,
+    "phase_approve_finished_mail_template": 31
+  },
+  "display": [
+    {
+      "positions": [
+        200,
+        50
+      ],
+      "id": -3
+    },
+    {
+      "image": "/download/resources/vn.com.fsoft.tool.sms:fsoftsms_uiresource/images/workflowimage/User_male.png",
+      "positions": [
+        200,
+        150
+      ],
+      "id": -10
+    },
+    {
+      "image": "/download/resources/vn.com.fsoft.tool.sms:fsoftsms_uiresource/images/workflowimage/User_male.png",
+      "positions": [
+        200,
+        250
+      ],
+      "id": -20
+    },
+    {
+      "image": "/download/resources/vn.com.fsoft.tool.sms:fsoftsms_uiresource/images/workflowimage/User_male.png",
+      "positions": [
+        100,
+        250
+      ],
+      "id": -30
+    },
+    {
+      "positions": [
+        200,
+        450
+      ],
+      "id": -1
+    }
+  ]
+} 

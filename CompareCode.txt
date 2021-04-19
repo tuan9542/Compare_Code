@@ -1,4 +1,7 @@
-﻿/*
+﻿SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;
+GO
+/*
 ==================================================
 Author			:	? - VietMXH
 Create date		:	? - 17/01/2019 09:00
@@ -7,14 +10,15 @@ Note			:
 ==================================================
 Test:
 EXEC Requests_GetInMain
-    @EmpCode = '6710'
-  , @TabIndex = 1
+  @EmpCode = '2288'
+, @TabIndex = 1
 */
 ALTER PROCEDURE dbo.Requests_GetInMain ( @EmpCode NVARCHAR(50), @TabIndex INT = 1 )
 AS
 BEGIN
     BEGIN TRY
-        DECLARE @p_Log_Start DATETIME = GETDATE();
+
+        ----RETURN
 
         SET NOCOUNT ON;
 
@@ -69,6 +73,55 @@ BEGIN
             AND A.TimeCreate > @p_ViewDate
             AND --	(Không được thay đổi điều kiện WHERE!!!)
             A.Status = 1;
+
+        -- TuanNA89 - 12/04/2021 - Tách những bảng gọi nhiều lần ra bảng tạm
+        --	===Lấy DL Categories===
+        SELECT
+            C.Id
+          , C.ParentId
+          , C.Description
+        INTO
+            #tmp_Categories
+        FROM
+            dbo.Categories AS C ( NOLOCK )
+        WHERE
+            C.Status = 1;
+
+        --	===Lấy DL MasterDatas===
+        SELECT
+            MD.Id
+          , MD.Code
+          , MD.Name
+          , MD.[Group]
+        INTO
+            #tmp_MasterDatas
+        FROM
+            dbo.MasterDatas AS MD ( NOLOCK )
+        WHERE
+            MD.Status = 1;
+
+        --	===Lấy DL ViewHistories===
+        SELECT
+            RequestId
+          , EmpCode
+          , HasImportant
+          , Status
+        INTO
+            #tmp_ViewHistories
+        FROM
+            dbo.ViewHistories ( NOLOCK );
+
+        --	===Lấy DL F03_Employees===
+        SELECT
+            ID
+          , EmployeeCode
+          , EmployeeName
+          , WarehouseCode
+          , JobTitle
+        INTO
+            #Tmp__Employees
+        FROM
+            dbo.F03_Employees WITH ( NOLOCK );
 
         CREATE TABLE #Tmp__COMMON__Req
         (
@@ -140,7 +193,6 @@ BEGIN
                 #Tmp__TabIndex_1__AssByEmp_ReqId
             FROM
                 #Tmp__Assigners__ByEmpCode AS A;
-
             --	#Tmp__TabIndex_1__Req
             SELECT
                 R.Id
@@ -232,7 +284,7 @@ BEGIN
                 R.TypeId <> 167
                 AND R.Status > 0
                 AND (( R.Status < 3 ) OR ( R.StillShowing = 1 AND R.Status IN (3, 4)))
-                AND R.TimeAppear <= GETDATE()
+                AND ( R.TimeAppear <= GETDATE())
                 AND (( R.Assigner = @EmpCode AND R.Status BETWEEN 2 AND 4 )
                      OR ( A.Id > 0 AND R.StepStatus = 1 )
                      OR --	Load Inbox cho tất cả User xử lý khi CallLog Trạng thái Chờ xử lý
@@ -335,7 +387,12 @@ BEGIN
                 dbo.Conversations C ( NOLOCK )
             WHERE
                 C.RequestId IN ( SELECT A.RequestId FROM #Tmp__TabIndex_1__AssByEmp_ReqId AS A )
-                AND C.Status = 1;
+                AND C.Status = 1
+
+                --▼	Edit - VietMXH - 27/09/2018 - Chỉ xét 2:Trao đổi==================================================
+                AND --	2:Trao đổi
+                C.Type = 2;
+            --▲	Edit - VietMXH - 27/09/2018 - Chỉ xét 2:Trao đổi==================================================
 
             SELECT
                 C.RequestId
@@ -582,7 +639,7 @@ ORDER BY C.Id DESC
                 FROM
                     dbo.Permissions ( NOLOCK ) P
                 WHERE
-                    P.TypeId = 23
+                    P.TypeId IN (23)
                     AND P.Jobtitle IN ('00073', '00175', '00176', '00279', '00385')
                     AND P.Status = 1;
                 SELECT
@@ -642,8 +699,9 @@ ORDER BY C.Id DESC
                         AND R.FromShop IN ( SELECT GiaTri FROM dbo.ufn_SplitStringToTable(@Shop, ',', 0) )
                     )
                     OR ( R.TypeId IN (134, 143) AND R.Status < 4 AND R.StepNo > 2 );
-                --▲ ChuongNT3 - 23/01/2019 - add tag process loai 134,143
 
+
+                --▲ ChuongNT3 - 23/01/2019 - add tag process loai 134,143
                 SELECT
                     C.RequestId
                   , C.Id
@@ -700,7 +758,6 @@ ORDER BY C.Id DESC
                   , #Temp_PermissionHC_23;
             END;
             -----▲ Add - ThuongNM2 - 12/01/2019 - Thêm loại 23 cho HC theo dõi All bước ======> Thanhdt29 Yêu cầu
-
             INSERT INTO #Tmp__COMMON__Req
             SELECT TOP 200
                    R.Id
@@ -802,16 +859,6 @@ ORDER BY C.Id DESC
             PRINT GETDATE();
         END;
         PRINT GETDATE();
-
-        --	===Lấy DL F03_Employees===
-        SELECT
-            ID
-          , EmployeeCode
-          , EmployeeName
-        INTO
-            #Tmp__Employees
-        FROM
-            dbo.F03_Employees WITH ( NOLOCK );
 
         ---------Haonn------------------
         ----chi sua phan load cac callog cua user dang nhap
@@ -915,8 +962,24 @@ ORDER BY C.Id DESC
                 AND D.Status = 1
                 AND D.Property8 <> '';
 
+            -- TuanNA89 - 12/04/2021 - Insert CallLog Ưu tiên
+            CREATE TABLE #Tmp__Requests_UuTien
+            (
+                STT INT IDENTITY(1, 1)
+              , Id BIGINT
+              , Title NVARCHAR(MAX)
+              , TimeCreate DATETIME
+              , StepNo INT
+              , TypeId INT
+              , Sender NVARCHAR(100)
+              , ThoiGian INT
+              , Assigner NVARCHAR(100)
+              , Status INT
+            );
+
             IF (( SELECT COUNT(1)FROM #Tmp__TabIndex_1__PushReqToUser ) > 0 )
             BEGIN
+                PRINT 'T1';
                 SELECT DISTINCT TOP 20
                        A.Id AS Id
                 INTO
@@ -962,6 +1025,45 @@ ORDER BY C.Id DESC
                     #Tmp__TabIndex_1__COMMON__Req__Full;
 
                 --	===Insert #Tmp__Requests_GetInMain===
+                -- TuanNA89 - 12/04/2021 - Insert CallLog Ưu tiên
+                --	---Insert Ưu tiên Loại 208:Kiểm tra CIC khách hàng---                
+                INSERT INTO #Tmp__Requests_UuTien ( Id, Title, TimeCreate, StepNo, TypeId, Sender, ThoiGian, Assigner, Status )
+                SELECT
+                    Id
+                  , Title
+                  , TimeCreate
+                  , StepNo
+                  , TypeId
+                  , Sender
+                  , ThoiGian
+                  , Assigner
+                  , Status
+                FROM
+                    #Tmp__TabIndex_1__COMMON__Req__Full ( NOLOCK )
+                WHERE
+                    TypeId = 208
+                ORDER BY
+                    Id DESC;
+
+                --	---Insert Ưu tiên Loại 205:Claim nhà bảo hiểm---
+                INSERT INTO #Tmp__Requests_UuTien ( Id, Title, TimeCreate, StepNo, TypeId, Sender, ThoiGian, Assigner, Status )
+                SELECT
+                    Id
+                  , Title
+                  , TimeCreate
+                  , StepNo
+                  , TypeId
+                  , Sender
+                  , ThoiGian
+                  , Assigner
+                  , Status
+                FROM
+                    #Tmp__TabIndex_1__COMMON__Req__Full ( NOLOCK )
+                WHERE
+                    TypeId = 205
+                ORDER BY
+                    Id DESC;
+
                 --	---Insert Ưu tiên Loại 208:Kiểm tra CIC khách hàng---
                 INSERT INTO #Tmp__Requests_GetInMain
                 (
@@ -979,35 +1081,34 @@ ORDER BY C.Id DESC
                   , isTrash
                   , TypeId
                 )
-                SELECT DISTINCT
-                       R.Id AS Id -- bigint
-                     , G.Description AS [Group] -- nvarchar(100)
-                     , R.Title AS Title -- nvarchar(max)
-                     , FORMAT(R.TimeCreate, 'dd/MM/yyyy HH:mm', 'vi') AS TimeCreate -- nvarchar(50)
-                     , R.StepNo AS StepNo -- int
-                     , 1 AS isHighlight -- bit
-                     , M.Name AS Status -- nvarchar(250)
-                     , CONVERT(VARCHAR(10), R.ThoiGian / 60) + 'H' + CONVERT(VARCHAR(10), R.ThoiGian % 60) AS ExistInStep -- nvarchar(50)
-                     , R.Assigner AS Assigner -- nvarchar(300)
-                     , ISNULL(V.HasImportant, 0) AS HasImportant -- bit
-                     , N'' AS NguonGQKN -- nvarchar(50)
-                     , N'' AS isTrash -- nvarchar(50)
-                     , R.TypeId AS TypeId -- int
+                SELECT
+                    R.Id AS Id -- bigint
+                  , G.Description AS [Group] -- nvarchar(100)
+                  , R.Title AS Title -- nvarchar(max)
+                  , FORMAT(R.TimeCreate, 'dd/MM/yyyy HH:mm', 'vi') AS TimeCreate -- nvarchar(50)
+                  , R.StepNo AS StepNo -- int
+                  , 1 AS isHighlight -- bit
+                  , M.Name AS Status -- nvarchar(250)
+                  , CONVERT(VARCHAR(10), R.ThoiGian / 60) + 'H' + CONVERT(VARCHAR(10), R.ThoiGian % 60) AS ExistInStep -- nvarchar(50)
+                  , R.Assigner AS Assigner -- nvarchar(300)
+                  , ISNULL(V.HasImportant, 0) AS HasImportant -- bit
+                  , N'' AS NguonGQKN -- nvarchar(50)
+                  , N'' AS isTrash -- nvarchar(50)
+                  , R.TypeId AS TypeId -- int
                 FROM
-                    #Tmp__TabIndex_1__COMMON__Req__Full R
-                    LEFT JOIN dbo.Categories ( NOLOCK ) C ON C.Id = R.TypeId
-                    LEFT JOIN dbo.Categories ( NOLOCK ) G ON C.ParentId = G.Id
-                    LEFT JOIN dbo.MasterDatas ( NOLOCK ) M ON M.Code = R.Status
-                                                              AND M.[Group] = 'RequestStatus'
-                    LEFT JOIN dbo.ViewHistories ( NOLOCK ) V ON V.RequestId = R.Id
-                                                                AND V.EmpCode = @EmpCode
-                                                                AND R.TypeId <> 99
-                    LEFT JOIN dbo.F03_Employees ( NOLOCK ) E ON E.EmployeeCode = R.Sender
-                WHERE
-                    --	208:Kiểm tra CIC khách hàng
-                    R.TypeId = 208
+                    #Tmp__Requests_UuTien R
+                    LEFT JOIN #tmp_Categories ( NOLOCK ) C ON C.Id = R.TypeId
+                    LEFT JOIN #tmp_Categories ( NOLOCK ) G ON C.ParentId = G.Id
+                    LEFT JOIN #tmp_MasterDatas ( NOLOCK ) M ON M.Code = R.Status
+                                                               AND M.[Group] = 'RequestStatus'
+                    LEFT JOIN #tmp_ViewHistories ( NOLOCK ) V ON V.RequestId = R.Id
+                                                                 AND V.EmpCode = @EmpCode
+                                                                 AND R.TypeId <> 99
+                    LEFT JOIN #Tmp__Employees ( NOLOCK ) E ON E.EmployeeCode = R.Sender
                 ORDER BY
-                    R.Id DESC;
+                    R.STT;
+                -- TuanNA89 - 12/04/2021 - Insert CallLog Ưu tiên
+
                 --	---Insert các Loại còn lại---
                 INSERT INTO #Tmp__Requests_GetInMain
                 (
@@ -1068,14 +1169,14 @@ ORDER BY C.Id DESC
                      , R.TypeId AS TypeId -- int
                 FROM
                     #Tmp__TabIndex_1__COMMON__Req__Full R
-                    LEFT JOIN dbo.Categories ( NOLOCK ) C ON C.Id = R.TypeId
-                    LEFT JOIN dbo.Categories ( NOLOCK ) G ON C.ParentId = G.Id
-                    LEFT JOIN dbo.MasterDatas ( NOLOCK ) M ON M.Code = R.Status
-                                                              AND M.[Group] = 'RequestStatus'
-                    LEFT JOIN dbo.ViewHistories ( NOLOCK ) V ON V.RequestId = R.Id
-                                                                AND V.EmpCode = @EmpCode
-                                                                AND R.TypeId <> 99
-                    LEFT JOIN dbo.F03_Employees ( NOLOCK ) E ON E.EmployeeCode = R.Sender
+                    LEFT JOIN #tmp_Categories ( NOLOCK ) C ON C.Id = R.TypeId
+                    LEFT JOIN #tmp_Categories ( NOLOCK ) G ON C.ParentId = G.Id
+                    LEFT JOIN #tmp_MasterDatas ( NOLOCK ) M ON M.Code = R.Status
+                                                               AND M.[Group] = 'RequestStatus'
+                    LEFT JOIN #tmp_ViewHistories ( NOLOCK ) V ON V.RequestId = R.Id
+                                                                 AND V.EmpCode = @EmpCode
+                                                                 AND R.TypeId <> 99
+                    LEFT JOIN #Tmp__Employees ( NOLOCK ) E ON E.EmployeeCode = R.Sender
                 WHERE
                     R.TypeId NOT IN (   14 --	14:Thông báo
                                       , 20 --	20:Inside
@@ -1087,8 +1188,9 @@ ORDER BY C.Id DESC
                                       , 142 --	142:Thông báo Mã Code Đăng nhập CRM
                                       , 159 --	159:Thông báo Kết quả Bảo hành CRM
                                       , 160 --	160:Thông báo Kết quả Bảo hành Vàng CRM
-                                      , 167 --	167:Thông báo GQKN 
+                                      , 167 --	167:Thông báo GQKN
                                       , 208 --	208:Kiểm tra CIC khách hàng
+                                      , 205 --  205: Claim nhà bảo hiểm
                                     )
                 ORDER BY
                     R.Id DESC;
@@ -1097,6 +1199,7 @@ ORDER BY C.Id DESC
             END;
             ELSE
             BEGIN
+                PRINT 'T2';
                 SELECT DISTINCT TOP 20
                        a.Id AS Id
                 INTO
@@ -1132,7 +1235,45 @@ ORDER BY C.Id DESC
                     #Tmp__TabIndex_1__COMMON__Req__Full;
 
                 --	===Insert #Tmp__Requests_GetInMain===
-                --	---Insert Ưu tiên Loại 208:Kiểm tra CIC khách hàng---
+                -- TuanNA89 - 12/04/2021 - Insert CallLog Ưu tiên   
+                --	---Insert Ưu tiên Loại 208:Kiểm tra CIC khách hàng---             
+                INSERT INTO #Tmp__Requests_UuTien ( Id, Title, TimeCreate, StepNo, TypeId, Sender, ThoiGian, Assigner, Status )
+                SELECT
+                    Id
+                  , Title
+                  , TimeCreate
+                  , StepNo
+                  , TypeId
+                  , Sender
+                  , ThoiGian
+                  , Assigner
+                  , Status
+                FROM
+                    #Tmp__TabIndex_1__COMMON__Req__Full ( NOLOCK )
+                WHERE
+                    TypeId = 208
+                ORDER BY
+                    Id DESC;
+
+                --	---Insert Ưu tiên Loại 205:Claim nhà bảo hiểm---
+                INSERT INTO #Tmp__Requests_UuTien ( Id, Title, TimeCreate, StepNo, TypeId, Sender, ThoiGian, Assigner, Status )
+                SELECT
+                    Id
+                  , Title
+                  , TimeCreate
+                  , StepNo
+                  , TypeId
+                  , Sender
+                  , ThoiGian
+                  , Assigner
+                  , Status
+                FROM
+                    #Tmp__TabIndex_1__COMMON__Req__Full ( NOLOCK )
+                WHERE
+                    TypeId = 205
+                ORDER BY
+                    Id DESC;
+
                 INSERT INTO #Tmp__Requests_GetInMain
                 (
                     Id
@@ -1164,20 +1305,20 @@ ORDER BY C.Id DESC
                      , N'' AS isTrash -- nvarchar(50)
                      , R.TypeId AS TypeId -- int
                 FROM
-                    #Tmp__TabIndex_1__COMMON__Req__Full AS R
-                    LEFT JOIN dbo.Categories ( NOLOCK ) C ON C.Id = R.TypeId
-                    LEFT JOIN dbo.Categories ( NOLOCK ) G ON C.ParentId = G.Id
-                    LEFT JOIN dbo.MasterDatas ( NOLOCK ) M ON M.Code = R.Status
-                                                              AND M.[Group] = 'RequestStatus'
-                    LEFT JOIN dbo.ViewHistories ( NOLOCK ) V ON V.RequestId = R.Id
-                                                                AND V.EmpCode = @EmpCode
-                                                                AND R.TypeId <> 99
-                    LEFT JOIN dbo.F03_Employees ( NOLOCK ) E ON E.EmployeeCode = R.Sender
-                WHERE
-                    --	208:Kiểm tra CIC khách hàng
-                    R.TypeId = 208
-                ORDER BY
-                    R.Id DESC;
+                    #Tmp__Requests_UuTien AS R
+                    LEFT JOIN #tmp_Categories ( NOLOCK ) C ON C.Id = R.TypeId
+                    LEFT JOIN #tmp_Categories ( NOLOCK ) G ON C.ParentId = G.Id
+                    LEFT JOIN #tmp_MasterDatas ( NOLOCK ) M ON M.Code = R.Status
+                                                               AND M.[Group] = 'RequestStatus'
+                    LEFT JOIN #tmp_ViewHistories ( NOLOCK ) V ON V.RequestId = R.Id
+                                                                 AND V.EmpCode = @EmpCode
+                                                                 AND R.TypeId <> 99
+                    LEFT JOIN #Tmp__Employees ( NOLOCK ) E ON E.EmployeeCode = R.Sender;
+
+
+
+
+
                 --	---Insert các Loại còn lại---
                 INSERT INTO #Tmp__Requests_GetInMain
                 (
@@ -1232,17 +1373,17 @@ ORDER BY C.Id DESC
                      , R.TypeId AS TypeId -- int
                 FROM
                     #Tmp__TabIndex_1__COMMON__Req__Full R
-                    LEFT JOIN dbo.Categories ( NOLOCK ) C ON C.Id = R.TypeId
-                    LEFT JOIN dbo.Categories ( NOLOCK ) G ON C.ParentId = G.Id
-                    LEFT JOIN dbo.MasterDatas ( NOLOCK ) M ON M.Code = R.Status
-                                                              AND M.[Group] = 'RequestStatus'
-                    LEFT JOIN dbo.ViewHistories ( NOLOCK ) V ON V.RequestId = R.Id
-                                                                AND V.EmpCode = @EmpCode
-                                                                AND R.TypeId <> 99
-                    LEFT JOIN dbo.F03_Employees ( NOLOCK ) E ON E.EmployeeCode = R.Sender
+                    LEFT JOIN #tmp_Categories ( NOLOCK ) C ON C.Id = R.TypeId
+                    LEFT JOIN #tmp_Categories ( NOLOCK ) G ON C.ParentId = G.Id
+                    LEFT JOIN #tmp_MasterDatas ( NOLOCK ) M ON M.Code = R.Status
+                                                               AND M.[Group] = 'RequestStatus'
+                    LEFT JOIN #tmp_ViewHistories ( NOLOCK ) V ON V.RequestId = R.Id
+                                                                 AND V.EmpCode = @EmpCode
+                                                                 AND R.TypeId <> 99
+                    LEFT JOIN #Tmp__Employees ( NOLOCK ) E ON E.EmployeeCode = R.Sender
                 WHERE
                     --	208:Kiểm tra CIC khách hàng
-                    R.TypeId <> 208
+                    R.TypeId NOT IN (205, 208)
                 ORDER BY
                     R.Id DESC;
 
@@ -1255,6 +1396,7 @@ ORDER BY C.Id DESC
         END;
         ELSE
         BEGIN
+            PRINT 'T3';
             --	==SELECT MÀN HÌNH ===				
             SELECT
                 RD.RequestId
@@ -1314,16 +1456,16 @@ ORDER BY C.Id DESC
                 #Tmp__TabIndex_N__COMMON__Req__Full
             FROM
                 #Tmp__COMMON__Req R
-                LEFT JOIN dbo.Categories ( NOLOCK ) C ON C.Id = R.TypeId
-                LEFT JOIN dbo.Categories ( NOLOCK ) G ON C.ParentId = G.Id
-                LEFT JOIN dbo.MasterDatas ( NOLOCK ) M ON M.Code = R.Status
-                                                          AND M.[Group] = 'RequestStatus'
+                LEFT JOIN #tmp_Categories ( NOLOCK ) C ON C.Id = R.TypeId
+                LEFT JOIN #tmp_Categories ( NOLOCK ) G ON C.ParentId = G.Id
+                LEFT JOIN #tmp_MasterDatas ( NOLOCK ) M ON M.Code = R.Status
+                                                           AND M.[Group] = 'RequestStatus'
                 LEFT JOIN #Tmp__Employees AS EMA ON EMA.EmployeeCode = R.Assigner
                 LEFT JOIN #Tmp__Employees AS EMS ON EMS.EmployeeCode = @EmpCode
-                LEFT JOIN dbo.ViewHistories ( NOLOCK ) V ON V.RequestId = R.Id
-                                                            AND V.EmpCode = @EmpCode
-                                                            AND R.TypeId <> 99
-                LEFT JOIN dbo.F03_Employees ( NOLOCK ) E ON E.EmployeeCode = R.Sender
+                LEFT JOIN #tmp_ViewHistories ( NOLOCK ) V ON V.RequestId = R.Id
+                                                             AND V.EmpCode = @EmpCode
+                                                             AND R.TypeId <> 99
+                LEFT JOIN #Tmp__Employees ( NOLOCK ) E ON E.EmployeeCode = R.Sender
             WHERE
                 R.TypeId NOT IN (   14 --	14:Thông báo
                                   , 20 --	20:Inside
@@ -1336,7 +1478,7 @@ ORDER BY C.Id DESC
                                   , 159 --	159:Thông báo Kết quả Bảo hành CRM
                                   , 160 --	160:Thông báo Kết quả Bảo hành Vàng CRM
                                   , 167 --	167:Thông báo GQKN
-                                ----, 208 --	208:Kiểm tra CIC khách hàng
+                                --, 208 --	208:Kiểm tra CIC khách hàng
                                 );
 
             DROP TABLE #Tmp__TabIndex_N__CheckDetail_Exist_TypeId_19;
@@ -1399,7 +1541,7 @@ ORDER BY C.Id DESC
 
             DROP TABLE #Tmp__TabIndex_N__COMMON__Req__Full__Sort3;
 
-            -- TuanNA89 - 22/11/2018 - Fix load loại calllog 208 giống rule TabIndex = 1
+            -- ▼ Edit - TuanNA89 - 22/11/2018 - Fix load Calllog loại 208 theo rule giống tab inbox ==================================================
             INSERT INTO #Tmp__Requests_GetInMain
             (
                 Id
@@ -1436,6 +1578,7 @@ ORDER BY C.Id DESC
                 R.TypeId = 208
             ORDER BY
                 R.Id DESC;
+            -- ▲ Edit - TuanNA89 - 22/11/2018 - Fix load Calllog loại 208 theo rule giống tab inbox ==================================================
 
             INSERT INTO #Tmp__Requests_GetInMain
             (
@@ -1469,9 +1612,8 @@ ORDER BY C.Id DESC
                  , R.TypeId AS TypeId
             FROM
                 #Tmp__TabIndex_N__COMMON__Req__Full AS R
-            -- TuanNA89 - 22/11/2018 - Fix load loại calllog 208 giống rule TabIndex = 1
             WHERE
-                R.TypeId <> 208
+                R.TypeId <> 208 -- ▶ Edit - TuanNA89 - 22/11/2018 - Fix load Calllog loại 208 theo rule giống tab inbox
             ORDER BY
                 R.Id DESC;
 
@@ -1509,7 +1651,12 @@ ORDER BY C.Id DESC
         DROP TABLE #Tmp__COMMON__Req__HC;
         DROP TABLE #Tmp__Requests_GetInMain;
         DROP TABLE #Tmp__Employees;
-        /*
+        DROP TABLE #Tmp__Requests_UuTien;
+        DROP TABLE #tmp_Categories;
+        DROP TABLE #tmp_MasterDatas;
+        DROP TABLE #tmp_ViewHistories;
+
+    /*
         DROP TABLE #Tmp__EmpJobTitle__ByEmpCode;
 		DROP TABLE #Tmp__JobTitle_CSKH;
 		DROP TABLE #Tmp__Assigners__ByEmpCode;
@@ -1536,19 +1683,6 @@ ORDER BY C.Id DESC
 					DROP TABLE #tem_CallLogFollowJobs,#temp_CallLogFollowAssiner;
 		*/
 
-        DECLARE @p_Log_TimeProcess BIGINT = ISNULL(( DATEDIFF(MILLISECOND, @p_Log_Start, GETDATE())), 0);
-        PRINT CONCAT('@p_Log_TimeProcess = ', @p_Log_TimeProcess);
-        IF ( @p_Log_TimeProcess > 10000 )
-        BEGIN
-            INSERT INTO dbo.Log_Requests_GetInMain ( LogDateTime, EmpCode, TabIndex, TimeProcess )
-            VALUES (
-                       @p_Log_Start -- LogDateTime - datetime
-                     , @EmpCode -- EmpCode - nvarchar(50)
-                     , @TabIndex -- TabIndex - int
-                     , @p_Log_TimeProcess -- TimeProcess - bigint
-                   );
-        END;
-
     END TRY
     BEGIN CATCH
         DECLARE @ErrorMessage NVARCHAR(MAX) = N'';
@@ -1570,7 +1704,5 @@ END;
 
 ----SELECT * FROM dbo.Logs(NOLOCK) WHERE Title=N'Requests_GetInMain' AND CHARINDEX(N'', Error)>0 ORDER BY Id DESC
 ----SELECT * FROM dbo.Logs(NOLOCK) WHERE TimeCreate>'2018-05-26' AND Title='Requests_GetInMain' ORDER BY Id DESC
-
-
 GO
 

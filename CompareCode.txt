@@ -1,372 +1,1576 @@
-﻿{
-  "relatives": [
-    {
-      "owner": "",
-      "summary": "Người tạo YC",
-      "id": -3,
-      "type": "ticket",
-      "isDone": false,
-      "status": "Opened"
-    },
-    {
-      "owner": "System",
-      "summary": "Hệ thống xác định quy trình",
-      "roles": {
-        "viewer": [
-          "TuanNA89"
-        ],
-        "assigner": [
-          "TuanNA89"
-        ],
-        "implementer": [
-          "TuanNA89"
-        ]
-      },
-      "co-execution": true,
-      "sla": {
-        "res": 2,
-        "fix": 4
-      },
-      "decisions": {
-        "auto": true,
-        "textDisp": "Hệ thống xác định quy trình",
-        "actions": [
-          {
-            "workflow": {
-              "relationships": [
-                -1020,
-                -2001
-              ],
-              "relatives": [
-                -20,
-                -1
-              ]
-            },
-            "name": "HR Duyệt",
-            "id": -1,
-            "conditions": {
-              "operation": "or",
-              "items": [
-                {
-                  "right-element": {
-                    "dataset": "value",
-                    "value": "1"
-                  },
-                  "compare-type": "text",
-                  "operation": "equal",
-                  "left-element": {
-                    "inputId": -3,
-                    "infoId": -23017,
-                    "phaseId": -10,
-                    "type": "select",
-                    "dataset": "INDIVIDUAL"
-                  }
-                }
-              ]
-            }
-          },
-          {
-            "workflow": {
-              "relationships": [
-                -1030,
-                -3001
-              ],
-              "relatives": [
-                -30,
-                -1
-              ]
-            },
-            "name": "Trưởng bộ phận duyệt",
-            "id": -2,
-            "conditions": {
-              "operation": "or",
-              "items": [
-                {
-                  "right-element": {
-                    "dataset": "value",
-                    "value": "0"
-                  },
-                  "compare-type": "text",
-                  "operation": "equal",
-                  "left-element": {
-                    "inputId": -3,
-                    "infoId": -23017,
-                    "phaseId": -10,
-                    "type": "select",
-                    "dataset": "INDIVIDUAL"
-                  }
-                }
-              ]
-            }
-          }
-        ],
-        "autoStartAfter": 1,
-        "status": "unfinished"
-      },
-      "id": -10,
-      "type": "phase",
-      "isDone": false,
-      "phaseType": "Implement",
-      "role_config": {
-        "provider_id": []
-      },
-      "status": "Responding"
-    },
-    {
-      "owner": "",
-      "summary": "HR duyệt",
-      "roles": {
-        "assigner": [
-          "TuanNA89"
-        ]
-      },
-      "autocreate": true,
-      "co-execution": true,
-      "sla": {
-        "res": 2,
-        "fix": 4
-      },
-      "id": -20,
-      "type": "phase",
-      "isDone": false,
-      "phaseType": "Implement",
-      "role_config": {
-        "provider_id": []
-      },
-      "status": "Responding"
-    },
-    {
-      "owner": "",
-      "summary": "Trưởng bộ phận duyệt",
-      "roles": {
-        "assigner": [
-          "TuanNA89"
-        ]
-      },
-      "autocreate": true,
-      "co-execution": true,
-      "sla": {
-        "res": 2,
-        "fix": 4
-      },
-      "id": -30,
-      "type": "phase",
-      "isDone": false,
-      "phaseType": "Implement",
-      "role_config": {
-        "provider_id": []
-      },
-      "status": "Responding"
-    },
-    {
-      "summary": "Xác nhận hoàn thành",
-      "autocreate": true,
-      "id": -1,
-      "type": "phase",
-      "isDone": false,
-      "phaseType": "Close",
-      "status": "Waiting"
-    }
-  ],
-  "relationships": [
-    {
-      "from": -3,
-      "id": -310,
-      "position": -100,
-      "to": -10,
-      "type": "default",
-      "status": "finished"
-    },
-    {
-      "autocreate": false,
-      "from": -10,
-      "detail": {
-        "individual": [
-          {
-            "staticContent": "<p style='font-size: 12px; color: #3617FF'><i></i></p>",
-            "name": "Kết quả",
-            "additionalDisplayClass": "left-info",
-            "id": -10,
-            "position": 10,
-            "conditions": {
-              "max-length": 1000,
-              "required": false,
-              "min-length": 1
-            },
-            "type": "textarea",
-            "value": ""
-          }
-        ]
-      },
-      "id": -1020,
-      "to": -20,
-      "position": 10000,
-      "type": "approval",
-      "status": "waiting"
-    },
-    {
-      "autocreate": false,
-      "from": -10,
-      "detail": {
-        "individual": [
-          {
-            "staticContent": "<p style='font-size: 12px; color: #3617FF'><i></i></p>",
-            "name": "Kết quả",
-            "additionalDisplayClass": "left-info",
-            "id": -10,
-            "position": 10,
-            "conditions": {
-              "max-length": 1000,
-              "required": false,
-              "min-length": 1
-            },
-            "type": "textarea",
-            "value": ""
-          }
-        ]
-      },
-      "id": -1030,
-      "to": -30,
-      "position": 10100,
-      "type": "approval",
-      "status": "waiting"
-    },
-    {
-      "buttonConfig": {
-        "requestUpdate": {
-          "enable": false
-        }
-      },
-      "autocreate": false,
-      "from": -30,
-      "detail": {
-        "individual": [
-          {
-            "staticContent": "<p style='font-size: 12px; color: #3617FF'><i></i></p>",
-            "name": "Kết quả",
-            "additionalDisplayClass": "left-info",
-            "id": -10,
-            "position": 10,
-            "conditions": {
-              "max-length": 1000,
-              "required": true,
-              "min-length": 1
-            },
-            "type": "textarea",
-            "value": ""
-          }
-        ]
-      },
-      "id": -3001,
-      "to": -1,
-      "type": "approval",
-      "status": "waiting"
-    },
-    {
-      "buttonConfig": {
-        "requestUpdate": {
-          "enable": false
-        }
-      },
-      "autocreate": false,
-      "from": -20,
-      "detail": {
-        "individual": [
-          {
-            "staticContent": "<p style='font-size: 12px; color: #3617FF'><i></i></p>",
-            "name": "Kết quả",
-            "additionalDisplayClass": "left-info",
-            "id": -10,
-            "position": 10,
-            "conditions": {
-              "max-length": 1000,
-              "required": true,
-              "min-length": 1
-            },
-            "type": "textarea",
-            "value": ""
-          }
-        ]
-      },
-      "id": -2001,
-      "to": -1,
-      "type": "approval",
-      "status": "waiting"
-    }
-  ],
-  "notification_config": {
-    "approvers_pending_mail_template": 15,
-    "ticket_response_mail_template": 3,
-    "comment_mail_template": 22,
-    "viewers_assignment_mail_template": 24,
-    "inform_bill_mail_template": 32,
-    "ticket_result_reject_mail_template": 10,
-    "watchers_ticket_rejection_mail_template": 21,
-    "creator_rejected_mail_template": 21,
-    "new_performer_phase_reassignment_mail_template": 12,
-    "ticket_share_mail_template": 27,
-    "ticket_creation_mail_template": 1,
-    "relationship_result_reject_mail_template": 11,
-    "creator_approved_mail_template": 23,
-    "co_execute_rejection_mail_template": 25,
-    "mention_mail_template": 9,
-    "implementation_reminder_mail_template": 19,
-    "creator_requested_update_mail_template": 14,
-    "ticket_cancellation_mail_template": 5,
-    "approval_input_finish_mail_template": 17,
-    "co_execute_request_to_update_mail_template": 26,
-    "old_performer_phase_reassignment_mail_template": 13,
-    "watchers_ticket_auto_closing_mail_template": 8,
-    "approval_reminder_no_token_mail_template": 29,
-    "watchers_ticket_creation_mail_template": 2,
-    "watchers_ticket_cancellation_mail_template": 6,
-    "inform_export_mail_template": 33,
-    "approval_reminder_mail_template": 18,
-    "confirmation_reminder_mail_template": 20,
-    "phase_input_finish_mail_template": 16,
-    "phase_finished_mail_template": 30,
-    "watchers_ticket_closing_mail_template": 7,
-    "watchers_ticket_response_mail_template": 4,
-    "phase_approve_finished_mail_template": 31
-  },
-  "display": [
-    {
-      "positions": [
-        200,
-        50
-      ],
-      "id": -3
-    },
-    {
-      "image": "/download/resources/vn.com.fsoft.tool.sms:fsoftsms_uiresource/images/workflowimage/User_male.png",
-      "positions": [
-        200,
-        150
-      ],
-      "id": -10
-    },
-    {
-      "image": "/download/resources/vn.com.fsoft.tool.sms:fsoftsms_uiresource/images/workflowimage/User_male.png",
-      "positions": [
-        200,
-        250
-      ],
-      "id": -20
-    },
-    {
-      "image": "/download/resources/vn.com.fsoft.tool.sms:fsoftsms_uiresource/images/workflowimage/User_male.png",
-      "positions": [
-        100,
-        250
-      ],
-      "id": -30
-    },
-    {
-      "positions": [
-        200,
-        450
-      ],
-      "id": -1
-    }
-  ]
-} 
+﻿/*
+==================================================
+Author			:	? - VietMXH
+Create date		:	? - 17/01/2019 09:00
+Description		:	Load CallLog trang Chính
+Note			:	
+==================================================
+Test:
+EXEC Requests_GetInMain
+    @EmpCode = '6710'
+  , @TabIndex = 1
+*/
+ALTER PROCEDURE dbo.Requests_GetInMain ( @EmpCode NVARCHAR(50), @TabIndex INT = 1 )
+AS
+BEGIN
+    BEGIN TRY
+        DECLARE @p_Log_Start DATETIME = GETDATE();
+
+        SET NOCOUNT ON;
+
+        DECLARE @p_ViewDate DATE = DATEADD(MONTH, -6, GETDATE());
+
+        SELECT
+            EM.JobTitleCode AS JobTitleCode
+        INTO
+            #Tmp__EmpJobTitle__ByEmpCode
+        FROM
+            dbo.F03_EmployeeJobTitles AS EM WITH ( NOLOCK )
+        WHERE
+            EM.EmployeeCode = @EmpCode
+            AND EM.Status = 'A';
+
+        IF (
+               SELECT
+                   COUNT(1)
+               FROM
+                   #Tmp__EmpJobTitle__ByEmpCode
+               WHERE
+                   JobTitleCode IN ('00241', '00262', '00676')
+           ) > 0
+        BEGIN
+            SET @p_ViewDate = DATEADD(MONTH, -2, GETDATE());
+        END;
+
+        SELECT
+            JobTitleCode AS JobTitleCode
+        INTO
+            #Tmp__JobTitle_CSKH
+        FROM
+            [SV_THUC_FRT_INSIDE].FRTInsideV2.dbo.F03_GroupMail WITH ( NOLOCK )
+        WHERE
+            GroupMailCode = 'FRT.CSKH'
+            AND Status = 'A';
+
+        --	===Lấy Người xử lý theo User (Không được thay đổi điều kiện WHERE!!!)
+        SELECT
+            A.Id AS Id
+          , A.RequestId
+          , A.StepNo
+          , A.Type
+          , A.EmployeeCode
+          , A.Status
+        INTO
+            #Tmp__Assigners__ByEmpCode
+        FROM
+            dbo.Assigners AS A ( NOLOCK )
+        WHERE
+            A.EmployeeCode = @EmpCode
+            AND A.TimeCreate > @p_ViewDate
+            AND --	(Không được thay đổi điều kiện WHERE!!!)
+            A.Status = 1;
+
+        CREATE TABLE #Tmp__COMMON__Req
+        (
+            Id BIGINT
+          , Sender NVARCHAR(40)
+          , Assigner NVARCHAR(40)
+          , Title NVARCHAR(MAX)
+          , GroupId INT
+          , TypeId INT
+          , StepNo INT
+          , StepStatus TINYINT
+          , TimeCreate DATETIME
+          , TimeFinish DATETIME
+          , ToShop NVARCHAR(40)
+          , ToOffice NVARCHAR(40)
+          , isHighlight BIT
+          , Status TINYINT
+          , FromShop NVARCHAR(40)
+          , FromOffice NVARCHAR(40)
+        );
+
+        ---------------------- Hiền.Đoàn Lấy loại hành chính
+        CREATE TABLE #Tmp__COMMON__Req__HC
+        (
+            Id BIGINT
+          , Sender NVARCHAR(40)
+          , Assigner NVARCHAR(40)
+          , Title NVARCHAR(3000)
+          , GroupId INT
+          , TypeId INT
+          , StepNo INT
+          , StepStatus TINYINT
+          , TimeCreate DATETIME
+          , TimeFinish DATETIME
+          , ToShop NVARCHAR(40)
+          , ToOffice NVARCHAR(40)
+          , isHighlight BIT
+          , Status TINYINT
+          , FromShop NVARCHAR(40)
+          , FromOffice NVARCHAR(40)
+        );
+
+        --	===Tạo Tmp chứa CallLog Load trong trang Chính===
+        CREATE TABLE #Tmp__Requests_GetInMain
+        (
+            STT INT IDENTITY(1, 1)
+          , Id BIGINT
+          , [Group] NVARCHAR(100)
+          , Title NVARCHAR(MAX)
+          , TimeCreate NVARCHAR(50)
+          , StepNo INT
+          , isHighlight BIT
+          , [Status] NVARCHAR(250)
+          , ExistInStep NVARCHAR(50)
+          , Assigner NVARCHAR(300)
+          , HasImportant BIT
+          , NguonGQKN NVARCHAR(50)
+          , isTrash NVARCHAR(50)
+          , TypeId INT
+        );
+
+        IF ( @TabIndex = 1 ) -- Inbox
+        BEGIN
+            PRINT N'Tab 1: Inbox';
+
+            SELECT DISTINCT
+                   A.RequestId
+            INTO
+                #Tmp__TabIndex_1__AssByEmp_ReqId
+            FROM
+                #Tmp__Assigners__ByEmpCode AS A;
+
+            --	#Tmp__TabIndex_1__Req
+            SELECT
+                R.Id
+              , R.Sender
+              , R.Assigner
+              , R.Title
+              , R.GroupId
+              , R.TypeId
+              , R.StepNo
+              , R.StepStatus
+              , R.TimeCreate
+              , R.TimeFinish
+              , R.ToShop
+              , R.ToOffice
+              , R.isHighlight
+              , R.Status
+              , R.FromShop
+              , R.FromOffice
+              , R.StillShowing
+              , R.TimeAppear
+            INTO
+                #Tmp__TabIndex_1__Req
+            FROM
+                dbo.Requests AS R ( NOLOCK )
+            WHERE
+                R.Id IN (
+                            SELECT
+                                A.RequestId
+                            FROM
+                                #Tmp__TabIndex_1__AssByEmp_ReqId AS A
+                            WHERE
+                                A.RequestId = R.Id
+                        )
+                OR R.Assigner = @EmpCode;
+
+            --▼	Edit - VietMXH - 09/01/2018 - 65:Hàng demo + TimeAppear NULL + Bước 2 hoặc 3 => TimeAppear = Hiện tại => Cho nổi CallLog==================================================
+            UPDATE
+                #Tmp__TabIndex_1__Req
+            SET
+                TimeAppear = GETDATE()
+            WHERE
+                TypeId = 65
+                AND TimeAppear IS NULL
+                AND StepNo IN (2, 3);
+            --▲	Edit - VietMXH - 09/01/2018 - 65:Hàng demo + TimeAppear NULL + Bước 2 hoặc 3 => TimeAppear = Hiện tại => Cho nổi CallLog==================================================
+
+            INSERT INTO #Tmp__COMMON__Req
+            (
+                Id
+              , Sender
+              , Assigner
+              , Title
+              , GroupId
+              , TypeId
+              , StepNo
+              , StepStatus
+              , TimeCreate
+              , TimeFinish
+              , ToShop
+              , ToOffice
+              , isHighlight
+              , Status
+              , FromShop
+              , FromOffice
+            )
+            SELECT
+                R.Id
+              , R.Sender
+              , R.Assigner
+              , R.Title
+              , R.GroupId
+              , R.TypeId
+              , R.StepNo
+              , R.StepStatus
+              , R.TimeCreate
+              , R.TimeFinish
+              , R.ToShop
+              , R.ToOffice
+              , R.isHighlight
+              , R.Status
+              , R.FromShop
+              , R.FromOffice
+            FROM
+                #Tmp__TabIndex_1__Req ( NOLOCK ) R
+                LEFT JOIN #Tmp__Assigners__ByEmpCode ( NOLOCK ) A ON R.Id = A.RequestId
+                                                                     AND A.StepNo = R.StepNo
+                                                                     AND A.Type = 1
+            WHERE
+                R.TypeId <> 167
+                AND R.Status > 0
+                AND (( R.Status < 3 ) OR ( R.StillShowing = 1 AND R.Status IN (3, 4)))
+                AND R.TimeAppear <= GETDATE()
+                AND (( R.Assigner = @EmpCode AND R.Status BETWEEN 2 AND 4 )
+                     OR ( A.Id > 0 AND R.StepStatus = 1 )
+                     OR --	Load Inbox cho tất cả User xử lý khi CallLog Trạng thái Chờ xử lý
+                     ( R.Status = 1 AND A.EmployeeCode = @EmpCode AND A.Type = 1 )
+                    );
+
+            -----------------------------------------------------------------
+            INSERT INTO #Tmp__COMMON__Req__HC
+            (
+                Id
+              , Sender
+              , Assigner
+              , Title
+              , GroupId
+              , TypeId
+              , StepNo
+              , StepStatus
+              , TimeCreate
+              , TimeFinish
+              , ToShop
+              , ToOffice
+              , isHighlight
+              , Status
+              , FromShop
+              , FromOffice
+            )
+            SELECT
+                R.Id
+              , R.Sender
+              , R.Assigner
+              , R.Title
+              , R.GroupId
+              , R.TypeId
+              , R.StepNo
+              , R.StepStatus
+              , R.TimeCreate
+              , R.TimeFinish
+              , R.ToShop
+              , R.ToOffice
+              , R.isHighlight
+              , R.Status
+              , R.FromShop
+              , R.FromOffice
+            FROM
+                #Tmp__TabIndex_1__Req ( NOLOCK ) R
+                LEFT JOIN #Tmp__Assigners__ByEmpCode ( NOLOCK ) A ON R.Id = A.RequestId
+                                                                     AND A.Status = 1
+                                                                     AND A.StepNo = R.StepNo
+                                                                     AND A.EmployeeCode = @EmpCode
+                                                                     AND R.Assigner = @EmpCode
+                                                                     AND A.Type = 1
+            WHERE
+                R.TypeId IN (23, 125, 126, 127, 128, 129, 130, 134, 143, 152, 155, 162, 166)
+                AND (
+                        (
+                            R.Status IN (3, 4)
+                            AND R.TypeId NOT IN (134, 143, 152) --ChuongNT3 - bỏ hiển thị CL hoàn tất loại 134 - 143
+                        )
+                        OR ( R.StillShowing = 1 AND R.Status < 5 )
+                    )
+                AND R.Status > 0
+                AND (( A.Id > 0 AND R.StepStatus = 1 )
+                     OR ( R.Assigner = @EmpCode AND R.Status > 1 )
+                    )
+                AND R.TimeAppear <= GETDATE();
+
+            SELECT --TOP 100
+                RequestId
+            INTO
+                #Tmp__TabIndex_1__BoCallLogDaChuyen
+            FROM
+                dbo.Conversations ( NOLOCK )
+            WHERE
+                RequestId IN ( SELECT Id FROM #Tmp__COMMON__Req__HC AS HC WHERE HC.Assigner <> @EmpCode )
+                AND Type = 5
+                AND CreateBy = @EmpCode
+                AND Status = 1;
+
+            DELETE FROM
+            #Tmp__COMMON__Req__HC
+            WHERE
+                Id IN (
+                          SELECT --DISTINCT
+                              D.RequestId
+                          FROM
+                              #Tmp__TabIndex_1__BoCallLogDaChuyen AS D
+                      );
+
+            DROP TABLE #Tmp__TabIndex_1__BoCallLogDaChuyen;
+
+            SELECT
+                C.RequestId
+              , C.Id
+              , C.Sender
+              , C.CreateBy
+              , C.TimeCreate
+            INTO
+                #Tmp__TabIndex_1__Conversations
+            FROM
+                dbo.Conversations C ( NOLOCK )
+            WHERE
+                C.RequestId IN ( SELECT A.RequestId FROM #Tmp__TabIndex_1__AssByEmp_ReqId AS A )
+                AND C.Status = 1;
+
+            SELECT
+                C.RequestId
+              , C.Id
+              , C.Sender
+              , C.CreateBy
+              , C.TimeCreate
+              , ROW_NUMBER() OVER ( PARTITION BY C.RequestId
+ORDER BY C.Id DESC
+                                  ) AS UuTien
+            INTO
+                #Tmp__TabIndex_1__Conversations_Last
+            FROM
+                #Tmp__TabIndex_1__Conversations AS C;
+
+            DELETE FROM #Tmp__TabIndex_1__Conversations_Last WHERE UuTien > 1;
+
+            INSERT INTO #Tmp__COMMON__Req
+            (
+                Id
+              , Sender
+              , Assigner
+              , Title
+              , GroupId
+              , TypeId
+              , StepNo
+              , StepStatus
+              , TimeCreate
+              , TimeFinish
+              , ToShop
+              , ToOffice
+              , isHighlight
+              , Status
+              , FromShop
+              , FromOffice
+            )
+            SELECT
+                HC.Id
+              , HC.Sender
+              , HC.Assigner
+              , HC.Title
+              , HC.GroupId
+              , HC.TypeId
+              , HC.StepNo
+              , HC.StepStatus
+              , HC.TimeCreate
+              , HC.TimeFinish
+              , HC.ToShop
+              , HC.ToOffice
+              , HC.isHighlight
+              , HC.Status
+              , HC.FromShop
+              , HC.FromOffice
+            FROM
+                #Tmp__COMMON__Req__HC AS HC
+                INNER JOIN #Tmp__TabIndex_1__Conversations_Last AS C ON HC.Id = C.RequestId
+            WHERE
+                HC.Id = C.RequestId
+                AND CONVERT(DATE, C.TimeCreate) >= '2017-05-10'
+                AND C.Sender <> '-1'
+                AND HC.Assigner <> C.Sender;
+
+            DROP TABLE #Tmp__TabIndex_1__Req;
+            DROP TABLE #Tmp__TabIndex_1__Conversations;
+            DROP TABLE #Tmp__TabIndex_1__Conversations_Last;
+            DROP TABLE #Tmp__TabIndex_1__AssByEmp_ReqId;
+        END;
+        ELSE IF ( @TabIndex = 2 ) -- GROUP
+        BEGIN
+            PRINT N'Tab 2: GROUP';
+
+            SELECT
+                P.TypeId
+              , P.StepNo
+            INTO
+                #Tmp_TabIndex_2_Permissions
+            FROM
+                dbo.Permissions AS P ( NOLOCK )
+            WHERE
+                P.Jobtitle IN ( SELECT EJ.JobTitleCode FROM #Tmp__EmpJobTitle__ByEmpCode AS EJ )
+                AND P.Status = 1;
+
+            SELECT
+                R.Id
+              , R.TypeId
+              , R.StepNo
+            INTO
+                #Tmp_TabIndex_2_ReqByTypeIdInPer
+            FROM
+                dbo.Requests AS R ( NOLOCK )
+            WHERE
+                R.TypeId IN ( SELECT A.TypeId FROM #Tmp_TabIndex_2_Permissions AS A )
+                AND R.Status > 0
+                AND (( R.Status < 3 ) OR ( R.StillShowing = 1 AND R.Status IN (3, 4)));
+
+            SELECT
+                R.Id
+            INTO
+                #tem_CallLogFollowJobs
+            FROM
+                #Tmp_TabIndex_2_ReqByTypeIdInPer AS R
+                INNER JOIN #Tmp_TabIndex_2_Permissions AS A ON R.TypeId = A.TypeId
+                                                               AND R.StepNo = A.StepNo;
+
+            DROP TABLE #Tmp_TabIndex_2_ReqByTypeIdInPer;
+
+            DROP TABLE #Tmp_TabIndex_2_Permissions;
+
+            SELECT
+                R.Id
+            INTO
+                #temp_CallLogFollowAssiner
+            FROM
+                #Tmp__Assigners__ByEmpCode AS A
+                INNER JOIN dbo.Requests AS R ( NOLOCK ) ON A.RequestId = R.Id
+                                                           AND A.StepNo = R.StepNo
+                                                           AND A.Type = 1
+            WHERE
+                R.Status > 0
+                AND (( R.Status < 3 ) OR ( R.StillShowing = 1 AND R.Status IN (3, 4)));
+
+            INSERT INTO #Tmp__COMMON__Req
+            SELECT TOP 200
+                   R.Id
+                 , R.Sender
+                 , R.Assigner
+                 , R.Title
+                 , R.GroupId
+                 , R.TypeId
+                 , R.StepNo
+                 , R.StepStatus
+                 , R.TimeCreate
+                 , R.TimeFinish
+                 , R.ToShop
+                 , R.ToOffice
+                 , R.isHighlight
+                 , R.Status
+                 , R.FromShop
+                 , R.FromOffice
+            FROM
+                dbo.Requests ( NOLOCK ) R
+            WHERE
+                (
+                    R.Id IN ( SELECT Id FROM #tem_CallLogFollowJobs )
+                    OR R.Id IN ( SELECT Id FROM #temp_CallLogFollowAssiner )
+                )
+                AND R.TimeAppear <= GETDATE()
+                AND ( R.TypeId <> 167 )
+                AND R.Status > 0
+            ORDER BY
+                R.Id DESC;
+
+            DROP TABLE
+                #tem_CallLogFollowJobs
+              , #temp_CallLogFollowAssiner;
+        END;
+        ELSE IF ( @TabIndex = 3 ) -- Sent
+        BEGIN
+            PRINT N'Tab 3: Sent';
+
+            INSERT INTO #Tmp__COMMON__Req
+            SELECT
+                R.Id
+              , R.Sender
+              , R.Assigner
+              , R.Title
+              , R.GroupId
+              , R.TypeId
+              , R.StepNo
+              , R.StepStatus
+              , R.TimeCreate
+              , R.TimeFinish
+              , R.ToShop
+              , R.ToOffice
+              , R.isHighlight
+              , R.Status
+              , R.FromShop
+              , R.FromOffice
+            FROM
+                dbo.Requests ( NOLOCK ) R
+            WHERE
+                ( R.Status BETWEEN 1 AND 3 )
+                AND R.TypeId <> 167
+                AND (
+                        R.Sender = @EmpCode
+                        OR R.Id IN ( SELECT A.RequestId FROM #Tmp__Assigners__ByEmpCode AS A WHERE A.Type = 3 )
+                    )
+                AND R.TimeAppear <= GETDATE();
+        END;
+        ELSE IF ( @TabIndex = 4 ) -- CC
+        BEGIN
+            INSERT INTO #Tmp__COMMON__Req
+            SELECT TOP 200
+                   R.Id
+                 , R.Sender
+                 , R.Assigner
+                 , R.Title
+                 , R.GroupId
+                 , R.TypeId
+                 , R.StepNo
+                 , R.StepStatus
+                 , R.TimeCreate
+                 , R.TimeFinish
+                 , R.ToShop
+                 , R.ToOffice
+                 , R.isHighlight
+                 , R.Status
+                 , R.FromShop
+                 , R.FromOffice
+            FROM
+                dbo.Requests ( NOLOCK ) R
+                INNER JOIN dbo.Assigners ( NOLOCK ) A ON A.RequestId = R.Id
+                                                         AND A.Type = 2
+                                                         AND A.EmployeeCode = @EmpCode
+                                                         AND A.Status = 1
+            WHERE
+                R.Status < 5
+                AND R.TimeAppear IS NOT NULL
+                AND R.TimeAppear <= GETDATE()
+                AND ( R.TypeId <> 167 )
+                AND R.Status NOT IN (0)
+            ORDER BY
+                R.Id DESC;
+        END;
+        ELSE IF ( @TabIndex = 5 ) -- All GQKN
+        BEGIN
+            -----▼ Add - ThuongNM2 - 12/01/2019 - Thêm loại 23 cho HC theo dõi All bước ======> Thanhdt29 Yêu cầu
+            IF ((
+                    SELECT
+                        COUNT(1)
+                    FROM
+                        #Tmp__EmpJobTitle__ByEmpCode
+                    WHERE
+                        JobTitleCode IN ('00073', '00175', '00176', '00279', '00385') -- Nhân viên thuộc hành chính
+                ) > 0
+               )
+            BEGIN
+                SELECT
+                    P.Id
+                  , P.Jobtitle
+                  , P.StepNo
+                INTO
+                    #Temp_PermissionHC_23
+                FROM
+                    dbo.Permissions ( NOLOCK ) P
+                WHERE
+                    P.TypeId = 23
+                    AND P.Jobtitle IN ('00073', '00175', '00176', '00279', '00385')
+                    AND P.Status = 1;
+                SELECT
+                    A.PermissionId
+                  , A.Organization
+                  , A.Region
+                  , A.Assigner
+                  , A.Shop
+                INTO
+                    #Temp_Assigments_HC23
+                FROM
+                    dbo.Assignments ( NOLOCK ) A
+                WHERE
+                    PermissionId IN ( SELECT Id FROM #Temp_PermissionHC_23 )
+                    AND A.Assigner = @EmpCode
+                    AND Status = 1;
+
+                DECLARE @Shop NVARCHAR(MAX) = STUFF((
+                                                        SELECT
+                                                            ',' + ISNULL(Shop, '') -- Bỏ đi phân công all shop ThanhDT29 Yêu cầu
+                                                        FROM
+                                                            #Temp_Assigments_HC23 F1
+                                                        FOR XML PATH('')
+                                                    )
+                                                  , 1
+                                                  , 1
+                                                  , ''
+                                                   );
+                SELECT
+                    R.Id
+                  , R.Sender
+                  , R.Assigner
+                  , R.Title
+                  , R.GroupId
+                  , R.TypeId
+                  , R.StepNo
+                  , R.StepStatus
+                  , R.TimeCreate
+                  , R.TimeFinish
+                  , R.ToShop
+                  , R.ToOffice
+                  , R.isHighlight
+                  , R.Status
+                  , R.FromShop
+                  , R.FromOffice
+                  , R.StillShowing
+                  , R.TimeAppear
+                INTO
+                    #Tmp__TabIndex_5__Req -- Danh sách Request 23 chỉ đối với khối shop =>ThanhDT29 Yêu cầu
+                FROM
+                    dbo.Requests AS R ( NOLOCK )
+                WHERE
+                    --▼ ChuongNT3 - 23/01/2019 - add tag process loai 134,143
+                    (
+                        R.TypeId = 23
+                        AND R.Status < 4
+                        AND R.FromShop IN ( SELECT GiaTri FROM dbo.ufn_SplitStringToTable(@Shop, ',', 0) )
+                    )
+                    OR ( R.TypeId IN (134, 143) AND R.Status < 4 AND R.StepNo > 2 );
+                --▲ ChuongNT3 - 23/01/2019 - add tag process loai 134,143
+
+                SELECT
+                    C.RequestId
+                  , C.Id
+                  , C.Sender
+                  , C.CreateBy
+                  , C.TimeCreate
+                  , ROW_NUMBER() OVER ( PARTITION BY C.RequestId
+ORDER BY C.Id DESC
+                                      ) AS UuTien
+                INTO
+                    #Temp_Conversation_new_Tab5 -- Lấy danh sách trao đổi mới mới nhất.
+                FROM
+                    dbo.Conversations AS C ( NOLOCK )
+                WHERE
+                    C.RequestId IN ( SELECT R.Id FROM #Tmp__TabIndex_5__Req AS R )
+                    AND C.Type IN (2, 3)
+                    AND C.Status = 1
+                    AND C.Sender <> '-1';
+                --AND C.Sender <> @EmpCode;	
+                DELETE FROM
+                #Temp_Conversation_new_Tab5 -- Xóa đi những trao dổi cũ chỉ lấy 1 line
+                WHERE
+                    UuTien > 1;
+                DELETE #Temp_Conversation_new_Tab5 WHERE Sender = @EmpCode; -- Không lấy trao đổi mới nhất mà user đó xem
+                INSERT INTO #Tmp__COMMON__Req
+                SELECT
+                    R.Id
+                  , R.Sender
+                  , R.Assigner
+                  , R.Title
+                  , R.GroupId
+                  , R.TypeId
+                  , R.StepNo
+                  , R.StepStatus
+                  , R.TimeCreate
+                  , R.TimeFinish
+                  , R.ToShop
+                  , R.ToOffice
+                  , CASE WHEN C.TimeCreate IS NOT NULL THEN 1 ELSE 0 END AS isHighlight
+                  , R.Status
+                  , R.FromShop
+                  , R.FromOffice
+                FROM
+                    #Tmp__TabIndex_5__Req R ( NOLOCK )
+                    LEFT JOIN #Temp_Conversation_new_Tab5 C ( NOLOCK ) ON C.RequestId = R.Id
+                ORDER BY
+                    C.TimeCreate DESC
+                  , isHighlight DESC;
+
+                DROP TABLE
+                    #Temp_Conversation_new_Tab5
+                  , #Tmp__TabIndex_5__Req
+                  , #Temp_Assigments_HC23
+                  , #Temp_PermissionHC_23;
+            END;
+            -----▲ Add - ThuongNM2 - 12/01/2019 - Thêm loại 23 cho HC theo dõi All bước ======> Thanhdt29 Yêu cầu
+
+            INSERT INTO #Tmp__COMMON__Req
+            SELECT TOP 200
+                   R.Id
+                 , R.Sender
+                 , R.Assigner
+                 , R.Title
+                 , R.GroupId
+                 , R.TypeId
+                 , R.StepNo
+                 , R.StepStatus
+                 , R.TimeCreate
+                 , R.TimeFinish
+                 , R.ToShop
+                 , R.ToOffice
+                 , R.isHighlight
+                 , R.Status
+                 , R.FromShop
+                 , R.FromOffice
+            FROM
+                dbo.Requests ( NOLOCK ) R
+                LEFT JOIN dbo.Assigners ( NOLOCK ) A ON R.Id = A.RequestId
+                                                        AND A.Status = 1
+                                                        AND A.StepNo = R.StepNo
+                                                        AND A.EmployeeCode = @EmpCode
+                                                        AND A.Type = 1
+                LEFT JOIN dbo.RequestSteps ( NOLOCK ) RS ON RS.RequestId = R.Id
+                                                            AND RS.StepNo = 1
+                                                            AND RS.Assigner = @EmpCode
+            WHERE
+                (
+                    (( R.TypeId = 19 )
+                     AND R.StepNo > 1
+                     AND ( R.Status < 3 OR ( R.StillShowing = 1 AND R.Status IN (3, 4)))
+                     AND (( A.Id IS NOT NULL AND R.StepStatus = 1 )
+                          OR ( R.Assigner = @EmpCode AND R.StepStatus <> 1 )
+                          OR ( RS.Id IS NOT NULL )
+                         )
+                     AND EXISTS (
+                                    SELECT
+                                        1
+                                    FROM
+                                        dbo.F03_EmployeeJobTitles ( NOLOCK ) EJ
+                                    WHERE
+                                        EJ.EmployeeCode = @EmpCode
+                                        AND EJ.Status = 'A'
+                                        AND EJ.JobTitleCode IN (
+                                                                   SELECT
+                                                                       G.JobTitleCode
+                                                                   FROM
+                                                                       [SV_THUC_FRT_INSIDE].FRTInsideV2.dbo.F03_GroupMail G WITH ( NOLOCK )
+                                                                   WHERE
+                                                                       G.GroupMailCode = 'FRT.CSKH'
+                                                                       AND G.Status = 'A'
+                                                               )
+                                )
+                    )
+                    OR (( R.TypeId = 185 OR R.TypeId = 28 )
+                        AND ( R.Status < 3 OR ( R.StillShowing = 1 AND R.Status = 3 ))
+                        AND (( A.Id IS NOT NULL AND R.StepStatus = 1 )
+                             OR ( R.Assigner = @EmpCode OR R.Sender = @EmpCode )
+                             OR ( RS.Id IS NOT NULL )
+                            )
+                       )
+                )
+                AND R.Status > 0
+            ORDER BY
+                R.Id DESC;
+        END;
+        ELSE IF ( @TabIndex = 6 ) -- Sent
+        BEGIN
+            INSERT INTO #Tmp__COMMON__Req
+            SELECT
+                R.Id
+              , R.Sender
+              , R.Assigner
+              , R.Title
+              , R.GroupId
+              , R.TypeId
+              , R.StepNo
+              , R.StepStatus
+              , R.TimeCreate
+              , R.TimeFinish
+              , R.ToShop
+              , R.ToOffice
+              , R.isHighlight
+              , R.Status
+              , R.FromShop
+              , R.FromOffice
+            FROM
+                dbo.Requests ( NOLOCK ) R
+            WHERE
+                R.Status = 0
+                AND R.TypeId = 154
+                AND ( R.Sender = @EmpCode )
+                AND R.TimeAppear IS NOT NULL
+                AND R.TimeAppear <= GETDATE();
+
+
+            PRINT GETDATE();
+        END;
+        PRINT GETDATE();
+
+        --	===Lấy DL F03_Employees===
+        SELECT
+            ID
+          , EmployeeCode
+          , EmployeeName
+        INTO
+            #Tmp__Employees
+        FROM
+            dbo.F03_Employees WITH ( NOLOCK );
+
+        ---------Haonn------------------
+        ----chi sua phan load cac callog cua user dang nhap
+        IF ( @TabIndex = 1 )
+        BEGIN
+            SELECT
+                a.ID
+              , a.IDCall
+              , a.TimeCreate
+              , a.TypeId
+              , a.StepNo
+              , a.Assigner
+              , a.ThoiGian
+              , CONVERT(DATETIME, FORMAT(a.PushDate, 'yyyy-MM-dd HH:mm:ss')) AS PushDate
+              , a.UserID
+            INTO
+                #Tmp__TabIndex_1__PushReqToUser
+            FROM
+                dbo.FRT_PUSH_Requests a ( NOLOCK )
+            WHERE
+                ISNULL(a.UserID, '') = ISNULL(@EmpCode, '');
+
+            ----lay danh sach callog len 
+            SELECT --DISTINCT
+                R.Id
+              , R.Sender
+              , R.Title
+              , R.GroupId
+              , R.TypeId
+              , R.StepNo
+              , R.StepStatus
+              , R.TimeCreate
+              , R.TimeFinish
+              , R.ToShop
+              , R.ToOffice
+              , R.isHighlight
+              , R.Status
+              , R.FromShop
+              , R.FromOffice
+              , R.Assigner AS Tmp_Assigner
+              , CAST(NULL AS NVARCHAR(300)) AS Assigner
+              , CAST(NULL AS NVARCHAR(50)) AS NguoiXuLy
+              , 0 AS ThoiGian
+              , 0 AS Co
+            INTO
+                #Tmp__TabIndex_1__COMMON__Req__Full
+            FROM
+                #Tmp__COMMON__Req R;
+
+            IF ( EXISTS ( SELECT TOP 1 1 FROM #Tmp__TabIndex_1__COMMON__Req__Full ))
+            BEGIN
+                DECLARE @p_TabIndex_1_Emp_Code NVARCHAR(50) = N'';
+                DECLARE @p_TabIndex_1_Emp_Name NVARCHAR(250) = N'';
+
+                SELECT TOP 1
+                       @p_TabIndex_1_Emp_Code = E.EmployeeCode
+                     , @p_TabIndex_1_Emp_Name = E.EmployeeName
+                FROM
+                    #Tmp__Employees AS E
+                WHERE
+                    E.EmployeeCode = @EmpCode;
+
+                SET @p_TabIndex_1_Emp_Code = ISNULL(@p_TabIndex_1_Emp_Code, '');
+                SET @p_TabIndex_1_Emp_Name = ISNULL(@p_TabIndex_1_Emp_Name, '');
+
+                UPDATE
+                    F
+                SET
+                    F.Assigner = CASE
+                                     WHEN ( F.StepStatus = 1 AND @TabIndex = 1 ) THEN ( ISNULL(@p_TabIndex_1_Emp_Code, '') + '-' + ISNULL(@p_TabIndex_1_Emp_Name, ''))
+                                     WHEN ( EMA.EmployeeCode IS NOT NULL ) THEN ( ISNULL(EMA.EmployeeCode, '') + '-' + ISNULL(EMA.EmployeeName, ''))
+                                     ELSE N'Chưa có người xử lý'
+                                 END
+                  , F.NguoiXuLy = CASE
+                                      WHEN ( F.StepStatus = 1 AND @TabIndex = 1 ) THEN ( ISNULL(@p_TabIndex_1_Emp_Code, ''))
+                                      WHEN ( EMA.EmployeeCode IS NOT NULL ) THEN ( ISNULL(EMA.EmployeeCode, ''))
+                                      ELSE N''
+                                  END
+                FROM
+                    #Tmp__TabIndex_1__COMMON__Req__Full AS F
+                    LEFT JOIN #Tmp__Employees AS EMA ON EMA.EmployeeCode = F.Tmp_Assigner;
+            END;
+
+            --	===Lấy Detail để check Tồn tại 19:Giải quyết khiếu nại===
+            SELECT
+                D.RequestId
+            INTO
+                #Tmp__TabIndex_1__CheckDetail_Exist_TypeId_19
+            FROM
+                dbo.RequestDetails AS D ( NOLOCK )
+            WHERE
+                D.RequestId IN (
+                                   SELECT
+                                       F.Id
+                                   FROM
+                                       #Tmp__TabIndex_1__COMMON__Req__Full AS F
+                                   WHERE
+                                       --	19:Giải quyết khiếu nại
+                                       F.TypeId = 19
+                               )
+                AND D.Status = 1
+                AND D.Property8 <> '';
+
+            IF (( SELECT COUNT(1)FROM #Tmp__TabIndex_1__PushReqToUser ) > 0 )
+            BEGIN
+                SELECT DISTINCT TOP 20
+                       A.Id AS Id
+                INTO
+                    #Tmp__TabIndex_1__COMMON__Req__Full__Sort1
+                FROM
+                    #Tmp__TabIndex_1__COMMON__Req__Full AS A
+                WHERE
+                    A.TypeId NOT IN (   14 --	14:Thông báo
+                                      , 20 --	20:Inside
+                                      , 57 --	57:Thông báo Ecom
+                                      , 111 --	111:Kiểm soát nội bộ
+                                      , 116 --	116:Thông báo Thay giá BI
+                                      , 117 --	117:Thông báo Lịch kiểm kê POS
+                                      , 118 --	118:Thông báo Kết quả Thẩm định lỗi CRM
+                                      , 142 --	142:Thông báo Mã Code Đăng nhập CRM
+                                      , 159 --	159:Thông báo Kết quả Bảo hành CRM
+                                      , 160 --	160:Thông báo Kết quả Bảo hành Vàng CRM
+                                      , 167 --	167:Thông báo GQKN 
+                                    )
+                ORDER BY
+                    A.Id DESC;
+
+                UPDATE
+                    #Tmp__TabIndex_1__COMMON__Req__Full
+                SET
+                    ThoiGian = ISNULL(dbo.[fn_Time_GetMinsWork_fix](TimeCreate, GETDATE(), Id, TypeId, StepNo), '0')
+                WHERE
+                    #Tmp__TabIndex_1__COMMON__Req__Full.Id IN ( SELECT s.Id FROM #Tmp__TabIndex_1__COMMON__Req__Full__Sort1 s );
+
+                DELETE FROM dbo.FRT_PUSH_Requests WHERE UserID = @EmpCode;
+
+                INSERT INTO dbo.FRT_PUSH_Requests ( IDCall, TimeCreate, TypeId, StepNo, Assigner, ThoiGian, PushDate, UserID )
+                SELECT
+                    Id
+                  , TimeCreate
+                  , TypeId
+                  , StepNo
+                  , NguoiXuLy
+                  , ThoiGian
+                  , GETDATE()
+                  , @EmpCode
+                FROM
+                    #Tmp__TabIndex_1__COMMON__Req__Full;
+
+                --	===Insert #Tmp__Requests_GetInMain===
+                --	---Insert Ưu tiên Loại 208:Kiểm tra CIC khách hàng---
+                INSERT INTO #Tmp__Requests_GetInMain
+                (
+                    Id
+                  , [Group]
+                  , Title
+                  , TimeCreate
+                  , StepNo
+                  , isHighlight
+                  , Status
+                  , ExistInStep
+                  , Assigner
+                  , HasImportant
+                  , NguonGQKN
+                  , isTrash
+                  , TypeId
+                )
+                SELECT DISTINCT
+                       R.Id AS Id -- bigint
+                     , G.Description AS [Group] -- nvarchar(100)
+                     , R.Title AS Title -- nvarchar(max)
+                     , FORMAT(R.TimeCreate, 'dd/MM/yyyy HH:mm', 'vi') AS TimeCreate -- nvarchar(50)
+                     , R.StepNo AS StepNo -- int
+                     , 1 AS isHighlight -- bit
+                     , M.Name AS Status -- nvarchar(250)
+                     , CONVERT(VARCHAR(10), R.ThoiGian / 60) + 'H' + CONVERT(VARCHAR(10), R.ThoiGian % 60) AS ExistInStep -- nvarchar(50)
+                     , R.Assigner AS Assigner -- nvarchar(300)
+                     , ISNULL(V.HasImportant, 0) AS HasImportant -- bit
+                     , N'' AS NguonGQKN -- nvarchar(50)
+                     , N'' AS isTrash -- nvarchar(50)
+                     , R.TypeId AS TypeId -- int
+                FROM
+                    #Tmp__TabIndex_1__COMMON__Req__Full R
+                    LEFT JOIN dbo.Categories ( NOLOCK ) C ON C.Id = R.TypeId
+                    LEFT JOIN dbo.Categories ( NOLOCK ) G ON C.ParentId = G.Id
+                    LEFT JOIN dbo.MasterDatas ( NOLOCK ) M ON M.Code = R.Status
+                                                              AND M.[Group] = 'RequestStatus'
+                    LEFT JOIN dbo.ViewHistories ( NOLOCK ) V ON V.RequestId = R.Id
+                                                                AND V.EmpCode = @EmpCode
+                                                                AND R.TypeId <> 99
+                    LEFT JOIN dbo.F03_Employees ( NOLOCK ) E ON E.EmployeeCode = R.Sender
+                WHERE
+                    --	208:Kiểm tra CIC khách hàng
+                    R.TypeId = 208
+                ORDER BY
+                    R.Id DESC;
+                --	---Insert các Loại còn lại---
+                INSERT INTO #Tmp__Requests_GetInMain
+                (
+                    Id
+                  , [Group]
+                  , Title
+                  , TimeCreate
+                  , StepNo
+                  , isHighlight
+                  , Status
+                  , ExistInStep
+                  , Assigner
+                  , HasImportant
+                  , NguonGQKN
+                  , isTrash
+                  , TypeId
+                )
+                SELECT DISTINCT TOP 200
+                       R.Id AS Id -- bigint
+                     , G.Description AS [Group] -- nvarchar(100)
+                     , R.Title AS Title -- nvarchar(max)
+                     , FORMAT(R.TimeCreate, 'dd/MM/yyyy HH:mm', 'vi') AS TimeCreate -- nvarchar(50)
+                     , R.StepNo AS StepNo -- int
+                     , R.isHighlight AS isHighlight -- bit
+                     , M.Name AS Status -- nvarchar(250)
+                     , CONVERT(VARCHAR(10), R.ThoiGian / 60) + 'H' + CONVERT(VARCHAR(10), R.ThoiGian % 60) AS ExistInStep -- nvarchar(50)
+                     , R.Assigner AS Assigner -- nvarchar(300)
+                     , ISNULL(V.HasImportant, 0) AS HasImportant -- bit
+                     , CASE
+                           WHEN ( R.TypeId = 19 ) THEN ( CASE
+                                                             WHEN (
+                                                                      EXISTS (
+                                                                                 SELECT
+                                                                                     1
+                                                                                 FROM
+                                                                                     #Tmp__TabIndex_1__CheckDetail_Exist_TypeId_19 AS CD
+                                                                                 WHERE
+                                                                                     CD.RequestId = R.Id
+                                                                             )
+                                                                      OR (
+                                                                             ISNULL(E.WarehouseCode, '') = ''
+                                                                             AND E.JobTitle IN ( SELECT JCSKH.JobTitleCode FROM #Tmp__JobTitle_CSKH AS JCSKH )
+                                                                         )
+                                                                  ) THEN 'Y'
+                                                             WHEN ( ISNULL(E.WarehouseCode, '') <> '' ) THEN 'N'
+                                                             ELSE ''
+                                                         END
+                                                       )
+                           ELSE ''
+                       END AS NguonGQKN -- nvarchar(50)
+                     , CASE
+                           WHEN (
+                                    R.TypeId = 154 --	154:Bill Vận chuyển
+                                    AND R.Status = 0
+                                ) THEN 'Y'
+                           ELSE ''
+                       END AS isTrash -- nvarchar(50)
+                     , R.TypeId AS TypeId -- int
+                FROM
+                    #Tmp__TabIndex_1__COMMON__Req__Full R
+                    LEFT JOIN dbo.Categories ( NOLOCK ) C ON C.Id = R.TypeId
+                    LEFT JOIN dbo.Categories ( NOLOCK ) G ON C.ParentId = G.Id
+                    LEFT JOIN dbo.MasterDatas ( NOLOCK ) M ON M.Code = R.Status
+                                                              AND M.[Group] = 'RequestStatus'
+                    LEFT JOIN dbo.ViewHistories ( NOLOCK ) V ON V.RequestId = R.Id
+                                                                AND V.EmpCode = @EmpCode
+                                                                AND R.TypeId <> 99
+                    LEFT JOIN dbo.F03_Employees ( NOLOCK ) E ON E.EmployeeCode = R.Sender
+                WHERE
+                    R.TypeId NOT IN (   14 --	14:Thông báo
+                                      , 20 --	20:Inside
+                                      , 57 --	57:Thông báo Ecom
+                                      , 111 --	111:Kiểm soát nội bộ
+                                      , 116 --	116:Thông báo Thay giá BI
+                                      , 117 --	117:Thông báo Lịch kiểm kê POS
+                                      , 118 --	118:Thông báo Kết quả Thẩm định lỗi CRM
+                                      , 142 --	142:Thông báo Mã Code Đăng nhập CRM
+                                      , 159 --	159:Thông báo Kết quả Bảo hành CRM
+                                      , 160 --	160:Thông báo Kết quả Bảo hành Vàng CRM
+                                      , 167 --	167:Thông báo GQKN 
+                                      , 208 --	208:Kiểm tra CIC khách hàng
+                                    )
+                ORDER BY
+                    R.Id DESC;
+
+                DROP TABLE #Tmp__TabIndex_1__COMMON__Req__Full__Sort1;
+            END;
+            ELSE
+            BEGIN
+                SELECT DISTINCT TOP 20
+                       a.Id AS Id
+                INTO
+                    #Tmp__TabIndex_1__COMMON__Req__Full__Sort2
+                FROM
+                    #Tmp__TabIndex_1__COMMON__Req__Full a
+                WHERE
+                    a.TypeId <> 99
+                ORDER BY
+                    a.Id DESC;
+
+                ---chay lay thoi gian
+                UPDATE
+                    #Tmp__TabIndex_1__COMMON__Req__Full
+                SET
+                    ThoiGian = ISNULL(dbo.[fn_Time_GetMinsWork_fix](TimeCreate, GETDATE(), Id, TypeId, StepNo), '0')
+                WHERE
+                    #Tmp__TabIndex_1__COMMON__Req__Full.Id IN ( SELECT S.Id FROM #Tmp__TabIndex_1__COMMON__Req__Full__Sort2 AS S );
+
+                DELETE FROM dbo.FRT_PUSH_Requests WHERE UserID = @EmpCode;
+
+                INSERT INTO dbo.FRT_PUSH_Requests ( IDCall, TimeCreate, TypeId, StepNo, Assigner, ThoiGian, PushDate, UserID )
+                SELECT
+                    Id
+                  , TimeCreate
+                  , TypeId
+                  , StepNo
+                  , NguoiXuLy
+                  , ThoiGian
+                  , GETDATE()
+                  , @EmpCode
+                FROM
+                    #Tmp__TabIndex_1__COMMON__Req__Full;
+
+                --	===Insert #Tmp__Requests_GetInMain===
+                --	---Insert Ưu tiên Loại 208:Kiểm tra CIC khách hàng---
+                INSERT INTO #Tmp__Requests_GetInMain
+                (
+                    Id
+                  , [Group]
+                  , Title
+                  , TimeCreate
+                  , StepNo
+                  , isHighlight
+                  , Status
+                  , ExistInStep
+                  , Assigner
+                  , HasImportant
+                  , NguonGQKN
+                  , isTrash
+                  , TypeId
+                )
+                SELECT DISTINCT
+                       R.Id AS Id -- bigint
+                     , G.Description AS [Group] -- nvarchar(100)
+                     , R.Title AS Title -- nvarchar(max)
+                     , FORMAT(R.TimeCreate, 'dd/MM/yyyy HH:mm', 'vi') AS TimeCreate -- nvarchar(50)
+                     , R.StepNo AS StepNo -- int
+                     , 1 AS isHighlight -- bit
+                     , M.Name AS Status -- nvarchar(250)
+                     , CONVERT(VARCHAR(10), R.ThoiGian / 60) + 'H' + CONVERT(VARCHAR(10), R.ThoiGian % 60) AS ExistInStep -- nvarchar(50)
+                     , R.Assigner AS Assigner -- nvarchar(300)
+                     , ISNULL(V.HasImportant, 0) AS HasImportant -- bit
+                     , N'' AS NguonGQKN -- nvarchar(50)
+                     , N'' AS isTrash -- nvarchar(50)
+                     , R.TypeId AS TypeId -- int
+                FROM
+                    #Tmp__TabIndex_1__COMMON__Req__Full AS R
+                    LEFT JOIN dbo.Categories ( NOLOCK ) C ON C.Id = R.TypeId
+                    LEFT JOIN dbo.Categories ( NOLOCK ) G ON C.ParentId = G.Id
+                    LEFT JOIN dbo.MasterDatas ( NOLOCK ) M ON M.Code = R.Status
+                                                              AND M.[Group] = 'RequestStatus'
+                    LEFT JOIN dbo.ViewHistories ( NOLOCK ) V ON V.RequestId = R.Id
+                                                                AND V.EmpCode = @EmpCode
+                                                                AND R.TypeId <> 99
+                    LEFT JOIN dbo.F03_Employees ( NOLOCK ) E ON E.EmployeeCode = R.Sender
+                WHERE
+                    --	208:Kiểm tra CIC khách hàng
+                    R.TypeId = 208
+                ORDER BY
+                    R.Id DESC;
+                --	---Insert các Loại còn lại---
+                INSERT INTO #Tmp__Requests_GetInMain
+                (
+                    Id
+                  , [Group]
+                  , Title
+                  , TimeCreate
+                  , StepNo
+                  , isHighlight
+                  , Status
+                  , ExistInStep
+                  , Assigner
+                  , HasImportant
+                  , NguonGQKN
+                  , isTrash
+                  , TypeId
+                )
+                SELECT DISTINCT TOP 500
+                       R.Id AS Id -- bigint
+                     , G.Description AS [Group] -- nvarchar(100)
+                     , R.Title AS Title -- nvarchar(max)
+                     , FORMAT(R.TimeCreate, 'dd/MM/yyyy HH:mm', 'vi') AS TimeCreate -- nvarchar(50)
+                     , R.StepNo AS StepNo -- int
+                     , R.isHighlight AS isHighlight -- bit
+                     , M.Name AS Status -- nvarchar(250)
+                     , CONVERT(VARCHAR(10), R.ThoiGian / 60) + 'H' + CONVERT(VARCHAR(10), R.ThoiGian % 60) AS ExistInStep -- nvarchar(50)
+                     , R.Assigner AS Assigner -- nvarchar(300)
+                     , ISNULL(V.HasImportant, 0) AS HasImportant -- bit
+                     , CASE
+                           WHEN ( R.TypeId = 19 ) THEN ( CASE
+                                                             WHEN (
+                                                                      EXISTS (
+                                                                                 SELECT
+                                                                                     1
+                                                                                 FROM
+                                                                                     #Tmp__TabIndex_1__CheckDetail_Exist_TypeId_19 AS CD
+                                                                                 WHERE
+                                                                                     CD.RequestId = R.Id
+                                                                             )
+                                                                      OR (
+                                                                             ISNULL(E.WarehouseCode, '') = ''
+                                                                             AND E.JobTitle IN ( SELECT JCSKH.JobTitleCode FROM #Tmp__JobTitle_CSKH AS JCSKH )
+                                                                         )
+                                                                  ) THEN 'Y'
+                                                             WHEN ( ISNULL(E.WarehouseCode, '') <> '' ) THEN 'N'
+                                                             ELSE ''
+                                                         END
+                                                       )
+                           ELSE ''
+                       END AS NguonGQKN -- nvarchar(50)
+                     , CASE WHEN ( R.TypeId = 154 AND R.Status = 0 ) THEN 'Y' ELSE '' END AS isTrash -- nvarchar(50)
+                     , R.TypeId AS TypeId -- int
+                FROM
+                    #Tmp__TabIndex_1__COMMON__Req__Full R
+                    LEFT JOIN dbo.Categories ( NOLOCK ) C ON C.Id = R.TypeId
+                    LEFT JOIN dbo.Categories ( NOLOCK ) G ON C.ParentId = G.Id
+                    LEFT JOIN dbo.MasterDatas ( NOLOCK ) M ON M.Code = R.Status
+                                                              AND M.[Group] = 'RequestStatus'
+                    LEFT JOIN dbo.ViewHistories ( NOLOCK ) V ON V.RequestId = R.Id
+                                                                AND V.EmpCode = @EmpCode
+                                                                AND R.TypeId <> 99
+                    LEFT JOIN dbo.F03_Employees ( NOLOCK ) E ON E.EmployeeCode = R.Sender
+                WHERE
+                    --	208:Kiểm tra CIC khách hàng
+                    R.TypeId <> 208
+                ORDER BY
+                    R.Id DESC;
+
+                DROP TABLE #Tmp__TabIndex_1__COMMON__Req__Full__Sort2;
+            END;
+
+            DROP TABLE #Tmp__TabIndex_1__PushReqToUser;
+            DROP TABLE #Tmp__TabIndex_1__COMMON__Req__Full;
+            DROP TABLE #Tmp__TabIndex_1__CheckDetail_Exist_TypeId_19;
+        END;
+        ELSE
+        BEGIN
+            --	==SELECT MÀN HÌNH ===				
+            SELECT
+                RD.RequestId
+            INTO
+                #Tmp__TabIndex_N__CheckDetail_Exist_TypeId_19
+            FROM
+                dbo.RequestDetails AS RD ( NOLOCK )
+            WHERE
+                RD.RequestId IN ( SELECT R.Id FROM #Tmp__COMMON__Req AS R WHERE R.TypeId = 19 )
+                AND RD.Status = 1
+                AND RD.Property8 <> '';
+
+            SELECT
+                R.Id
+              , G.Description 'Group'
+              , R.Title
+              , R.TimeCreate
+              , R.StepNo
+              , R.isHighlight
+              , M.Name 'Status'
+              , CONVERT(NVARCHAR(10), '0') AS ExistInStep
+              , Assigner = CASE
+                               WHEN ( R.StepStatus = 1 AND @TabIndex = 1 ) THEN ( EMS.EmployeeCode + '-' + EMS.EmployeeName )
+                               WHEN ( EMA.EmployeeCode IS NOT NULL ) THEN ( EMA.EmployeeCode + '-' + EMA.EmployeeName )
+                               WHEN ( R.Assigner = '-1' ) THEN N'-Hệ thống'
+                               WHEN ( R.Assigner = '-2' ) THEN N'-Nhà vận chuyển'
+                               WHEN ( R.Assigner = '-3' ) THEN N'-Hệ Thống POS' --ChuongNT3 - 14/12/2017 - Thêm Assigner
+                               WHEN ( LEFT(R.Assigner, 1) = 'H' ) THEN dbo.[fn_GetHangDemo](R.Assigner) --NgoanHT - 14/04/2018
+                               ELSE dbo.fn_CheckPermissions(R.TypeId, R.StepNo)
+                           END
+              , ISNULL(V.HasImportant, 0) AS HasImportant
+              , R.TypeId
+              , CASE
+                    WHEN ( R.TypeId = 19 ) THEN ( CASE
+                                                      WHEN (
+                                                               EXISTS (
+                                                                          SELECT
+                                                                              1
+                                                                          FROM
+                                                                              #Tmp__TabIndex_N__CheckDetail_Exist_TypeId_19 AS RD19
+                                                                          WHERE
+                                                                              RD19.RequestId = R.Id
+                                                                      )
+                                                               OR (
+                                                                      ISNULL(E.WarehouseCode, '') = ''
+                                                                      AND E.JobTitle IN ( SELECT JobTitleCode FROM #Tmp__JobTitle_CSKH )
+                                                                  )
+                                                           ) THEN 'Y'
+                                                      WHEN ( ISNULL(E.WarehouseCode, '') <> '' ) THEN 'N'
+                                                      ELSE ''
+                                                  END
+                                                )
+                    ELSE ''
+                END AS NguonGQKN
+              , CASE WHEN ( R.TypeId = 154 AND R.Status = 0 ) THEN 'Y' ELSE '' END AS isTrash
+            INTO
+                #Tmp__TabIndex_N__COMMON__Req__Full
+            FROM
+                #Tmp__COMMON__Req R
+                LEFT JOIN dbo.Categories ( NOLOCK ) C ON C.Id = R.TypeId
+                LEFT JOIN dbo.Categories ( NOLOCK ) G ON C.ParentId = G.Id
+                LEFT JOIN dbo.MasterDatas ( NOLOCK ) M ON M.Code = R.Status
+                                                          AND M.[Group] = 'RequestStatus'
+                LEFT JOIN #Tmp__Employees AS EMA ON EMA.EmployeeCode = R.Assigner
+                LEFT JOIN #Tmp__Employees AS EMS ON EMS.EmployeeCode = @EmpCode
+                LEFT JOIN dbo.ViewHistories ( NOLOCK ) V ON V.RequestId = R.Id
+                                                            AND V.EmpCode = @EmpCode
+                                                            AND R.TypeId <> 99
+                LEFT JOIN dbo.F03_Employees ( NOLOCK ) E ON E.EmployeeCode = R.Sender
+            WHERE
+                R.TypeId NOT IN (   14 --	14:Thông báo
+                                  , 20 --	20:Inside
+                                  , 57 --	57:Thông báo Ecom
+                                  , 111 --	111:Kiểm soát nội bộ
+                                  , 116 --	116:Thông báo Thay giá BI
+                                  , 117 --	117:Thông báo Lịch kiểm kê POS
+                                  , 118 --	118:Thông báo Kết quả Thẩm định lỗi CRM
+                                  , 142 --	142:Thông báo Mã Code Đăng nhập CRM
+                                  , 159 --	159:Thông báo Kết quả Bảo hành CRM
+                                  , 160 --	160:Thông báo Kết quả Bảo hành Vàng CRM
+                                  , 167 --	167:Thông báo GQKN
+                                ----, 208 --	208:Kiểm tra CIC khách hàng
+                                );
+
+            DROP TABLE #Tmp__TabIndex_N__CheckDetail_Exist_TypeId_19;
+
+            --	===Bỏ CL duyệt hình ảnh Status = 0 ra khỏi tab inbox===
+            SELECT
+                D.RequestID AS RequestID
+            INTO
+                #Tmp__TabIndex_N__COMMON__Req__Full__Xoa
+            FROM
+                dbo.FRT_AnhCallLog_DuyetAnh AS D ( NOLOCK )
+            WHERE
+                D.RequestID IN ( SELECT R.Id FROM #Tmp__TabIndex_N__COMMON__Req__Full AS R )
+                AND D.Status = 0;
+
+            DELETE FROM
+            #Tmp__TabIndex_N__COMMON__Req__Full
+            WHERE
+                Id IN ( SELECT X.RequestID FROM #Tmp__TabIndex_N__COMMON__Req__Full__Xoa AS X );
+
+            SELECT DISTINCT TOP 20
+                   a.Id AS Id
+                 , a.StepNo
+                 , a.TypeId
+                 , a.TimeCreate
+                 , CONVERT(NVARCHAR(10), N'') AS ExistInStep
+            INTO
+                #Tmp__TabIndex_N__COMMON__Req__Full__Sort3
+            FROM
+                #Tmp__TabIndex_N__COMMON__Req__Full a
+            WHERE
+                a.TypeId NOT IN (   14 --	14:Thông báo
+                                  , 20 --	20:Inside
+                                  , 57 --	57:Thông báo Ecom
+                                  , 111 --	111:Kiểm soát nội bộ
+                                  , 116 --	116:Thông báo Thay giá BI
+                                  , 117 --	117:Thông báo Lịch kiểm kê POS
+                                  , 118 --	118:Thông báo Kết quả Thẩm định lỗi CRM
+                                  , 142 --	142:Thông báo Mã Code Đăng nhập CRM
+                                  , 159 --	159:Thông báo Kết quả Bảo hành CRM
+                                  , 160 --	160:Thông báo Kết quả Bảo hành Vàng CRM
+                                  , 167 --	167:Thông báo GQKN 
+                                )
+            ORDER BY
+                a.Id DESC;
+
+            UPDATE
+                #Tmp__TabIndex_N__COMMON__Req__Full__Sort3
+            SET
+                ExistInStep = ISNULL(dbo.[fn_Time_ExistInStep_fix](Id, TypeId, StepNo, TimeCreate), '0');
+
+            UPDATE
+                #Tmp__TabIndex_N__COMMON__Req__Full
+            SET
+                ExistInStep = b.ExistInStep
+            FROM
+                #Tmp__TabIndex_N__COMMON__Req__Full a
+                INNER JOIN #Tmp__TabIndex_N__COMMON__Req__Full__Sort3 b ON b.Id = a.Id
+                                                                           AND b.TypeId = a.TypeId;
+
+            DROP TABLE #Tmp__TabIndex_N__COMMON__Req__Full__Sort3;
+
+            -- TuanNA89 - 22/11/2018 - Fix load loại calllog 208 giống rule TabIndex = 1
+            INSERT INTO #Tmp__Requests_GetInMain
+            (
+                Id
+              , [Group]
+              , Title
+              , TimeCreate
+              , StepNo
+              , isHighlight
+              , Status
+              , ExistInStep
+              , Assigner
+              , HasImportant
+              , NguonGQKN
+              , isTrash
+              , TypeId
+            )
+            SELECT DISTINCT TOP 500
+                   R.Id AS Id
+                 , R.[Group] AS [Group]
+                 , R.Title AS Title
+                 , FORMAT(R.TimeCreate, 'dd/MM/yyyy HH:mm', 'vi') AS TimeCreate
+                 , R.StepNo AS StepNo
+                 , 1 AS isHighlight
+                 , R.[Status] AS Status
+                 , R.ExistInStep AS ExistInStep
+                 , R.Assigner AS Assigner
+                 , R.HasImportant AS HasImportant
+                 , R.NguonGQKN AS NguonGQKN
+                 , R.isTrash AS isTrash
+                 , R.TypeId AS TypeId
+            FROM
+                #Tmp__TabIndex_N__COMMON__Req__Full AS R
+            WHERE
+                R.TypeId = 208
+            ORDER BY
+                R.Id DESC;
+
+            INSERT INTO #Tmp__Requests_GetInMain
+            (
+                Id
+              , [Group]
+              , Title
+              , TimeCreate
+              , StepNo
+              , isHighlight
+              , Status
+              , ExistInStep
+              , Assigner
+              , HasImportant
+              , NguonGQKN
+              , isTrash
+              , TypeId
+            )
+            SELECT DISTINCT TOP 500
+                   R.Id AS Id
+                 , R.[Group] AS [Group]
+                 , R.Title AS Title
+                 , FORMAT(R.TimeCreate, 'dd/MM/yyyy HH:mm', 'vi') AS TimeCreate
+                 , R.StepNo AS StepNo
+                 , R.isHighlight AS isHighlight
+                 , R.[Status] AS Status
+                 , R.ExistInStep AS ExistInStep
+                 , R.Assigner AS Assigner
+                 , R.HasImportant AS HasImportant
+                 , R.NguonGQKN AS NguonGQKN
+                 , R.isTrash AS isTrash
+                 , R.TypeId AS TypeId
+            FROM
+                #Tmp__TabIndex_N__COMMON__Req__Full AS R
+            -- TuanNA89 - 22/11/2018 - Fix load loại calllog 208 giống rule TabIndex = 1
+            WHERE
+                R.TypeId <> 208
+            ORDER BY
+                R.Id DESC;
+
+            DROP TABLE
+                #Tmp__TabIndex_N__COMMON__Req__Full
+              , #Tmp__TabIndex_N__COMMON__Req__Full__Xoa;
+        END;
+
+        --	===Lấy CallLog Load trong trang Chính===
+        SELECT
+            M.STT
+          , M.Id
+          , M.[Group]
+          , M.Title
+          , M.TimeCreate
+          , M.StepNo
+          , M.isHighlight
+          , M.Status
+          , M.ExistInStep
+          , M.Assigner
+          , M.HasImportant
+          , M.NguonGQKN
+          , M.isTrash
+          , M.TypeId
+        FROM
+            #Tmp__Requests_GetInMain AS M
+        ORDER BY
+            --	Sort theo Thứ tự (Sort riêng theo từng TabIndex khi Insert #Tmp__Requests_GetInMain)
+            M.STT;
+
+        DROP TABLE #Tmp__EmpJobTitle__ByEmpCode;
+        DROP TABLE #Tmp__JobTitle_CSKH;
+        DROP TABLE #Tmp__Assigners__ByEmpCode;
+        DROP TABLE #Tmp__COMMON__Req;
+        DROP TABLE #Tmp__COMMON__Req__HC;
+        DROP TABLE #Tmp__Requests_GetInMain;
+        DROP TABLE #Tmp__Employees;
+        /*
+        DROP TABLE #Tmp__EmpJobTitle__ByEmpCode;
+		DROP TABLE #Tmp__JobTitle_CSKH;
+		DROP TABLE #Tmp__Assigners__ByEmpCode;
+		DROP TABLE #Tmp__COMMON__Req;
+		DROP TABLE #Tmp__COMMON__Req__HC;
+        DROP TABLE #Tmp__Requests_GetInMain;
+				DROP TABLE #Tmp__TabIndex_1__AssByEmp_ReqId;
+				DROP TABLE #Tmp__TabIndex_1__Req;
+				DROP TABLE #Tmp__TabIndex_1__BoCallLogDaChuyen;
+				DROP TABLE #Tmp__TabIndex_1__Conversations;
+				DROP TABLE #Tmp__TabIndex_1__Conversations_Last;
+		DROP TABLE #Tmp__Employees;
+                DROP TABLE #Tmp__TabIndex_1__PushReqToUser;
+                DROP TABLE #Tmp__TabIndex_1__COMMON__Req__Full;
+				DROP TABLE #Tmp__TabIndex_1__CheckDetail_Exist_TypeId_19;
+						DROP TABLE #Tmp__TabIndex_1__COMMON__Req__Full__Sort1;
+						DROP TABLE #Tmp__TabIndex_1__COMMON__Req__Full__Sort2;
+				DROP TABLE #Tmp__TabIndex_N__CheckDetail_Exist_TypeId_19;
+				DROP TABLE #Tmp__TabIndex_N__COMMON__Req__Full;
+				DROP TABLE #Tmp__TabIndex_N__COMMON__Req__Full__Xoa;
+				DROP TABLE #Tmp__TabIndex_N__COMMON__Req__Full__Sort3;
+
+					DROP TABLE #Tmp_TabIndex_2_Permissions;
+					DROP TABLE #tem_CallLogFollowJobs,#temp_CallLogFollowAssiner;
+		*/
+
+        DECLARE @p_Log_TimeProcess BIGINT = ISNULL(( DATEDIFF(MILLISECOND, @p_Log_Start, GETDATE())), 0);
+        PRINT CONCAT('@p_Log_TimeProcess = ', @p_Log_TimeProcess);
+        IF ( @p_Log_TimeProcess > 10000 )
+        BEGIN
+            INSERT INTO dbo.Log_Requests_GetInMain ( LogDateTime, EmpCode, TabIndex, TimeProcess )
+            VALUES (
+                       @p_Log_Start -- LogDateTime - datetime
+                     , @EmpCode -- EmpCode - nvarchar(50)
+                     , @TabIndex -- TabIndex - int
+                     , @p_Log_TimeProcess -- TimeProcess - bigint
+                   );
+        END;
+
+    END TRY
+    BEGIN CATCH
+        DECLARE @ErrorMessage NVARCHAR(MAX) = N'';
+        SET @ErrorMessage = N'Lỗi: [Requests_GetInMain]';
+        SET @ErrorMessage += N', @EmpCode=''' + ISNULL(CONVERT(NVARCHAR(50), @EmpCode), 'NULL') + N'''';
+        SET @ErrorMessage += N', @TabIndex=''' + ISNULL(CONVERT(NVARCHAR(50), @TabIndex, 121), 'NULL') + N'''';
+        SET @ErrorMessage += N' - ERROR_MESSAGE: ' + ERROR_MESSAGE() + N' - ERROR_LINE: ' + CONVERT(NVARCHAR, ERROR_LINE());
+
+        --	===Ghi Log===
+        INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+        VALUES (
+                   N'Requests_GetInMain' -- Title - nvarchar(300)
+                 , @ErrorMessage -- Error - nvarchar(max)
+                 , 1 -- Status - tinyint
+                 , GETDATE() -- TimeCreate - datetime
+               );
+    END CATCH;
+END;
+
+----SELECT * FROM dbo.Logs(NOLOCK) WHERE Title=N'Requests_GetInMain' AND CHARINDEX(N'', Error)>0 ORDER BY Id DESC
+----SELECT * FROM dbo.Logs(NOLOCK) WHERE TimeCreate>'2018-05-26' AND Title='Requests_GetInMain' ORDER BY Id DESC
+
+
+GO
+

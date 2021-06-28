@@ -44,14 +44,19 @@ AS
                 RD.RequestId
               , RD.Id
               , RD.Approved
+			  , RD.Property1 AS TenHangMuc
+			  , RD.Property7 AS LinkHinh
+			  , RD.Property8 AS LyDoKhongDuyet
             INTO
                 #tmp_Details
             FROM
                 dbo.RequestDetails AS RD ( NOLOCK )
             WHERE
                 RD.RequestId = @RequestId
-                AND RD.Approved = 0;
+                AND RD.Approved = 0
+				AND ISNULL(RD.Property7,'') <> ''  ;
 
+					  
             UPDATE
                 dbo.RequestDetails
             SET
@@ -70,7 +75,8 @@ AS
                     ON F.RequestId = D.RequestId
                        AND F.RequestDetailId = D.Id
             WHERE
-                D.Approved = 0;
+                D.Approved = 0
+				AND F.Status = 1;
 
             IF ( @StepNo = 3 )
                 BEGIN
@@ -94,7 +100,7 @@ AS
                         AND Type = 1
                         AND Status = 1;
 
-                    EXEC SV_THUC_FRT_MOBILE.MPOS.dbo.FRT_SP_InsertNotify_oneapp
+                    EXEC MPOS.dbo.FRT_SP_InsertNotify_oneapp
                         @UserID = @p_Notify_EmpCode_String
                       , @Title = @p_Notify_Title
                       , @NoiDung = @p_Notify_NoiDung
@@ -106,11 +112,46 @@ AS
                       , @CallLog_TypeId = 229 -- int
                       , @url_picture = N''; -- nvarchar(200)
 
+					  DECLARE @Request_StepNo_Current INT = 0, @Request_StepNo_Current_TimeEnd DATETIME
+					  SELECT TOP 1 @Request_StepNo_Current = RS.StepNo FROM dbo.RequestSteps AS RS (NOLOCK) WHERE RS.RequestId = @RequestId AND RS.StepNo IN (2,4) ORDER BY RS.StepNo DESC
+                      
+					  DECLARE @Conversation NVARCHAR(MAX) = ''
+					  SELECT @Conversation = STRING_AGG(CONCAT(TD.TenHangMuc,' - ', N'Lý do từ chối: ', TD.LyDoKhongDuyet, N' - Link ảnh: ', CONCAT('<a href="https://imagescore.fptshop.com.vn:1233', TD.LinkHinh,'">https://imagescore.fptshop.com.vn:1233', TD.LinkHinh,'</a>')),'<br>')
+					  FROM #tmp_Details AS TD (NOLOCK)
+
+					  INSERT INTO dbo.Conversations
+					  (
+					      RequestId
+					    , StepNo
+					    , Sender
+					    , Message
+					    , CreateBy
+					    , Type
+					    , Status
+					    , RequestDetailId
+					    , TimeCreate
+					    , Requests_ARCH_Id
+					    , IPClient
+					    , FromForm
+					  )
+					  SELECT @RequestId,
+							@StepNo,
+							'-1',
+							@Conversation,
+							'-1',
+							2,
+							1,
+							NULL,
+							GETDATE(),
+							NULL,
+							NULL,
+							NULL
+
                     SELECT 0 Result, N'Chuyển bước thành công' Message;
                 END;
             ELSE IF ( @StepNo = 4 )
                      BEGIN
-                         UPDATE dbo.Requests SET ErrorCode = '1' WHERE Id = @RequestId;
+                         UPDATE dbo.Requests SET StepNo = 3, Status = 2 WHERE Id = @RequestId;
 
                          SELECT
                              @p_Notify_EmpCode_String = ''
@@ -118,16 +159,17 @@ AS
                            , @p_Notify_NoiDung = CONCAT(N'Calllog Hình ảnh triển khai POSM ', @RequestId, N' bị từ chối duyệt vì có hình ảnh không đạt yêu cầu');
 
                          SELECT
-                             @p_Notify_EmpCode_String = COALESCE(@p_Notify_EmpCode_String, '') + EmployeeCode + ','
+                             @p_Notify_EmpCode_String = COALESCE(@p_Notify_EmpCode_String, '') + A.EmployeeCode + ','
                          FROM
-                             Assigners ( NOLOCK )
+                             dbo.Assigners AS A ( NOLOCK )
                          WHERE
                              RequestId = @RequestId
-                             AND StepNo = @StepNo
+                             AND StepNo = 3
                              AND Type = 1
-                             AND Status = 1;
+                             AND Status = 1
+						GROUP BY A.EmployeeCode
 
-                         EXEC SV_THUC_FRT_MOBILE.MPOS.dbo.FRT_SP_InsertNotify_oneapp
+                         EXEC MPOS.dbo.FRT_SP_InsertNotify_oneapp
                              @UserID = @p_Notify_EmpCode_String
                            , @Title = @p_Notify_Title
                            , @NoiDung = @p_Notify_NoiDung
@@ -171,9 +213,6 @@ AS
     END;
 
 ----SELECT * FROM dbo.Logs(NOLOCK) WHERE Title=N'CallLog_POSMHinhAnh_Type_Create' AND CHARINDEX(N'', Error)>0 ORDER BY Id DESC
-
-
-
 
 GO
 

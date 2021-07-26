@@ -3,216 +3,368 @@ SET ANSI_NULLS ON
 GO
 /*
 ==================================================
-Author			:	TuanNA89
-Create date		:	22/07/2020
-Description		:	Xử lý callLog 229
-Note			:	
+Author			:	VietMXH
+Create date		:	05/07/2018 - 02/10/2020 16:16
+Description		:	CallLog Hoàn tiền thanh toán dư cho KH  - Lấy Pending - Sinh XLVP
+Note			:	153:Duyệt hoàn tiền thanh toán dư cho KH
+				:	[10.96.254.143].FRTInsideV2
+				:	981:BETA ; 571:GOLIVE
 ==================================================
+Test:
+EXEC sp__RefundPayment__GetPending__InsertViolationVoteRecord
 */
-ALTER PROCEDURE CallLogPOSM_DuyetHinhAnh_Type229_XuLy @RequestId BIGINT = 0
+ALTER PROCEDURE dbo.sp__RefundPayment__GetPending__InsertViolationVoteRecord
 AS
-    BEGIN
+BEGIN
+    BEGIN TRY
+        --	===Lấy Ngày quét===
+        DECLARE @p__NgayQuet DATE = GETDATE();
+
+        ----SET @p__NgayQuet = '2018-07-28';	--	VietMXH - Test
+        PRINT CONCAT(N'@p__NgayQuet: ', @p__NgayQuet);
+
+        --	===Check T7/CN?===
+        IF ( DATEPART(DW, @p__NgayQuet) IN (7, 1))
+        BEGIN
+            PRINT CONCAT(N'Ngày quét "', CONVERT(NVARCHAR(50), @p__NgayQuet, 121), N'" là T7/CN nên không quét!');
+            RETURN;
+        END;
+
+        --	===Check Holiday?===
+        DECLARE @p__Holiday__ID INT;
+        SELECT TOP 1
+               @p__Holiday__ID = D.ID
+        FROM
+            dbo.Holidays AS D ( NOLOCK )
+        WHERE
+            D.BO = 1
+            AND @p__NgayQuet BETWEEN CONVERT(DATE, D.FromDay) AND CONVERT(DATE, D.ToDay);
+
+        IF ( @p__Holiday__ID > 0 )
+        BEGIN
+            PRINT CONCAT(N'Ngày quét "', CONVERT(NVARCHAR(50), @p__NgayQuet, 121), N'" là Holiday nên không quét!');
+            RETURN;
+        END;
+
         DECLARE
-            @StoreName VARCHAR(50) = OBJECT_NAME(@@PROCID)
-          , @ErrorMessage NVARCHAR(MAX) = N'';
-        BEGIN TRY
-            SET @ErrorMessage = N'[' + @StoreName + N']';
-            SET @ErrorMessage = CONCAT(@ErrorMessage, N' @RequestId =N''', ISNULL(@RequestId, NULL), '''');
+            @p__NgayTao__From           DATE = dbo.fn_Get_DATE_By_Days(@p__NgayQuet, -7, 1, 1, 1)
+          , @p__NgayTao__To             DATE = dbo.fn_Get_DATE_By_Days(@p__NgayQuet, -3, 1, 1, 1)
+          , @p__Count__XLVP__PushInside INT  = 0;
 
+        PRINT ( N'@p__NgayTao__From: ' + ISNULL(CONVERT(NVARCHAR(50), @p__NgayTao__From, 121), 'NULL'));
+        PRINT ( N'@p__NgayTao__To: ' + ISNULL(CONVERT(NVARCHAR(50), @p__NgayTao__To, 121), 'NULL'));
 
-            INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
-            VALUES (
-                       @StoreName -- Title - nvarchar(300)
-                     , @ErrorMessage -- Error - nvarchar(max)
-                     , 0 -- Status - tinyint
-                     , GETDATE() -- TimeCreate - datetime
-                   );
+        --	===Lấy Req===
+        CREATE TABLE #Tmp__Req ( STT INT IDENTITY(1, 1), ReqId INT, TimeCre DATETIME );
+        INSERT INTO #Tmp__Req ( ReqId, TimeCre )
+        SELECT
+            R.Id AS ReqId
+          , R.TimeCreate AS TimeCre
+        FROM
+            dbo.Requests AS R ( NOLOCK )
+        WHERE
+            CONVERT(DATE, R.TimeCreate) BETWEEN @p__NgayTao__From AND @p__NgayTao__To
+            AND --	153:Duyệt hoàn tiền thanh toán dư cho KH
+            R.TypeId = 153
+            AND --	Chưa 4:Hoàn tất/5:Hủy
+            R.Status < 4;
 
-            DECLARE @StepNo INT = 0;
-            DECLARE
-                @p_Notify_EmpCode_String VARCHAR(300) = ''
-              , @p_Notify_Title NVARCHAR(500) = N'Công việc cần thực hiện'
-              , @p_Notify_NoiDung NVARCHAR(500) = N'';
+        IF ( EXISTS ( SELECT 1 FROM #Tmp__Req ))
+        BEGIN
+            --	===Lấy Ass===
             SELECT
-                @StepNo = R.StepNo
-            FROM
-                dbo.Requests AS R ( NOLOCK )
-            WHERE
-                R.Id = @RequestId;
-
-            SELECT
-                RD.RequestId
-              , RD.Id
-              , RD.Approved
-			  , RD.Property1 AS TenHangMuc
-			  , RD.Property7 AS LinkHinh
-			  , RD.Property8 AS LyDoKhongDuyet
+                A.RequestId AS ReqId
+              , A.EmployeeCode AS NVVP
             INTO
-                #tmp_Details
+                #Tmp__Ass
             FROM
-                dbo.RequestDetails AS RD ( NOLOCK )
+                dbo.Assigners AS A ( NOLOCK )
             WHERE
-                RD.RequestId = @RequestId
-                AND RD.Approved = 0
-				AND ISNULL(RD.Property7,'') <> ''  ;
+                A.RequestId IN ( SELECT R.ReqId FROM #Tmp__Req AS R )
+                AND --	Bước 1
+                A.StepNo = 1
+                AND --	1:Assigner
+                A.Type = 1
+                AND --	1:Active
+                A.Status = 1
+            --
+            ;
 
-					  
-            UPDATE
-                dbo.RequestDetails
-            SET
-                Property7 = ''
-            WHERE
-                RequestId = @RequestId
-                AND Approved = 0;
+            DECLARE
+                @p__NgayQuet__Month INT = MONTH(@p__NgayQuet)
+              , @p__NgayQuet__Year  INT = YEAR(@p__NgayQuet);
 
-            UPDATE
-                F
-            SET
-                F.Status = 0
+            --	===Lấy Info XLVP===
+            CREATE TABLE #Tmp__XLVP
+            (
+                ReqId INT
+              , TimeCre DATE
+              , SoTienCallLog NUMERIC(19, 6)
+              , NVVP NVARCHAR(50)
+              , HeSoPhat FLOAT
+              , Count_NVVP INT
+              , Remark NVARCHAR(500)
+              , SoTienBoiThuong NUMERIC(19, 6)
+              , MonthRecord INT
+              , YearRecord INT
+            );
+            INSERT INTO #Tmp__XLVP
+            (
+                ReqId
+              , TimeCre
+              , SoTienCallLog
+              , NVVP
+              , HeSoPhat
+              , Count_NVVP
+              , Remark
+              , SoTienBoiThuong
+              , MonthRecord
+              , YearRecord
+            )
+            SELECT
+                R.ReqId AS ReqId -- int
+              , R.TimeCre AS TimeCre -- DATE
+              , 100000 AS SoTienCallLog -- numeric -- * Mặc định 100K
+              , A.NVVP AS NVVP -- nvarchar(50)
+              , 1 AS HeSoPhat -- float
+              , NULL AS Count_NVVP -- int
+              , N'Trễ hạn ' + ISNULL(CONVERT(NVARCHAR(50), DATEDIFF(DAY, R.TimeCre, @p__NgayQuet)), '') + N' ngày xử lý CallLog outside: ' + ISNULL(CONVERT(NVARCHAR(50), R.ReqId), '') + N' thanh toán hoàn tiền dư online' AS Remark -- nvarchar(500)
+              , NULL AS SoTienBoiThuong -- numeric
+              , @p__NgayQuet__Month AS MonthRecord -- int
+              , @p__NgayQuet__Year AS YearRecord -- int
             FROM
-                #tmp_Details AS D
-                INNER JOIN dbo.FileAttachs AS F
-                    ON F.RequestId = D.RequestId
-                       AND F.RequestDetailId = D.Id
-            WHERE
-                D.Approved = 0
-				AND F.Status = 1;
+                #Tmp__Req AS R
+                INNER JOIN #Tmp__Ass AS A ON R.ReqId = A.ReqId;
 
-            IF ( @StepNo = 3 )
+            --	===Lấy SL NVVP từng Req===
+            SELECT
+                X.ReqId
+              , COUNT(1) AS Count_NVVP
+            INTO
+                #Tmp__XLVP__Count_NVVP
+            FROM
+                #Tmp__XLVP AS X
+            GROUP BY
+                X.ReqId;
+
+            --	===Update SL NVVP từng Req===
+            UPDATE
+                X
+            SET
+                X.Count_NVVP = C.Count_NVVP
+            FROM
+                #Tmp__XLVP AS X
+                INNER JOIN #Tmp__XLVP__Count_NVVP AS C ON X.ReqId = C.ReqId;
+
+            DROP TABLE #Tmp__XLVP__Count_NVVP;
+
+            --	===Update Số tiền===
+            UPDATE
+                #Tmp__XLVP
+            SET
+                SoTienBoiThuong = CASE
+                                      WHEN ( Count_NVVP > 0 ) THEN CEILING(( SoTienCallLog * 1.0 / Count_NVVP ) / 100) * 100
+                                      ELSE 0
+                                  END;
+
+            --	===Lấy Data XLVP dùng Push Inside===
+            CREATE TABLE #Tmp__XLVP__PushInside
+            (
+                STT INT IDENTITY(1, 1)
+              , ReqId INT
+              , TimeCre DATE
+              , SoTienCallLog NUMERIC(19, 6)
+              , NVVP NVARCHAR(50)
+              , HeSoPhat FLOAT
+              , Count_NVVP INT
+              , Remark NVARCHAR(500)
+              , SoTienBoiThuong NUMERIC(19, 6)
+              , MonthRecord INT
+              , YearRecord INT
+              , ViolationContentID INT
+              , NguoiGhiNhan NVARCHAR(50)
+            );
+            INSERT INTO #Tmp__XLVP__PushInside
+            (
+                ReqId
+              , TimeCre
+              , SoTienCallLog
+              , NVVP
+              , HeSoPhat
+              , Count_NVVP
+              , Remark
+              , SoTienBoiThuong
+              , MonthRecord
+              , YearRecord
+              , ViolationContentID
+              , NguoiGhiNhan
+            )
+            SELECT
+                X.ReqId AS ReqId -- int
+              , X.TimeCre AS TimeCre -- date
+              , X.SoTienCallLog AS SoTienCallLog -- numeric
+              , X.NVVP AS NVVP -- nvarchar(50)
+              , X.HeSoPhat AS HeSoPhat -- float
+              , X.Count_NVVP AS Count_NVVP -- int
+              , X.Remark AS Remark -- nvarchar(500)
+              , X.SoTienBoiThuong AS SoTienBoiThuong -- numeric
+              , X.MonthRecord AS MonthRecord -- int
+              , X.YearRecord AS YearRecord -- int
+              , 981 AS ViolationContentID -- Mã Vi phạm "Không thực hiện đúng hạn yêu cầu hoàn  tiền/chuyển tiền thanh online" - 981:BETA ; 571:GOLIVE
+              , N'33105' AS NguoiGhiNhan -- 02/10/2020 - Hanhbt6 yc
+            FROM
+                #Tmp__XLVP AS X
+            WHERE
+                X.SoTienBoiThuong > 0;
+
+            SET @p__Count__XLVP__PushInside = ISNULL(( SELECT COUNT(1)FROM #Tmp__XLVP__PushInside ), 0);
+
+            IF ( @p__Count__XLVP__PushInside > 0 )
+            BEGIN
+                DECLARE
+                    @p__Loop__STT     INT = 1
+                  , @p__Loop__STT_MAX INT = ISNULL(( SELECT MAX(P.STT)FROM #Tmp__XLVP__PushInside AS P ), 0);
+                WHILE ( @p__Loop__STT <= @p__Loop__STT_MAX )
                 BEGIN
-                    EXEC dbo.Assigners_InsertForRequest
-                        @RequestId = @RequestId -- bigint
-                      , @StepNo = @StepNo -- int
-                      , @Is_NotView = 1; -- bit
+                    DECLARE
+                        @p__Loop__CallLogID          INT           = 0
+                      , @p__Loop__MonthRecord        INT           = 0
+                      , @p__Loop__YearRecord         INT           = 0
+                      , @p__Loop__EmpViolation       NVARCHAR(50)  = N''
+                      , @p__Loop__ViolationContentID INT           = 0
+                      , @p__Loop__Remark             NVARCHAR(500) = N''
+                      , @p__Loop__HeSoPhat           FLOAT         = 0
+                      , @p__Loop__SoTienBoiThuong    FLOAT         = 0
+                      , @p__Loop__NguoiGhiNhan       NVARCHAR(50)  = NULL
+                    --
+                    ;
 
-                    SELECT
-                        @p_Notify_EmpCode_String = ''
-                      , @p_Notify_Title = N'Công việc cần thực hiện'
-                      , @p_Notify_NoiDung = CONCAT(N'Calllog Hình ảnh triển khai POSM ', @RequestId, N' bị từ chối hình ảnh, bạn vui lòng kiểm tra lại và xử lý theo thông tin được gửi về.');
-
-                    SELECT
-                        @p_Notify_EmpCode_String = COALESCE(@p_Notify_EmpCode_String, '') + EmployeeCode + ','
+                    SELECT TOP 1
+                           @p__Loop__CallLogID = P.ReqId
+                         , @p__Loop__MonthRecord = P.MonthRecord
+                         , @p__Loop__YearRecord = P.YearRecord
+                         , @p__Loop__EmpViolation = P.NVVP
+                         , @p__Loop__ViolationContentID = P.ViolationContentID
+                         , @p__Loop__Remark = P.Remark
+                         , @p__Loop__HeSoPhat = P.HeSoPhat
+                         , @p__Loop__SoTienBoiThuong = P.SoTienBoiThuong
+                         , @p__Loop__NguoiGhiNhan = P.NguoiGhiNhan
                     FROM
-                        Assigners ( NOLOCK )
+                        #Tmp__XLVP__PushInside AS P
                     WHERE
-                        RequestId = @RequestId
-                        AND StepNo = @StepNo
-                        AND Type = 1
-                        AND Status = 1;
+                        P.STT = @p__Loop__STT;
 
-                    EXEC MPOS.dbo.FRT_SP_InsertNotify_oneapp
-                        @UserID = @p_Notify_EmpCode_String
-                      , @Title = @p_Notify_Title
-                      , @NoiDung = @p_Notify_NoiDung
-                      , @sys_name = N'mCallLog'
-                      , @is_level = 2 -- * Mức độ: 2:Chú ý
-                      , @type = 0 -- int
-                      , @URL = N'' -- nvarchar(500)
-                      , @CallLog_ReqId = @RequestId -- int
-                      , @CallLog_TypeId = 229 -- int
-                      , @url_picture = N''; -- nvarchar(200)
+                    SET @p__Loop__CallLogID = ISNULL(@p__Loop__CallLogID, 0);
+                    SET @p__Loop__MonthRecord = ISNULL(@p__Loop__MonthRecord, 0);
+                    SET @p__Loop__YearRecord = ISNULL(@p__Loop__YearRecord, 0);
+                    SET @p__Loop__EmpViolation = ISNULL(@p__Loop__EmpViolation, '');
+                    SET @p__Loop__ViolationContentID = ISNULL(@p__Loop__ViolationContentID, 0);
+                    SET @p__Loop__Remark = ISNULL(@p__Loop__Remark, '');
+                    SET @p__Loop__HeSoPhat = ISNULL(@p__Loop__HeSoPhat, 0);
+                    SET @p__Loop__SoTienBoiThuong = ISNULL(@p__Loop__SoTienBoiThuong, 0);
 
-					  DECLARE @Request_StepNo_Current INT = 0, @Request_StepNo_Current_TimeEnd DATETIME
-					  SELECT TOP 1 @Request_StepNo_Current = RS.StepNo FROM dbo.RequestSteps AS RS (NOLOCK) WHERE RS.RequestId = @RequestId AND RS.StepNo IN (2,4) ORDER BY RS.StepNo DESC
-                      
-					  DECLARE @Conversation NVARCHAR(MAX) = ''
-					  SELECT @Conversation = STRING_AGG(CONCAT(TD.TenHangMuc,' - ', N'Lý do từ chối: ', TD.LyDoKhongDuyet, N' - Link ảnh: ', CONCAT('<a href="https://imagescore.fptshop.com.vn:1233', TD.LinkHinh,'">https://imagescore.fptshop.com.vn:1233', TD.LinkHinh,'</a>')),'<br>')
-					  FROM #tmp_Details AS TD (NOLOCK)
+                    IF ( @p__Loop__CallLogID > 0 )
+                    BEGIN
+                        BEGIN TRY
+                            DECLARE @SoPhieu VARCHAR(40);
+                            EXEC SV_BETA_FRT_INSIDE.FRTInsideV2.dbo.CallLog_InsertViolationVoteRecord
+                                @MonthRecord = @p__Loop__MonthRecord -- int
+                              , @YearRecord = @p__Loop__YearRecord -- int
+                              , @EmpViolation = @p__Loop__EmpViolation -- varchar(40)
+                              , @ViolationContentID = @p__Loop__ViolationContentID -- int
+                              , @CallLogID = @p__Loop__CallLogID -- bigint
+                              , @Remark = @p__Loop__Remark -- nvarchar(500)
+                              , @HeSoPhat = @p__Loop__HeSoPhat -- float
+                              , @SoTienPhatThem = 0.0 -- float
+                              , @SoTienBoiThuong = @p__Loop__SoTienBoiThuong -- float
+                              , @NguoiGhiNhan = @p__Loop__NguoiGhiNhan -- varchar(50)
+                              , @HDQuyDinh = N'' -- nvarchar(1000)
+                              , @HDTaiLieu = N'' -- nvarchar(1000)
+                              , @SoPhieu = @SoPhieu OUTPUT; -- varchar(40)
 
-					  INSERT INTO dbo.Conversations
-					  (
-					      RequestId
-					    , StepNo
-					    , Sender
-					    , Message
-					    , CreateBy
-					    , Type
-					    , Status
-					    , RequestDetailId
-					    , TimeCreate
-					    , Requests_ARCH_Id
-					    , IPClient
-					    , FromForm
-					  )
-					  SELECT @RequestId,
-							@StepNo,
-							'-1',
-							@Conversation,
-							'-1',
-							2,
-							1,
-							NULL,
-							GETDATE(),
-							NULL,
-							NULL,
-							NULL
+                            --	===Ghi Log===
+                            INSERT INTO dbo.Log_CallLog_InsertViolationVoteRecord
+                            (
+                                CreateDateTime
+                              , StoreName
+                              , TypeId
+                              , CallLogID
+                              , EmpViolation
+                              , ViolationContentID
+                              , HeSoPhat
+                              , Remark
+                              , SoTienPhatThem
+                              , SoTienBoiThuong
+                              , MonthRecord
+                              , YearRecord
+                              , NguoiGhiNhan
+                              , OUTPUT_SoPhieu
+                            )
+                            SELECT
+                                GETDATE() -- CreateDateTime - datetime
+                              , N'sp__RefundPayment__GetPending__InsertViolationVoteRecord' -- StoreName - nvarchar(50)
+                              , 153 -- TypeId - int -- * Loại CallLog: 153:Duyệt hoàn tiền thanh toán dư cho KH
+                              , @p__Loop__CallLogID -- CallLogID - int
+                              , @p__Loop__EmpViolation -- EmpViolation - nvarchar(50)
+                              , @p__Loop__ViolationContentID -- ViolationContentID - int
+                              , @p__Loop__HeSoPhat -- HeSoPhat - float
+                              , @p__Loop__Remark -- Remark - nvarchar(500)
+                              , 0.0 -- SoTienPhatThem - float
+                              , @p__Loop__SoTienBoiThuong -- SoTienBoiThuong - float
+                              , @p__Loop__MonthRecord -- MonthRecord - int
+                              , @p__Loop__YearRecord -- YearRecord - int
+                              , @p__Loop__NguoiGhiNhan
+                              , @SoPhieu;
 
-                    SELECT 0 Result, N'Chuyển bước thành công' Message;
+                        END TRY
+                        BEGIN CATCH
+                            DECLARE @ErrorMessage_FRTInsideV2 NVARCHAR(MAX) = N'';
+                            SET @ErrorMessage_FRTInsideV2 = N'Lỗi: [FRTInsideV2.dbo.CallLog_InsertViolationVoteRecord]';
+                            SET @ErrorMessage_FRTInsideV2 += N' - ERROR_MESSAGE: ' + ERROR_MESSAGE() + N' - ERROR_LINE: ' + CONVERT(NVARCHAR, ERROR_LINE());
+
+                            --	===Ghi Log===
+                            INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+                            VALUES (
+                                       N'sp__RefundPayment__GetPending__InsertViolationVoteRecord' -- Title - nvarchar(300)
+                                     , @ErrorMessage_FRTInsideV2 -- Error - nvarchar(max)
+                                     , 1 -- Status - tinyint
+                                     , GETDATE() -- TimeCreate - datetime
+                                   );
+                        END CATCH;
+                    END;
+
+                    SET @p__Loop__STT += 1;
                 END;
-            ELSE IF ( @StepNo = 4 )
-                     BEGIN
-                         UPDATE dbo.Requests SET StepNo = 3, Status = 2 WHERE Id = @RequestId;
+            END;
 
-                         SELECT
-                             @p_Notify_EmpCode_String = ''
-                           , @p_Notify_Title = N'Công việc cần thực hiện'
-                           , @p_Notify_NoiDung = CONCAT(N'Calllog Hình ảnh triển khai POSM ', @RequestId, N' bị từ chối duyệt vì có hình ảnh không đạt yêu cầu');
+            DROP TABLE #Tmp__XLVP__PushInside;
 
-                         SELECT
-                             @p_Notify_EmpCode_String = COALESCE(@p_Notify_EmpCode_String, '') + A.EmployeeCode + ','
-                         FROM
-                             dbo.Assigners AS A ( NOLOCK )
-                         WHERE
-                             RequestId = @RequestId
-                             AND StepNo = 3
-                             AND Type = 1
-                             AND Status = 1
-						GROUP BY A.EmployeeCode
+            DROP TABLE #Tmp__XLVP;
 
-                         EXEC MPOS.dbo.FRT_SP_InsertNotify_oneapp
-                             @UserID = @p_Notify_EmpCode_String
-                           , @Title = @p_Notify_Title
-                           , @NoiDung = @p_Notify_NoiDung
-                           , @sys_name = N'mCallLog'
-                           , @is_level = 2 -- * Mức độ: 2:Chú ý
-                           , @type = 0 -- int
-                           , @URL = N'' -- nvarchar(500)
-                           , @CallLog_ReqId = @RequestId -- int
-                           , @CallLog_TypeId = 229 -- int
-                           , @url_picture = N''; -- nvarchar(200)
+            DROP TABLE #Tmp__Ass;
+        END;
 
-                         INSERT INTO dbo.Conversations ( RequestId, StepNo, Sender, Message, CreateBy, TimeCreate, Type, Status )
-                         VALUES (
-                                    @RequestId -- RequestId - bigint
-                                  , @StepNo -- StepNo - int
-                                  , N'-1' -- Sender - nvarchar(40)
-                                  , N'Hệ thống auto cập nhật tình trạng duyệt công việc là Không duyệt vì trên calllog tồn tại hình ảnh không được duyệt' -- Message - nvarchar(max)
-                                  , N'-1' -- CreateBy - nvarchar(max)
-                                  , GETDATE()
-                                  , 2 -- Type - tinyint
-                                  , 1 -- Status - tinyint
-                                );
-						EXEC dbo.sp_Requests_Temporary_Delete @RequestID = @RequestId -- bigint
+        PRINT ( N'@p__Count__XLVP__PushInside: ' + ISNULL(CONVERT(NVARCHAR(50), @p__Count__XLVP__PushInside), 'NULL'));
 
-                         SELECT 1 Result, N'' Message;
-                     END;
-        END TRY
-        BEGIN CATCH
-            SET @ErrorMessage += N' - ERROR_MESSAGE: ' + ERROR_MESSAGE() + N' - ERROR_LINE: ' + CONVERT(NVARCHAR, ERROR_LINE());
-            PRINT @ErrorMessage;
-            --	===Ghi Log===
-            INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
-            VALUES (
-                       @StoreName -- Title - nvarchar(300)
-                     , CONCAT(N'Lỗi ', @ErrorMessage) -- Error - nvarchar(max)
-                     , 1 -- Status - tinyint
-                     , GETDATE() -- TimeCreate - datetime
-                   );
+        DROP TABLE #Tmp__Req;
+    END TRY
+    BEGIN CATCH
+        DECLARE @ErrorMessage NVARCHAR(MAX) = N'';
+        SET @ErrorMessage = N'Lỗi: [sp__RefundPayment__GetPending__InsertViolationVoteRecord]';
+        SET @ErrorMessage += N' - ERROR_MESSAGE: ' + ERROR_MESSAGE() + N' - ERROR_LINE: ' + CONVERT(NVARCHAR, ERROR_LINE());
 
-        END CATCH;
-    END;
+        --	===Ghi Log===
+        INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+        VALUES (
+                   N'sp__RefundPayment__GetPending__InsertViolationVoteRecord' -- Title - nvarchar(300)
+                 , @ErrorMessage -- Error - nvarchar(max)
+                 , 1 -- Status - tinyint
+                 , GETDATE() -- TimeCreate - datetime
+               );
+    END CATCH;
+END;
 
-----SELECT * FROM dbo.Logs(NOLOCK) WHERE Title=N'CallLog_POSMHinhAnh_Type_Create' AND CHARINDEX(N'', Error)>0 ORDER BY Id DESC
-
+----SELECT * FROM dbo.Logs(NOLOCK) WHERE Title=N'sp__RefundPayment__GetPending__InsertViolationVoteRecord' AND CHARINDEX(N'', Error)>0 ORDER BY Id DESC
+----SELECT * FROM dbo.Log_CallLog_InsertViolationVoteRecord(NOLOCK) ORDER BY ID DESC
 GO
 

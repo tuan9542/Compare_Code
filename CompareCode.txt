@@ -1,362 +1,1841 @@
-﻿SET QUOTED_IDENTIFIER ON;
-SET ANSI_NULLS ON;
+﻿SET QUOTED_IDENTIFIER ON
+SET ANSI_NULLS ON
 GO
 /*
 ==================================================
-Author			:	VietMXH
-Create date		:	05/07/2018 - 02/10/2020 16:16
-Description		:	CallLog Hoàn tiền thanh toán dư cho KH  - Lấy Pending - Sinh XLVP
-Note			:	153:Duyệt hoàn tiền thanh toán dư cho KH
-				:	[10.96.254.143].FRTInsideV2
-				:	981:BETA ; 571:GOLIVE
+Author			:	VietMXH - ChuongNT3
+Create date		:	10/12/2015 - 13/01/2021 16:55
+Description		:	Báo cáo chi tiết trao đổi
+Note			:	Chưa tối ưu
 ==================================================
 Test:
-EXEC sp__RefundPayment__GetPending__InsertViolationVoteRecord
+EXEC dbo.Report_Conversation
+    @TypeId = 48
+  , @RequestId = 5745973
+  , @RequestName = ''
+  , @Status = ''
+  , @ItemId = ''
+  , @TimeCreate = '2019-01-01'
+  , @TimeEnd = '2021-01-31'
+  , @UserCode = '6087'
 */
-ALTER PROCEDURE dbo.sp__RefundPayment__GetPending__InsertViolationVoteRecord
+ALTER PROCEDURE dbo.Report_Conversation
+    @TypeId INT = 0
+  , @RequestId INT = 0
+  , @RequestName NVARCHAR(300) = ''
+  , @Status NVARCHAR(40) = ''
+  , @ItemId VARCHAR(10) = ''
+  , @TimeCreate DATETIME = ''
+  , @TimeEnd DATETIME = ''
+  , @UserCode VARCHAR(50) = ''
 AS
 BEGIN
     BEGIN TRY
-        --	===Lấy Ngày quét===
-        DECLARE @p__NgayQuet DATE = GETDATE();
 
-        ----SET @p__NgayQuet = '2018-07-28';	--	VietMXH - Test
-        PRINT CONCAT(N'@p__NgayQuet: ', @p__NgayQuet);
+        SET NOCOUNT ON;
 
-        --	===Check T7/CN?===
-        IF ( DATEPART(DW, @p__NgayQuet) IN (7, 1))
+        IF ( ISNULL(@TypeId, 0) <= 0 )
         BEGIN
-            PRINT CONCAT(N'Ngày quét "', CONVERT(NVARCHAR(50), @p__NgayQuet, 121), N'" là T7/CN nên không quét!');
-            RETURN;
-        END;
-
-        --	===Check Holiday?===
-        DECLARE @p__Holiday__ID INT;
-        SELECT TOP 1
-               @p__Holiday__ID = D.ID
-        FROM
-            dbo.Holidays AS D ( NOLOCK )
-        WHERE
-            D.BO = 1
-            AND @p__NgayQuet BETWEEN CONVERT(DATE, D.FromDay) AND CONVERT(DATE, D.ToDay);
-
-        IF ( @p__Holiday__ID > 0 )
-        BEGIN
-            PRINT CONCAT(N'Ngày quét "', CONVERT(NVARCHAR(50), @p__NgayQuet, 121), N'" là Holiday nên không quét!');
             RETURN;
         END;
 
         DECLARE
-            @p__NgayTao__From           DATE = dbo.fn_Get_DATE_By_Days(@p__NgayQuet, -7, 1, 1, 1)
-          , @p__NgayTao__To             DATE = dbo.fn_Get_DATE_By_Days(@p__NgayQuet, -3, 1, 1, 1)
-          , @p__Count__XLVP__PushInside INT  = 0;
+            @StoreName VARCHAR(50)   = OBJECT_NAME(@@PROCID)
+          , @LogParams NVARCHAR(MAX) = N'';
 
-        PRINT ( N'@p__NgayTao__From: ' + ISNULL(CONVERT(NVARCHAR(50), @p__NgayTao__From, 121), 'NULL'));
-        PRINT ( N'@p__NgayTao__To: ' + ISNULL(CONVERT(NVARCHAR(50), @p__NgayTao__To, 121), 'NULL'));
+        SET @LogParams = N'[' + @StoreName + N']';
+        SET @LogParams = CONCAT(@LogParams, N' @TypeId =N''', ISNULL(@TypeId, NULL), '''');
+        SET @LogParams = CONCAT(@LogParams, N', @RequestId =N''', ISNULL(@RequestId, NULL), '''');
+        SET @LogParams = CONCAT(@LogParams, N', @RequestName =N''', ISNULL(@RequestName, NULL), '''');
+        SET @LogParams = CONCAT(@LogParams, N', @Status =N''', ISNULL(@Status, NULL), '''');
+        SET @LogParams = CONCAT(@LogParams, N', @ItemId =N''', ISNULL(@ItemId, NULL), '''');
+        SET @LogParams = CONCAT(@LogParams, N', @TimeCreate =N''', ISNULL(@TimeCreate, NULL), '''');
+        SET @LogParams = CONCAT(@LogParams, N', @TimeEnd =N''', ISNULL(@TimeEnd, NULL), '''');
+        SET @LogParams = CONCAT(@LogParams, N', @UserCode =N''', ISNULL(@UserCode, NULL), '''');
 
-        --	===Lấy Req===
-        CREATE TABLE #Tmp__Req ( STT INT IDENTITY(1, 1), ReqId INT, TimeCre DATETIME );
-        INSERT INTO #Tmp__Req ( ReqId, TimeCre )
+        INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+        VALUES (
+                   @StoreName -- Title - nvarchar(300)
+                 , @LogParams -- Error - nvarchar(max)
+                 , 0 -- Status - tinyint
+                 , GETDATE() -- TimeCreate - datetime
+               );
+
+        --	===Lấy DL F03_Employees===
         SELECT
-            R.Id AS ReqId
-          , R.TimeCreate AS TimeCre
-        FROM
-            dbo.Requests AS R ( NOLOCK )
-        WHERE
-            CONVERT(DATE, R.TimeCreate) BETWEEN @p__NgayTao__From AND @p__NgayTao__To
-            AND --	153:Duyệt hoàn tiền thanh toán dư cho KH
-            R.TypeId = 153
-            AND --	Chưa 4:Hoàn tất/5:Hủy
-            R.Status < 4;
+            E.ID AS ID
+          , E.EmployeeCode AS EmployeeCode
+          , E.EmployeeName AS EmployeeName
+          , E.Email AS Email
+          , E.WarehouseCode AS WarehouseCode
+          , E.OrganizationHierachyCode AS OrganizationHierachyCode
+          , E.RegionHierachyCode AS RegionHierachyCode
+          , E.JobTitle AS JobTitle
 
-        IF ( EXISTS ( SELECT 1 FROM #Tmp__Req ))
+          --▼	Edit - VietMXH - 31/10/2020 - Tối ưu==================================================
+          , CONCAT(E.EmployeeCode, '-', E.EmployeeName) AS EmployeeCode_Name
+        --▲	Edit - VietMXH - 31/10/2020 - Tối ưu==================================================
+
+        INTO
+            #Tmp_Employees
+        FROM
+            dbo.F03_Employees AS E ( NOLOCK );
+
+        --	===Lấy DL Warehouse===
+        CREATE TABLE #Tmp_Warehouse
+        (
+            ID INT
+          , WarehouseCode NVARCHAR(50)
+          , WarehouseName NVARCHAR(250)
+          , RegionL2 NVARCHAR(50)
+          , RegionL3 NVARCHAR(50)
+          , RegionL4 NVARCHAR(50)
+          , WarehouseCodeB1 NVARCHAR(50)
+        );
+        INSERT INTO #Tmp_Warehouse
+        (
+            ID
+          , WarehouseCode
+          , WarehouseName
+          , RegionL2
+          , RegionL3
+          , RegionL4
+          , WarehouseCodeB1
+        )
+        SELECT
+            W.ID AS ID
+          , W.WarehouseCode AS WarehouseCode
+          , W.WarehouseName AS WarehouseName
+          , W.RegionL2 AS RegionL2
+          , W.RegionL3 AS RegionL3
+          , W.RegionL4 AS RegionL4
+          , W.WarehouseCodeB1 AS WarehouseCodeB1
+        FROM
+            dbo.Warehouse AS W ( NOLOCK )
+        WHERE
+            Status = 'A';
+
+        -- TuanNA89 - 07/07/2020 - Thêm item Shop mới
+        IF ( @TypeId IN (19))
         BEGIN
-            --	===Lấy Ass===
+            INSERT INTO #Tmp_Warehouse ( WarehouseCode, WarehouseCodeB1, WarehouseName )
+            VALUES (
+                       '00000' -- WarehouseCode - varchar(40)
+                     , '00000'
+                     , N'TT Chăm sóc KH' -- WarehouseName - nvarchar(255)
+                   );
+        END;
+
+        --	===Lấy DL F03_OrganizationHierachies===
+        SELECT
+            ID
+          , OrganizationHierachyCode
+          , OrganizationHierachyName
+        INTO
+            #Tmp_OrganizationHierachies
+        FROM
+            dbo.F03_OrganizationHierachies WITH ( NOLOCK )
+        WHERE
+            Status = 'A';
+
+        --	===Lấy DL F03_RegionHierachies===
+        SELECT
+            ID
+          , RegionHierachyCode
+          , RegionHierachyName
+        INTO
+            #Tmp_RegionHierachies
+        FROM
+            dbo.F03_RegionHierachies WITH ( NOLOCK )
+        WHERE
+            Status = 'A';
+
+        SELECT
+            EM.EmployeeCode
+          , EM.Email
+          , EM.EmployeeName
+          , EM.JobTitle
+          , W.WarehouseCode
+          , W.WarehouseCodeB1
+          , W.WarehouseName
+          , W.RegionL4
+          , W.RegionL2
+          , O.OrganizationHierachyCode
+          , O.OrganizationHierachyName
+          , R.RegionHierachyName
+
+          --▼	Edit - VietMXH - 31/10/2020 - Tối ưu==================================================
+          , ISNULL(W.WarehouseName, O.OrganizationHierachyName) AS ShopOrOffice -- Shop hoặc phòng ban
+          , EM.EmployeeCode_Name AS EmployeeCode_Name
+        --▲	Edit - VietMXH - 31/10/2020 - Tối ưu==================================================
+
+        INTO
+            #Emp
+        FROM
+            #Tmp_Employees AS EM
+            LEFT JOIN #Tmp_Warehouse AS W ON EM.WarehouseCode = W.WarehouseCode
+            LEFT JOIN #Tmp_OrganizationHierachies AS O ON EM.OrganizationHierachyCode = O.OrganizationHierachyCode
+            LEFT JOIN #Tmp_RegionHierachies AS R ON R.RegionHierachyCode = ISNULL(W.RegionL4, EM.RegionHierachyCode);
+
+        --	===Lấy DL F03_Jobtitles===
+        SELECT
+            ID
+          , JobTitleCode
+          , JobTitleName
+        INTO
+            #Tmp_JobTitles
+        FROM
+            dbo.F03_JobTitles WITH ( NOLOCK )
+        WHERE
+            Status = 'A';
+
+        SELECT
+            G.JobTitleCode AS JobTitleCode
+        INTO
+            #Tmp__JobtitleCSKH
+        FROM
+            [SV_THUC_FRT_INSIDE].FRTInsideV2.dbo.F03_GroupMail AS G WITH ( NOLOCK )
+        WHERE
+            G.GroupMailCode = 'FRT.CSKH'
+            AND G.Status = 'A';
+
+        SELECT
+            I.Id
+          , I.Name
+          , I.TypeId
+          , I.ParentId
+        INTO
+            #Tmp_ItemsMaster
+        FROM
+            dbo.Items AS I ( NOLOCK );
+
+        CREATE TABLE #Items ( Id INT );
+
+        -- Danh sách item theo phân cấp cha con
+        IF ( @ItemId <> '' )
+        BEGIN
+            DECLARE @Loop INT = 1;
+
+            INSERT INTO #Items
+            SELECT Id FROM #Tmp_ItemsMaster ( NOLOCK ) WHERE ParentId = @ItemId
+            UNION ALL
+            SELECT @ItemId;
+
+            WHILE ( @Loop < 5 )
+            BEGIN
+                INSERT INTO #Items
+                SELECT
+                    Id
+                FROM
+                    #Tmp_ItemsMaster ( NOLOCK )
+                WHERE
+                    ParentId IN ( SELECT Id FROM #Items )
+                    AND Id NOT IN ( SELECT Id FROM #Items );
+
+                SET @Loop += 1;
+            END;
+
+            SET @Loop = 1;
+
+            WHILE ( @Loop < 5 )
+            BEGIN
+                SET @ItemId = (
+                                  SELECT TOP 1
+                                         ParentId
+                                  FROM
+                                      #Tmp_ItemsMaster ( NOLOCK )
+                                  WHERE
+                                      Id = @ItemId
+                                      AND ISNULL(ParentId, 0) <> 0
+                              );
+
+                IF ( @ItemId IS NOT NULL )
+                BEGIN
+                    INSERT INTO #Items SELECT @ItemId;
+                END;
+
+                SET @Loop += 1;
+            END;
+        END;
+
+        SELECT
+            A.Id AS Id
+          , B.Description AS 'RequestGroup'
+          , A.Description AS 'RequestType'
+        INTO
+            #Tmp_Categories
+        FROM
+            dbo.Categories ( NOLOCK ) A --	Con
+            INNER JOIN dbo.Categories ( NOLOCK ) B --	Cha
+            ON A.ParentId = B.Id
+        WHERE
+            A.Id = @TypeId;
+
+        SELECT Code, [Group], Name INTO #MasterDatas FROM dbo.MasterDatas ( NOLOCK );
+
+        --▼	Edit - VietMXH - 31/10/2020 - Tối ưu==================================================
+        SELECT
+            GiaTri AS Status
+        INTO
+            #Status
+        FROM
+            dbo.ufn_SplitStringToTable(@Status, ',', 0);
+
+        SELECT
+            R.Id --	Mã yc
+          , R.Title --	Tiêu đề
+          , R.TypeId
+          , R.GroupId
+          , R.Sender
+          , R.ErrorCode
+          , R.Assigner
+          , R.Status
+          , R.RequestIdRefer
+          , R.TimeGolive
+          , R.TimeCreate AS RequestTimeCreate -- ChuongNT3 - 22/08/2018 - thêm trao đổi
+          , FORMAT(R.TimeCreate, 'dd/MM/yyyy HH:mm') AS TimeCreate --	Ngày gửi yc
+          , FORMAT(R.TimeFinish, 'dd/MM/yyyy HH:mm') AS TimeFinish -- TuanNA89 - 09/09/2020 - Thêm cột
+          , DATEPART(HOUR, R.TimeCreate) AS TimeCreate_HOUR
+        INTO
+            #Tmp_Requests
+        FROM
+            dbo.Requests ( NOLOCK ) R
+        WHERE
+            R.Status < 5
+            AND ( R.TypeId = @TypeId )
+            AND ( @RequestId = 0 OR R.Id = @RequestId )
+            AND ( @RequestName = '' OR CHARINDEX(@RequestName, R.Title) > 0 )
+            AND ( @Status = '' OR R.[Status] IN ( SELECT FS.Status FROM #Status AS FS ))
+            AND ( R.TimeCreate BETWEEN @TimeCreate AND @TimeEnd + 1 )
+            AND ( @ItemId = '' OR R.GroupId IN ( SELECT Id FROM #Items ));
+
+        --------SELECT '' _#Tmp_Requests, * FROM #Tmp_Requests;
+        --▲	Edit - VietMXH - 31/10/2020 - Tối ưu==================================================
+
+        CREATE TABLE #Tmp__ConvByReqId
+        (
+            Id BIGINT
+          , Message NVARCHAR(MAX)
+          , RequestId BIGINT
+          , Sender NVARCHAR(300)
+          , TimeCreate DATETIME
+          , StepNo INT
+          , Type INT
+          , Status INT
+          , FromForm NVARCHAR(50)
+        );
+
+        INSERT INTO #Tmp__ConvByReqId ( Id, Message, RequestId, Sender, TimeCreate, StepNo, Type, Status, FromForm )
+        SELECT
+            C.Id AS Id
+          , C.Message AS Message
+          , C.RequestId AS RequestId
+          , C.Sender AS Sender
+          , C.TimeCreate AS TimeCreate
+          , C.StepNo AS StepNo
+          , C.Type AS Type
+          , C.Status AS Status
+          , C.FromForm AS FromForm
+        FROM
+            dbo.Conversations AS C ( NOLOCK )
+        WHERE
+            C.RequestId IN ( SELECT R.Id FROM #Tmp_Requests AS R );
+
+        --▼	Edit - VietMXH - 31/10/2020 - Tối ưu==================================================
+        SELECT
+            C.Id AS Id
+          , C.Message AS Message
+          , C.RequestId AS RequestId
+          , CONCAT(C.Sender, '-', EM.EmployeeName) AS Sender
+          , C.TimeCreate AS TimeCreate
+          , C.StepNo AS StepNo
+          , C.Type AS Type
+          , EM.ShopOrOffice AS ShopOrOffice
+          , CASE
+                WHEN ( C.StepNo = 0 AND C.Type = 1 ) THEN dbo.fn_RemoveTags(C.Message)
+                ELSE NULL
+            END AS RequestContent
+          , C.FromForm AS FromForm
+        INTO
+            #Tmp_Conversations
+        FROM
+            #Tmp__ConvByReqId AS C
+            LEFT JOIN #Emp AS EM ON C.Sender = EM.EmployeeCode
+        WHERE
+            C.Status = 1
+            AND C.Type <> 5;
+
+        DROP TABLE #Tmp__ConvByReqId;
+
+        WITH cvs AS (
+                        SELECT
+                            C.Id
+                          , C.Message
+                          , C.RequestId
+                          , C.Sender
+                          , C.TimeCreate
+                          , C.StepNo
+                          , C.Type
+                          , C.ShopOrOffice AS ShopOrOffice
+                          , ROW_NUMBER() OVER ( PARTITION BY RequestId
+ORDER BY TimeCreate
+                                              )     AS rn
+                        FROM
+                            #Tmp_Conversations C
+                        WHERE
+                            C.Type IN (2, 3) -- trao đổi , trả lời
+                    )
+        SELECT
+            cvs.Id
+          , cvs.Message
+          , cvs.RequestId
+          , cvs.Sender
+          , cvs.TimeCreate
+          , cvs.StepNo
+          , cvs.Type
+          , cvs.ShopOrOffice
+          , cvs.rn
+        INTO
+            #ConversationsFirst
+        FROM
+            cvs
+        WHERE
+            rn = 1;
+
+        SELECT
+            C.Id
+          , C.RequestId
+          , C.Message
+          , C.Sender
+          , C.TimeCreate
+          , C.FromForm AS FromForm
+        INTO
+            #ConversationsSecond
+        FROM
+            #Tmp_Conversations C
+        WHERE
+            C.Type IN (2, 3)
+            AND C.Id NOT IN ( SELECT Id FROM #ConversationsFirst );
+        --▲	Edit - VietMXH - 31/10/2020 - Tối ưu==================================================
+
+        --▼	Edit - VietMXH - 16/01/2019 - Fix lỗi XML NoName==================================================
+        UPDATE
+            #ConversationsSecond
+        SET
+            Message = REPLACE(Message, CHAR(0x001D), '')
+        WHERE
+            Message LIKE N'%' + CHAR(0x001D) + N'%';
+        UPDATE
+            #ConversationsSecond
+        SET
+            Message = REPLACE(Message, CHAR(0x0008), '')
+        WHERE
+            Message LIKE N'%' + CHAR(0x0008) + N'%';
+        UPDATE
+            #ConversationsSecond
+        SET
+            Message = REPLACE(Message, CHAR(0x000B), '')
+        WHERE
+            Message LIKE N'%' + CHAR(0x000B) + N'%';
+        UPDATE
+            #ConversationsSecond
+        SET
+            Message = REPLACE(Message COLLATE Latin1_General_BIN, CHAR(0), '')
+        WHERE
+            Message LIKE N'%' + CHAR(0)COLLATE Latin1_General_BIN + N'%';
+        --▲	Edit - VietMXH - 16/01/2019 - Fix lỗi XML NoName==================================================
+
+        CREATE TABLE #Tmp_Requests_ConversationsSecond
+        (
+            Id BIGINT
+          , ConversationSecond NVARCHAR(MAX)
+          , SenderSecond NVARCHAR(MAX)
+          , TimeSecond NVARCHAR(MAX)
+        );
+
+        IF ( @TypeId = 48 )
+        BEGIN
+            INSERT INTO #Tmp_Requests_ConversationsSecond ( Id, ConversationSecond, SenderSecond, TimeSecond )
             SELECT
-                A.RequestId AS ReqId
-              , A.EmployeeCode AS NVVP
-            INTO
-                #Tmp__Ass
+                R.Id
+              , (
+                    SELECT (
+                               SELECT
+                                   CONCAT(N'- (', CASE WHEN ( CS.FromForm <> '' ) THEN CS.FromForm ELSE N'CallLog' END, N'): ', CS.Message, CHAR(13), CHAR(10))
+                               FROM
+                                   #ConversationsSecond AS CS
+                               WHERE
+                                   CS.RequestId = R.Id
+                               FOR XML PATH(''), TYPE
+                           ).value('.', 'NVARCHAR(MAX)')
+                ) AS ConversationSecond -- Nội dung trao đổi
+              , (
+                    SELECT (
+                               SELECT
+                                   '- ' + CS.Sender + CHAR(13) + CHAR(10)
+                               FROM
+                                   #ConversationsSecond AS CS
+                               WHERE
+                                   CS.RequestId = R.Id
+                               FOR XML PATH(''), TYPE
+                           ).value('.', 'NVARCHAR(MAX)')
+                ) AS SenderSecond -- Người trao đổi
+              , (
+                    SELECT (
+                               SELECT
+                                   +' - ' + CONVERT(NVARCHAR(40), CS.TimeCreate, 103) + ' ' + CONVERT(VARCHAR(5), CS.TimeCreate, 108)
+                               FROM
+                                   #ConversationsSecond AS CS
+                               WHERE
+                                   CS.RequestId = R.Id
+                               FOR XML PATH(''), TYPE
+                           ).value('.', 'NVARCHAR(MAX)')
+                ) AS TimeSecond -- Thời gian trao đổi
             FROM
-                dbo.Assigners AS A ( NOLOCK )
+                #Tmp_Requests AS R;
+        END;
+        ELSE
+        BEGIN
+            INSERT INTO #Tmp_Requests_ConversationsSecond ( Id, ConversationSecond, SenderSecond, TimeSecond )
+            SELECT
+                R.Id
+              , (
+                    SELECT (
+                               SELECT
+                                   '- ' + CS.Message + CHAR(13) + CHAR(10)
+                               FROM
+                                   #ConversationsSecond CS
+                               WHERE
+                                   CS.RequestId = R.Id
+                               FOR XML PATH(''), TYPE
+                           ).value('.', 'NVARCHAR(MAX)')
+                ) AS ConversationSecond -- Nội dung trao đổi
+              , (
+                    SELECT (
+                               SELECT
+                                   '- ' + CS.Sender + CHAR(13) + CHAR(10)
+                               FROM
+                                   #ConversationsSecond CS
+                               WHERE
+                                   CS.RequestId = R.Id
+                               FOR XML PATH(''), TYPE
+                           ).value('.', 'NVARCHAR(MAX)')
+                ) AS SenderSecond -- Người trao đổi
+              , (
+                    SELECT (
+                               SELECT
+                                   +' - ' + CONVERT(NVARCHAR(40), CS.TimeCreate, 103) + ' ' + CONVERT(VARCHAR(5), CS.TimeCreate, 108)
+                               FROM
+                                   #ConversationsSecond CS
+                               WHERE
+                                   CS.RequestId = R.Id
+                               FOR XML PATH(''), TYPE
+                           ).value('.', 'NVARCHAR(MAX)')
+                ) AS TimeSecond -- Thời gian trao đổi
+            FROM
+                #Tmp_Requests AS R;
+        END;
+
+        SELECT
+            D.Id AS Id
+          , D.RequestId AS RequestId
+          , D.Property1 AS Property1
+          , D.Property2 AS Property2
+          , D.Property3 AS Property3
+          , D.Property4 AS Property4
+          , D.Property5 AS Property5
+          , D.Property6 AS Property6
+          , D.Property7 AS Property7
+          , D.Property8 AS Property8
+          , D.Property9 AS Property9
+          , D.Property10 AS Property10
+          , D.Property11 AS Property11
+          , D.Property12 AS Property12
+          , D.Property13 AS Property13
+          , D.Property15 AS Property15
+          , D.Quantity AS Quantity
+          , D.Quantity1 AS Quantity1
+          , D.ProductName AS ProductName
+          , D.CustomerCode AS CustomerCode
+          , D.CustomerName AS CustomerName
+          , D.SaleCode AS SaleCode
+          , D.EmpCode AS EmpCode
+          , D.EmpCode2 AS EmpCode2
+          , D.EmpCode3 AS EmpCode3
+          , D.Imei AS Imei
+          , D.Time1 AS Time1
+          , D.Time2 AS Time2
+          , D.Money1 AS Money1
+          , D.Note AS Note
+        INTO
+            #Tmp__ReqDetByReqId
+        FROM
+            dbo.RequestDetails AS D ( NOLOCK )
+        WHERE
+            D.RequestId IN ( SELECT R.Id FROM #Tmp_Requests AS R );
+
+        --▼	Edit - VietMXH - 31/10/2020 - Tối ưu==================================================
+        CREATE TABLE #Tmp_RequestDetails
+        (
+            RequestId BIGINT
+          , TypeId INT
+          , TimeFinish NVARCHAR(50)
+          , RequestDetails_Id BIGINT
+          , Property1 NVARCHAR(MAX)
+          , Property2 NVARCHAR(MAX)
+          , Property3 NVARCHAR(MAX)
+          , Property4 NVARCHAR(MAX)
+          , Property5 NVARCHAR(MAX)
+          , Property6 NVARCHAR(MAX)
+          , Property7 NVARCHAR(MAX)
+          , Property8 NVARCHAR(MAX)
+          , Property9 NVARCHAR(MAX)
+          , Property10 NVARCHAR(MAX)
+          , Property11 NVARCHAR(MAX)
+          , Property12 NVARCHAR(MAX)
+          , Property13 NVARCHAR(MAX)
+          , Property15 NVARCHAR(MAX)
+          , Quantity INT
+          , Quantity1 INT
+          , ProductName NVARCHAR(300)
+          , Imei NVARCHAR(50)
+          , Time1 DATETIME
+          , Time2 DATETIME
+          , CustomerCode NVARCHAR(100)
+          , CustomerName NVARCHAR(300)
+          , SaleCode NVARCHAR(100)
+          , EmpCode NVARCHAR(50)
+          , EmpCode2 NVARCHAR(50)
+          , EmpCode3 NVARCHAR(50)
+          , Money1 FLOAT
+          , Note NVARCHAR(500)
+          --
+          , ShopNhan NVARCHAR(MAX)
+          , PhongBanNhan NVARCHAR(MAX)
+          , TypeId_19_157_DSNVVP NVARCHAR(MAX)
+        );
+        INSERT INTO #Tmp_RequestDetails
+        (
+            RequestId
+          , TypeId
+          , TimeFinish
+          , RequestDetails_Id
+          , Property1
+          , Property2
+          , Property3
+          , Property4
+          , Property5
+          , Property6
+          , Property7
+          , Property8
+          , Property9
+          , Property10
+          , Property11
+          , Property12
+          , Property13
+          , Property15
+          , Quantity
+          , Quantity1
+          , ProductName
+          , Imei
+          , Time1
+          , Time2
+          , CustomerCode
+          , CustomerName
+          , SaleCode
+          , EmpCode
+          , EmpCode2
+          , EmpCode3
+          , Money1
+          , Note
+          , ShopNhan
+          , PhongBanNhan
+        )
+        SELECT
+            R.Id AS RequestId -- bigint
+          , R.TypeId AS TypeId -- int
+          , R.TimeFinish AS TimeFinish -- nvarchar(50)
+          , RD.Id AS RequestDetails_Id -- bigint
+          , RD.Property1 AS Property1 -- nvarchar(max)
+          , RD.Property2 AS Property2 -- nvarchar(max)
+          , RD.Property3 AS Property3 -- nvarchar(max)
+          , RD.Property4 AS Property4 -- nvarchar(max)
+          , RD.Property5 AS Property5 -- nvarchar(max)
+          , RD.Property6 AS Property6 -- nvarchar(max)
+          , RD.Property7 AS Property7 -- nvarchar(max)
+          , RD.Property8 AS Property8 -- nvarchar(max)
+          , RD.Property9 AS Property9 -- nvarchar(max)
+          , RD.Property10 AS Property10 -- nvarchar(max)
+          , RD.Property11 AS Property11 -- nvarchar(max)
+          , RD.Property12 AS Property12 -- nvarchar(max)
+          , RD.Property13 AS Property13 -- nvarchar(max)
+          , RD.Property15 AS Property15 -- nvarchar(max)
+          , RD.Quantity AS Quantity -- int
+          , RD.Quantity1 AS Quantity1 -- int
+          , RD.ProductName AS ProductName -- nvarchar(300)
+          , RD.Imei AS Imei -- nvarchar(50)
+          , RD.Time1 AS Time1 -- datetime
+          , RD.Time2 AS Time2 -- datetime
+          , RD.CustomerCode AS CustomerCode -- nvarchar(100)
+          , RD.CustomerName AS CustomerName -- nvarchar(300)
+          , RD.SaleCode AS SaleCode -- nvarchar(100)
+          , RD.EmpCode AS EmpCode -- nvarchar(50)
+          , RD.EmpCode2 AS EmpCode2 -- nvarchar(50)
+          , RD.EmpCode3 AS EmpCode3 -- nvarchar(50)
+          , RD.Money1 AS Money1 -- float
+          , RD.Note AS Note -- nvarchar(500)
+          --
+          , (
+                SELECT TOP 1
+                       T1.GiaTri
+                FROM
+                    dbo.ufn_SplitStringToTable(REPLACE(RD.Property6, CHAR(10), ''), ',', 0) AS T1 --	CHAR(10) : Dấu Enter
+                WHERE
+                    CHARINDEX('*', T1.GiaTri) = 0
+            ) AS ShopNhan -- nvarchar(max)
+          , (
+                SELECT TOP 1
+                       REPLACE(T2.GiaTri, '*', '')
+                FROM
+                    dbo.ufn_SplitStringToTable(REPLACE(RD.Property6, CHAR(10), ''), ',', 0) AS T2 --	CHAR(10) : Dấu Enter
+                WHERE
+                    CHARINDEX('*', T2.GiaTri) > 0
+            ) AS PhongBanNhan -- nvarchar(max)
+        FROM
+            #Tmp_Requests AS R
+            INNER JOIN #Tmp__ReqDetByReqId AS RD ON R.Id = RD.RequestId;
+
+        ----SELECT ''_#Tmp_RequestDetails, * FROM #Tmp_RequestDetails
+        --▲	Edit - VietMXH - 31/10/2020 - Tối ưu==================================================
+
+        DROP TABLE #Tmp__ReqDetByReqId;
+
+        CREATE TABLE #Tmp_ShopNhan
+        (
+            Id BIGINT
+          , WarehouseCode NVARCHAR(50)
+          , WarehouseCodeB1 NVARCHAR(50)
+          , WarehouseName NVARCHAR(250)
+          , RegionHierachyName NVARCHAR(250)
+          , ASM NVARCHAR(250)
+        );
+
+        --▼	Edit - VietMXH - 31/10/2020 - Tối ưu==================================================
+        IF ( @TypeId IN (19))
+        BEGIN
+            INSERT INTO #Tmp_ShopNhan ( Id, WarehouseCode, WarehouseCodeB1, WarehouseName, RegionHierachyName, ASM )
+            SELECT 
+                   RD.RequestId AS Id
+                 , W.WarehouseCode AS WarehouseCode
+                 , W.WarehouseCodeB1 AS WarehouseCodeB1
+                 , W.WarehouseName AS WarehouseName
+                 , RH.RegionHierachyName AS RegionHierachyName
+                 , STRING_AGG(E.EmployeeCode_Name,CHAR(13))
+            FROM
+                #Tmp_RequestDetails AS RD
+                INNER JOIN #Tmp_Warehouse AS W ON RD.TypeId = 19
+                                                  AND W.WarehouseCode = RD.ShopNhan
+                                                  OR W.WarehouseCodeB1 = RD.ShopNhan
+                LEFT JOIN #Tmp_RegionHierachies AS RH -- TuanNA89 - 07/07/2020 - Thêm item Shop mới
+                ON RH.RegionHierachyCode = W.RegionL2
+                LEFT JOIN dbo.F03_EmployeeJobTitles AS EJ ( NOLOCK ) ON W.RegionL3 = EJ.RegionHierachyCode AND EJ.Status = 'A'
+                LEFT JOIN #Tmp_Employees AS E ON EJ.EmployeeCode = E.EmployeeCode
+			GROUP BY RD.RequestId,
+					W.WarehouseCode,
+					W.WarehouseCodeB1,
+					W.WarehouseName,
+					RH.RegionHierachyName
+        END;
+
+        SELECT DISTINCT
+               RD.RequestId
+             , O.OrganizationHierachyName
+        INTO
+            #Tmp_PhongBanNhan
+        FROM
+            #Tmp_RequestDetails AS RD
+            INNER JOIN #Tmp_OrganizationHierachies AS O ON RD.PhongBanNhan = O.OrganizationHierachyCode;
+
+        ----SELECT ''_#Tmp_PhongBanNhan, * FROM #Tmp_PhongBanNhan
+
+        SELECT
+            RD.RequestId
+          , RD.RequestDetails_Id
+          , CONCAT((
+                       SELECT
+                           JobTitleCode + ' - ' + JobTitleName + '  ' + CHAR(10)
+                       FROM
+                           #Tmp_JobTitles
+                       WHERE
+                           JobTitleCode IN ( SELECT VALUE FROM dbo.ufn_StringToTable(RD.Property7, ',', 0) )
+                       FOR XML PATH('')
+                   )
+                 , CASE
+                       WHEN '00000' IN ( SELECT VALUE FROM dbo.ufn_StringToTable(RD.Property7, ',', 0) ) THEN N'Khác'
+                       ELSE ''
+                   END
+                  ) AS Property7
+        INTO
+            #Tmp_ChucDanh
+        FROM
+            #Tmp_RequestDetails AS RD;
+        --LEFT JOIN #Tmp_JobTitles AS FJJ ON FJJ.JobTitleCode = Property7
+        --▲	Edit - VietMXH - 31/10/2020 - Tối ưu==================================================
+
+        IF (( @TypeId = 1 ) OR ( @TypeId = 25 ))
+        BEGIN
+            --Lấy nội dung trao đổi lần đầu của support
+            SELECT
+                C.Id
+              , C.Message
+              , C.RequestId
+              , 'Sender' = EM.EmployeeCode + '-' + EM.EmployeeName
+              , EM.EmployeeCode
+              , C.TimeCreate
+              , C.StepNo
+              , C.Type
+              , EM.WarehouseName
+              , EM.OrganizationHierachyName
+              , EM.JobTitle
+            INTO
+                #Tmp_Conversations_01
+            FROM
+                dbo.Conversations ( NOLOCK ) C
+                LEFT JOIN #Emp AS EM ON C.Sender = EM.EmployeeCode
             WHERE
-                A.RequestId IN ( SELECT R.ReqId FROM #Tmp__Req AS R )
-                AND --	Bước 1
-                A.StepNo = 1
-                AND --	1:Assigner
-                A.Type = 1
-                AND --	1:Active
-                A.Status = 1
+                C.Status = 1
+                AND C.Type <> 5;
+
+            --▼	Edit - VietMXH - 17/05/2020 - Fix lỗi XML NoName==================================================
+            UPDATE
+                #Tmp_Conversations_01
+            SET
+                Message = REPLACE(Message, CHAR(0x000B), '')
+            WHERE
+                Message LIKE N'%' + CHAR(0x000B) + N'%';
+            --▲	Edit - VietMXH - 17/05/2020 - Fix lỗi XML NoName==================================================
+
+
+
+
+            ;
+            WITH cvs AS (
+                            SELECT
+                                *
+                              , ROW_NUMBER() OVER ( PARTITION BY RequestId
+ORDER BY TimeCreate
+                                                  )         AS rn
+                            FROM
+                                #Tmp_Conversations_01 C
+                            WHERE
+                                C.Type IN (2, 3)
+                                AND C.JobTitle IN ('00262') -- trao đổi , trả lời
+                        )
+            SELECT * INTO #ConversationsFirstSupport FROM cvs WHERE rn = 1;
+
+            SELECT
+                R.Id
+              -- Nội dung trao đổi
+              , 'ConversationSecond' = (
+                                           SELECT (
+                                                      SELECT
+                                                          '- ' + CS.Sender + ' - ' + CONVERT(NVARCHAR(40), CS.TimeCreate, 103) + ' ' + CONVERT(VARCHAR(5), CS.TimeCreate, 108) + '- ' + CS.Message + CHAR(13) + CHAR(10)
+                                                      FROM
+                                                          #Tmp_Conversations_01 CS
+                                                      WHERE
+                                                          CS.RequestId = R.Id
+                                                          AND CS.Type IN (2, 3)
+                                                      ORDER BY
+                                                          CS.Id DESC
+                                                      FOR XML PATH(''), TYPE
+                                                  ).value('.', 'NVARCHAR(MAX)')
+                                       )
+            INTO
+                #Tmp_Requests_ConversationsSecond_01
+            FROM
+                #Tmp_Requests AS R;
+
+            SELECT TOP 1
+                   C.Id
+                 , C.Message
+                 , C.RequestId
+                 , C.Sender
+                 , C.TimeCreate
+                 , C.StepNo
+                 , C.Type
+                 , C.WarehouseName
+                 , C.OrganizationHierachyName
+            INTO
+                #ConversationEnd
+            FROM
+                #Tmp_Conversations_01 C
+                LEFT JOIN #Emp E ON E.EmployeeCode = C.EmployeeCode
+            WHERE
+                C.RequestId IN ( SELECT Id FROM #Tmp_Requests )
+                AND E.JobTitle IN ('00262')
+                AND C.Type IN (2, 3)
+            ORDER BY
+                C.Id DESC;
+
+            SELECT
+                ISNULL(COUNT(C.EmployeeCode), 0) AS SLSender
+              , R.Id
+            INTO
+                #Temp_SLTraoDoi
+            FROM
+                #Tmp_Requests R
+                LEFT JOIN #Tmp_Conversations_01 ( NOLOCK ) C ON C.RequestId = R.Id
+                LEFT JOIN #Emp E ON E.EmployeeCode = C.EmployeeCode
+            WHERE
+                E.JobTitle IN ('00262') --E.OrganizationHierachyCode <> '0003' AND C.StepNo <> 0
+            GROUP BY
+                R.Id
+            ORDER BY
+                R.Id ASC;
+
+            --▼	Edit - VietMXH - 31/10/2020 - Tối ưu==================================================
+            SELECT
+                R.Id
+              , CT.RequestGroup 'RequestGroup' -- Nhóm yc
+              , CT.RequestType 'RequestType' -- Loại yc
+              , I.Name 'System' -- Shop hoặc phòng ban gửi
+              , ISNULL(EMS.WarehouseName, EMS.OrganizationHierachyName) 'FromShopOrOffice'
+              , R.Title -- Tiêu đề
+              , dbo.fn_RemoveTags(C.Message) 'Description' --Mô tả
+              , C.Sender --Người gửi yc
+              , R.TimeCreate --Ngày gửi yc
+              , CF.Message 'ConversationFirst' --Nội dung phản hồi lần đầu
+              , CF.Sender 'SenderFirst' -- Người phản hồi lần đầu
+              , CONVERT(NVARCHAR(40), CF.TimeCreate, 103) + ' ' + CONVERT(VARCHAR(5), CF.TimeCreate, 108) 'TimeFirst' -- Thời gian phản hồi lần đầu
+              , CS.ConversationSecond -- Nội dung trao đổi
+              , TDR.SLSender AS ConversationCount -- Đếm số lần trao đổi của sup
+              , T.Message 'ConversationTrouble' --Nội dung trả lời cuối cùng
+              , ISNULL(T.Sender, '') 'LastEmpUpdate' --Người cập nhật hướng xử lý của CSVC cuối cùng
+              , MD.Name 'RequestStatus'
+              , R.TimeFinish -- TuanNA89 - 09/09/2020 - Thêm cột
+            FROM
+                #Tmp_Requests AS R
+                LEFT JOIN dbo.Items AS I ( NOLOCK ) ON I.Id = R.GroupId
+                LEFT JOIN #Emp AS EMS ON EMS.EmployeeCode = R.Sender
+                LEFT JOIN #Emp AS EM ON EM.EmployeeCode = R.Assigner
+                LEFT JOIN #MasterDatas AS ER ON ER.Code = R.ErrorCode
+                                                AND ER.[Group] = 'Error'
+                LEFT JOIN #Tmp_Conversations_01 AS C ON C.RequestId = R.Id
+                                                        AND C.StepNo = 0
+                                                        AND C.Type = 1
+                LEFT JOIN #ConversationEnd AS T ON T.RequestId = R.Id
+                LEFT JOIN #ConversationsFirstSupport AS CF ON CF.RequestId = R.Id
+                LEFT JOIN #MasterDatas AS MD ON MD.Code = R.Status
+                                                AND MD.[Group] = 'RequestStatus'
+                LEFT JOIN #Tmp_Categories AS CT ON R.TypeId = CT.Id
+                LEFT JOIN #Tmp_Requests_ConversationsSecond_01 AS CS ON R.Id = CS.Id
+                LEFT JOIN #Tmp_RequestDetails AS RD ON RD.RequestId = R.Id
+                LEFT JOIN #Temp_SLTraoDoi TDR ON TDR.Id = R.Id
+            ----LEFT JOIN #Tmp_ChucDanh AS F03J ON RD.RequestId = F03J.RequestId
+            ----                                 AND RD.RequestDetails_Id = F03J.RequestDetails_Id
+            --   LEFT JOIN #Tmp_ShopNhan AS PP ON R.Id = PP.Id
+            ----LEFT JOIN #Tmp_PhongBanNhan AS PB ON R.Id = PB.RequestId
+            --▲	Edit - VietMXH - 31/10/2020 - Tối ưu==================================================
+
             --
             ;
 
-            DECLARE
-                @p__NgayQuet__Month INT = MONTH(@p__NgayQuet)
-              , @p__NgayQuet__Year  INT = YEAR(@p__NgayQuet);
+            DROP TABLE
+                #ConversationEnd
+              , #Temp_SLTraoDoi
+              , #ConversationsFirstSupport
+              , #Tmp_Conversations_01
+              , #Tmp_Requests_ConversationsSecond_01;
+        END;
+        ELSE IF ( @TypeId = 24 )
+        BEGIN
 
-            --	===Lấy Info XLVP===
-            CREATE TABLE #Tmp__XLVP
+            --▼	Edit - VietMXH - 31/10/2020 - Tối ưu==================================================
+            SELECT
+                ROW_NUMBER() OVER ( ORDER BY R.Id ) 'STT'
+              , R.Id
+              , CT.RequestGroup 'RequestGroup' -- Nhóm yc
+              , CT.RequestType 'RequestType' -- Loại yc
+              --Nguồn tiếp nhận
+              , 'ReceivingOrigin' = CASE
+                                        WHEN R.TypeId = 19
+                                             AND RD.Quantity IS NOT NULL
+                                             AND ISNULL(RD.Property8, '') = 'Inbound' THEN N'Call Center'
+                                        WHEN R.TypeId = 19
+                                             AND RD.Quantity IS NOT NULL
+                                             AND RD.Property8 = 'Happy call'
+                                             AND ISNULL(RD.Property3, '') <> '' THEN 'Happy Call'
+                                        WHEN R.TypeId = 19
+                                             AND RD.Quantity IS NOT NULL
+                                             AND RD.Property8 = N'Bảo hành'
+                                             AND ISNULL(RD.Property3, '') <> '' THEN N'Bảo Hành'
+                                        WHEN R.TypeId = 19
+                                             AND RD.Quantity IS NOT NULL
+                                             AND ISNULL(RD.Property3, '') <> '' THEN N'Happy Call'
+                                        WHEN R.TypeId = 19
+                                             AND RD.Quantity IS NULL
+                                             AND ISNULL(RD.Property2, '') <> '' THEN 'Call Center'
+                                        ELSE 'Shop'
+                                    END
+              -- Loại khiếu nại
+              , RD.Property3 'ComplaintType'
+              -- Chi tiết phân loại
+              , LTRIM(REPLACE(RD.Property1, '-', '')) 'ComplaintTypeDetail'
+              --cột Chức danh
+              , ISNULL(F03J.Property7, '') 'JobTitleName'
+              -- Hệ thống
+              , I.Name 'System'
+              -- Shop hoặc phòng ban gửi
+              , ISNULL(EMS.WarehouseName, EMS.OrganizationHierachyName) 'FromShopOrOffice'
+              , ER.Name 'Error'
+              , R.Title -- Tiêu đề
+              , C.RequestContent AS 'Description' --Mô tả
+              --Người gửi yc
+              , C.Sender
+              --Ngày gửi yc
+              , R.TimeCreate
+              -- Shop nhận
+              , 'ReceptionShop' = CASE
+                                      WHEN ISNULL(RD.ShopNhan, '') <> '' THEN PP.WarehouseName
+                                      ELSE PB.OrganizationHierachyName
+                                  END
+              -- Vùng miền của shop nhận
+              , 'RegionReceptionShop' = ISNULL(PP.RegionHierachyName, '')
+              --Nội dung phản hồi lần đầu
+              , CF.Message 'ConversationFirst'
+              --Bộ phận phản hồi lần đầu
+              , CF.ShopOrOffice AS PartFirst
+              -- Người phản hồi lần đầu
+              , CF.Sender 'SenderFirst'
+              -- Thời gian phản hồi lần đầu
+              , CONVERT(NVARCHAR(40), CF.TimeCreate, 103) + ' ' + CONVERT(VARCHAR(5), CF.TimeCreate, 108) 'TimeFirst'
+              -- Nội dung trao đổi
+              , CS.ConversationSecond
+              -- Người trao đổi
+              , CS.SenderSecond
+              -- Thời gian trao đổi
+              , CS.TimeSecond
+              , ISNULL(EM.WarehouseName, EM.OrganizationHierachyName) 'ToShopOrOffice'
+              , EM.RegionHierachyName 'ToRegion'
+              --Người cập nhật hướng xử lý của CSVC cuối cùng
+              , ISNULL(T.Sender, '') 'LastEmpUpdate'
+              -- Hướng xử lý của CSVC
+              , T.Message 'ConversationTrouble'
+              -- Thời gian hướng xử lý cuối cùng		
+              , CONVERT(NVARCHAR(40), T.TimeCreate, 103) + ' ' + CONVERT(VARCHAR(5), T.TimeCreate, 108) 'TimeUpdateSolution'
+              -- Trạng thái CallLog	
+              , MD.Name 'RequestStatus'
+              , RD.Property4 'CalllogType' -- Loại Calllog
+              , RD.Property5 --Số phiếu bảo hành
+              , R.TimeFinish -- TuanNA89 - 09/09/2020 - Thêm cột
+            FROM
+                #Tmp_Requests AS R
+                LEFT JOIN #Tmp_ItemsMaster AS I ON I.Id = R.GroupId
+                LEFT JOIN #Emp AS EMS ON EMS.EmployeeCode = R.Sender
+                LEFT JOIN #Emp AS EM ON EM.EmployeeCode = R.Assigner
+                LEFT JOIN #MasterDatas AS ER ON ER.Code = R.ErrorCode
+                                                AND ER.[Group] = 'Error'
+                LEFT JOIN #Tmp_Conversations AS C ON C.RequestId = R.Id
+                                                     AND C.StepNo = 0
+                                                     AND C.Type = 1
+                LEFT JOIN #Tmp_Conversations AS T ON T.RequestId = R.Id
+                                                     AND T.Type = 7
+                                                     AND T.StepNo = 0
+                LEFT JOIN #ConversationsFirst AS CF ON CF.RequestId = R.Id
+                LEFT JOIN #MasterDatas AS MD ON MD.Code = R.Status
+                                                AND MD.[Group] = 'RequestStatus'
+                LEFT JOIN #Tmp_Categories AS CT ON R.TypeId = CT.Id
+                LEFT JOIN #Tmp_Requests_ConversationsSecond AS CS ON R.Id = CS.Id
+                LEFT JOIN #Tmp_RequestDetails AS RD ON RD.RequestId = R.Id
+                LEFT JOIN #Tmp_ChucDanh AS F03J ON RD.RequestId = F03J.RequestId
+                                                   AND RD.RequestDetails_Id = F03J.RequestDetails_Id
+                LEFT JOIN #Tmp_ShopNhan AS PP ON R.Id = PP.Id
+                LEFT JOIN #Tmp_PhongBanNhan AS PB ON R.Id = PB.RequestId;
+        --▲	Edit - VietMXH - 31/10/2020 - Tối ưu==================================================
+
+        END;
+        ELSE IF ( @TypeId = 48 )
+        BEGIN
+            SELECT
+                ROW_NUMBER() OVER ( ORDER BY R.Id ) AS STT
+              , R.Id AS Id
+              , CT.RequestGroup AS RequestGroup -- Nhóm yc
+              , CT.RequestType AS RequestType -- Loại yc
+              , CASE
+                    --	===Xét theo Shop===
+                    WHEN ( EMS.WarehouseCode <> '' ) THEN 'Shop'
+                    --	===ELSE===
+                    ELSE ISNULL(EMS.OrganizationHierachyName, '')
+                END AS ReceivingOrigin --Nguồn tiếp nhận
+              , RD.Property3 AS ComplaintType -- Loại khiếu nại
+              , LTRIM(REPLACE(RD.Property1, '-', '')) AS ComplaintTypeDetail -- Chi tiết phân loại
+              , N'' AS NganhHang -- RD.CustomerCode
+              , N'' AS LoaiHang -- RD.CustomerName
+              , N'' AS ProductName -- RD.ProductName
+              , N'' AS JobTitleName --cột Chức danh
+              , N'' AS 'System' -- Hệ thống
+              , EMS.ShopOrOffice AS FromShopOrOffice -- Shop hoặc phòng ban gửi
+              , N'' AS Error
+              , R.Title AS Title -- Tiêu đề
+              , C.RequestContent AS 'Description' --Mô tả
+              , C.Sender AS Sender --Người gửi yc	
+              , R.TimeCreate AS TimeCreate --Ngày gửi yc
+              , N'' AS ReceptionShop -- Shop nhận
+              , N'' AS RegionReceptionShop -- Vùng miền của shop nhận
+              , CF.Message AS ConversationFirst --Nội dung phản hồi lần đầu
+              , CF.ShopOrOffice AS PartFirst --Bộ phận phản hồi lần đầu
+              , CF.Sender AS SenderFirst -- Người phản hồi lần đầu
+              , FORMAT(CF.TimeCreate, 'dd/MM/yyyy HH:mm') AS TimeFirst -- Thời gian phản hồi lần đầu
+              , CS.ConversationSecond AS ConversationSecond -- Nội dung trao đổi
+              , CS.SenderSecond AS SenderSecond -- Người trao đổi
+              , CS.TimeSecond AS TimeSecond -- Thời gian trao đổi
+              , EM.ShopOrOffice AS ToShopOrOffice
+              , EM.RegionHierachyName AS ToRegion
+              , N'' AS LastEmpUpdate --Người cập nhật hướng xử lý kh cuối cùng
+              , N'' AS ConversationTrouble -- Hướng xử lý khách hàng
+              , N'' AS ConversationTroubleTime -- Thời gian hướng xử lý cuối cùng
+              , N'' AS CSKHCostConfirm --Chi phí CSKH confirm -- RD.Property9
+              , N'' AS CostCfUpdateBy -- CSKH cập nhật chi phí -- ISNULL(RD.Imei + '-' + EMU.EmployeeName, '')
+              , FORMAT(RD.Time1, 'dd/MM/yyyy HH:mm') AS DateCSKHCostConfirm --Ngày CSKH confirm phí
+              , N'' AS SoSO --Diễn giải vi phạm
+              , RD.Property5 AS SoPhieuBaoHanh --Số phiếu bảo hành
+              , N'' AS SolutionInternal --Hướng xử lý nội bộ
+              , '' AS Huongxlnoibo
+              , N'' AS PersionUpdateSolution --Người cập nhật hướng XL nội bộ
+              , N'' AS TimeUpdateSolution --Thời gian cập nhật hướng XL nội bộ
+              , MD.Name AS RequestStatus -- Trạng thái CallLog
+              , RD.Property4 AS CalllogType -- Loại Calllog
+              , N'' AS ExtendTime
+              , '' AS UpdateByExTime
+              , RD.Money1 AS CSKHCostSave
+              , RD.Property11 AS NoteCSKHCostSave
+              , CASE
+                    WHEN ( CF.TimeCreate IS NULL ) THEN ''
+                    ELSE CASE
+                             WHEN ( RD.Property8 <> '' ) THEN ''
+                             ELSE CONCAT(DATEDIFF(MINUTE, R.RequestTimeCreate, CF.TimeCreate), ' phút')
+                         END
+                END AS TimeHandlingOneHour
+              , CASE
+                    WHEN ( CF.TimeCreate IS NULL ) THEN CASE
+                                                            WHEN (
+                                                                     R.TimeCreate_HOUR < 21
+                                                                     AND ISNULL(RD.Property8, '') = ''
+                                                                     AND DATEDIFF(MINUTE, R.RequestTimeCreate, GETDATE()) > 180 -- Edit - ThuongNM2 - 16/04/2019 Đổi 60 thành 180 BA.Phát Yêu cầu
+                                                                 ) THEN N'Không đạt'
+                                                            ELSE ''
+                                                        END
+                    ELSE CASE
+                             WHEN (
+                                      ISNULL(RD.Property8, '') = ''
+                                      AND (
+                                              R.TimeCreate_HOUR < 21
+                                              OR (
+                                                     R.TimeCreate_HOUR >= 21
+                                                     AND CONVERT(DATE, R.RequestTimeCreate) = CONVERT(DATE, CF.TimeCreate)
+                                                 )
+                                          )
+                                      AND DATEDIFF(MINUTE, R.RequestTimeCreate, CF.TimeCreate) <= 180 -- Edit - ThuongNM2 - 16/04/2019 Đổi 60 thành 180 BA.Phát Yêu cầu
+
+                                  ) THEN N'Đạt'
+                             WHEN (
+                                      ISNULL(RD.Property8, '') = ''
+                                      AND (
+                                              (
+                                                  R.TimeCreate_HOUR < 21
+                                                  AND DATEDIFF(MINUTE, R.RequestTimeCreate, CF.TimeCreate) > 180 -- Edit - ThuongNM2 - 16/04/2019 Đổi 60 thành 180 BA.Phát Yêu cầu
+                                              )
+                                              OR (
+                                                     R.TimeCreate_HOUR >= 21
+                                                     AND DATEPART(HOUR, CF.TimeCreate) < 10
+                                                     AND CONVERT(DATE, CF.TimeCreate) > CONVERT(DATE, DATEADD(DAY, 1, R.RequestTimeCreate))
+                                                 )
+                                              OR (
+                                                     R.TimeCreate_HOUR >= 21
+                                                     AND DATEPART(HOUR, CF.TimeCreate) >= 10
+                                                     AND CONVERT(DATE, CF.TimeCreate) > CONVERT(DATE, R.RequestTimeCreate)
+                                                 )
+                                          )
+                                  ) THEN N'Không đạt'
+                             WHEN (
+                                      R.TimeCreate_HOUR >= 21
+                                      AND DATEPART(HOUR, CF.TimeCreate) < 10
+                                      AND CONVERT(DATE, CF.TimeCreate) = CONVERT(DATE, DATEADD(DAY, 1, R.RequestTimeCreate))
+                                  ) THEN N'Đạt'
+                             ELSE ''
+                         END
+                END AS QualityFeedback
+              , '' AS FinalTimeHandling
+              , '' AS FinalQualityFeedback
+              , '' AS Note
+              , RD.Note AS KQXuLy
+              , N'' AS UpdateKQXuLy
+              , '' AS SDT
+              , EU.EmployeeCode_Name AS UserUpdateLoaiKN
+              , N'' AS DSNVVP
+              , N'' AS PBShopNVVP
+              , ISNULL(FORMAT(RD.Time2, 'yyyy-MM-dd HH:mm:ss'), '') AS TimeUpdateLoaiKN
+              , N'' AS TTBHHang
+              , NULL AS ConversationSummary
+              , NULL AS SenderSummary
+              , R.TimeFinish AS TimeFinish
+            FROM
+                #Tmp_Requests AS R
+                LEFT JOIN #Emp AS EMS ON EMS.EmployeeCode = R.Sender
+                LEFT JOIN #Emp AS EM ON EM.EmployeeCode = R.Assigner
+                LEFT JOIN #MasterDatas AS ER ON ER.Code = R.ErrorCode
+                                                AND ER.[Group] = 'Error'
+                LEFT JOIN #Tmp_Conversations AS C ON C.RequestId = R.Id
+                                                     AND C.StepNo = 0
+                                                     AND C.Type = 1
+                LEFT JOIN #ConversationsFirst AS CF ON CF.RequestId = R.Id
+                LEFT JOIN #MasterDatas AS MD ON MD.Code = R.Status
+                                                AND MD.[Group] = 'RequestStatus'
+                LEFT JOIN #Tmp_Categories AS CT ON R.TypeId = CT.Id
+                LEFT JOIN #Tmp_Requests_ConversationsSecond AS CS ON R.Id = CS.Id
+                LEFT JOIN #Tmp_RequestDetails AS RD ON RD.RequestId = R.Id
+                LEFT JOIN #Tmp_PhongBanNhan AS PB ON R.Id = PB.RequestId
+                LEFT JOIN #Tmp_Employees EU ON EU.EmployeeCode = RD.EmpCode
+                LEFT JOIN #Emp EMU ON EMU.EmployeeCode = RD.Imei
+            ORDER BY
+                R.TimeCreate;
+        END;
+        ELSE
+        BEGIN
+            CREATE TABLE #Tmp_MaPhieuBaoHanh
             (
-                ReqId INT
-              , TimeCre DATE
-              , SoTienCallLog NUMERIC(19, 6)
-              , NVVP NVARCHAR(50)
-              , HeSoPhat FLOAT
-              , Count_NVVP INT
-              , Remark NVARCHAR(500)
-              , SoTienBoiThuong NUMERIC(19, 6)
-              , MonthRecord INT
-              , YearRecord INT
+                R_RequestId_MaPhieuBaoHanh BIGINT
+              , TTBH_Hang_MaPhieuBaoHanh NVARCHAR(MAX)
+              , NganhHang_MaPhieuBaoHanh NVARCHAR(MAX)
+              , LoaiHang_MaPhieuBaoHanh NVARCHAR(MAX)
+              , TenSanPham_MaPhieuBaoHanh NVARCHAR(MAX)
             );
-            INSERT INTO #Tmp__XLVP
+
+            CREATE TABLE #Tmp_Items_19_157
             (
-                ReqId
-              , TimeCre
-              , SoTienCallLog
-              , NVVP
-              , HeSoPhat
-              , Count_NVVP
-              , Remark
-              , SoTienBoiThuong
-              , MonthRecord
-              , YearRecord
-            )
-            SELECT
-                R.ReqId AS ReqId -- int
-              , R.TimeCre AS TimeCre -- DATE
-              , 100000 AS SoTienCallLog -- numeric -- * Mặc định 100K
-              , A.NVVP AS NVVP -- nvarchar(50)
-              , 1 AS HeSoPhat -- float
-              , NULL AS Count_NVVP -- int
-              , N'Trễ hạn ' + ISNULL(CONVERT(NVARCHAR(50), DATEDIFF(DAY, R.TimeCre, @p__NgayQuet)), '') + N' ngày xử lý CallLog outside: ' + ISNULL(CONVERT(NVARCHAR(50), R.ReqId), '') + N' thanh toán hoàn tiền dư online' AS Remark -- nvarchar(500)
-              , NULL AS SoTienBoiThuong -- numeric
-              , @p__NgayQuet__Month AS MonthRecord -- int
-              , @p__NgayQuet__Year AS YearRecord -- int
-            FROM
-                #Tmp__Req AS R
-                INNER JOIN #Tmp__Ass AS A ON R.ReqId = A.ReqId;
-
-            --	===Lấy SL NVVP từng Req===
-            SELECT
-                X.ReqId
-              , COUNT(1) AS Count_NVVP
-            INTO
-                #Tmp__XLVP__Count_NVVP
-            FROM
-                #Tmp__XLVP AS X
-            GROUP BY
-                X.ReqId;
-
-            --	===Update SL NVVP từng Req===
-            UPDATE
-                X
-            SET
-                X.Count_NVVP = C.Count_NVVP
-            FROM
-                #Tmp__XLVP AS X
-                INNER JOIN #Tmp__XLVP__Count_NVVP AS C ON X.ReqId = C.ReqId;
-
-            DROP TABLE #Tmp__XLVP__Count_NVVP;
-
-            --	===Update Số tiền===
-            UPDATE
-                #Tmp__XLVP
-            SET
-                SoTienBoiThuong = CASE
-                                      WHEN ( Count_NVVP > 0 ) THEN CEILING(( SoTienCallLog * 1.0 / Count_NVVP ) / 100) * 100
-                                      ELSE 0
-                                  END;
-
-            --	===Lấy Data XLVP dùng Push Inside===
-            CREATE TABLE #Tmp__XLVP__PushInside
-            (
-                STT INT IDENTITY(1, 1)
-              , ReqId INT
-              , TimeCre DATE
-              , SoTienCallLog NUMERIC(19, 6)
-              , NVVP NVARCHAR(50)
-              , HeSoPhat FLOAT
-              , Count_NVVP INT
-              , Remark NVARCHAR(500)
-              , SoTienBoiThuong NUMERIC(19, 6)
-              , MonthRecord INT
-              , YearRecord INT
-              , ViolationContentID INT
-              , NguoiGhiNhan NVARCHAR(50)
+                Id INT
+              , Name NVARCHAR(300)
+              , ChildId INT
+              , ParentId INT
+              , ParentName NVARCHAR(1000)
             );
-            INSERT INTO #Tmp__XLVP__PushInside
-            (
-                ReqId
-              , TimeCre
-              , SoTienCallLog
-              , NVVP
-              , HeSoPhat
-              , Count_NVVP
-              , Remark
-              , SoTienBoiThuong
-              , MonthRecord
-              , YearRecord
-              , ViolationContentID
-              , NguoiGhiNhan
-            )
+            INSERT INTO #Tmp_Items_19_157 ( Id, Name, ChildId, ParentId, ParentName )
             SELECT
-                X.ReqId AS ReqId -- int
-              , X.TimeCre AS TimeCre -- date
-              , X.SoTienCallLog AS SoTienCallLog -- numeric
-              , X.NVVP AS NVVP -- nvarchar(50)
-              , X.HeSoPhat AS HeSoPhat -- float
-              , X.Count_NVVP AS Count_NVVP -- int
-              , X.Remark AS Remark -- nvarchar(500)
-              , X.SoTienBoiThuong AS SoTienBoiThuong -- numeric
-              , X.MonthRecord AS MonthRecord -- int
-              , X.YearRecord AS YearRecord -- int
-              , 981 AS ViolationContentID -- Mã Vi phạm "Không thực hiện đúng hạn yêu cầu hoàn  tiền/chuyển tiền thanh online" - 981:BETA ; 571:GOLIVE
-              , N'33105' AS NguoiGhiNhan -- 02/10/2020 - Hanhbt6 yc
+                TMI.Id
+              , TMI.Name
+              , ISNULL(TMI.ParentId, 0)
+              , CASE WHEN TMI.ParentId IS NULL THEN TMI.Id ELSE 0 END
+              , CASE WHEN TMI.ParentId IS NULL THEN TMI.Name ELSE '' END
             FROM
-                #Tmp__XLVP AS X
+                #Tmp_ItemsMaster AS TMI ( NOLOCK )
             WHERE
-                X.SoTienBoiThuong > 0;
+                TMI.TypeId = @TypeId;
 
-            SET @p__Count__XLVP__PushInside = ISNULL(( SELECT COUNT(1)FROM #Tmp__XLVP__PushInside ), 0);
-
-            IF ( @p__Count__XLVP__PushInside > 0 )
+            IF ( @TypeId = 19 )
             BEGIN
-                DECLARE
-                    @p__Loop__STT     INT = 1
-                  , @p__Loop__STT_MAX INT = ISNULL(( SELECT MAX(P.STT)FROM #Tmp__XLVP__PushInside AS P ), 0);
-                WHILE ( @p__Loop__STT <= @p__Loop__STT_MAX )
+                DECLARE @Loop_Item BIT = 1;
+                WHILE ( @Loop_Item = 1 )
                 BEGIN
-                    DECLARE
-                        @p__Loop__CallLogID          INT           = 0
-                      , @p__Loop__MonthRecord        INT           = 0
-                      , @p__Loop__YearRecord         INT           = 0
-                      , @p__Loop__EmpViolation       NVARCHAR(50)  = N''
-                      , @p__Loop__ViolationContentID INT           = 0
-                      , @p__Loop__Remark             NVARCHAR(500) = N''
-                      , @p__Loop__HeSoPhat           FLOAT         = 0
-                      , @p__Loop__SoTienBoiThuong    FLOAT         = 0
-                      , @p__Loop__NguoiGhiNhan       NVARCHAR(50)  = NULL
-                    --
-                    ;
-
-                    SELECT TOP 1
-                           @p__Loop__CallLogID = P.ReqId
-                         , @p__Loop__MonthRecord = P.MonthRecord
-                         , @p__Loop__YearRecord = P.YearRecord
-                         , @p__Loop__EmpViolation = P.NVVP
-                         , @p__Loop__ViolationContentID = P.ViolationContentID
-                         , @p__Loop__Remark = P.Remark
-                         , @p__Loop__HeSoPhat = P.HeSoPhat
-                         , @p__Loop__SoTienBoiThuong = P.SoTienBoiThuong
-                         , @p__Loop__NguoiGhiNhan = P.NguoiGhiNhan
+                    UPDATE
+                        I
+                    SET
+                        I.ParentId = I.Id
+                      , I.ParentName = CASE
+                                           WHEN I2.ChildId = 0 THEN I2.ParentName
+                                           ELSE CONCAT(I2.ParentName, ' - ', I2.Name)
+                                       END
                     FROM
-                        #Tmp__XLVP__PushInside AS P
+                        #Tmp_Items_19_157 AS I
+                        INNER JOIN #Tmp_Items_19_157 AS I2 ON I.ChildId = I2.ParentId
                     WHERE
-                        P.STT = @p__Loop__STT;
+                        I.ParentId = 0;
 
-                    SET @p__Loop__CallLogID = ISNULL(@p__Loop__CallLogID, 0);
-                    SET @p__Loop__MonthRecord = ISNULL(@p__Loop__MonthRecord, 0);
-                    SET @p__Loop__YearRecord = ISNULL(@p__Loop__YearRecord, 0);
-                    SET @p__Loop__EmpViolation = ISNULL(@p__Loop__EmpViolation, '');
-                    SET @p__Loop__ViolationContentID = ISNULL(@p__Loop__ViolationContentID, 0);
-                    SET @p__Loop__Remark = ISNULL(@p__Loop__Remark, '');
-                    SET @p__Loop__HeSoPhat = ISNULL(@p__Loop__HeSoPhat, 0);
-                    SET @p__Loop__SoTienBoiThuong = ISNULL(@p__Loop__SoTienBoiThuong, 0);
-
-                    IF ( @p__Loop__CallLogID > 0 )
+                    IF NOT EXISTS (
+                                      SELECT TOP 1
+                                             1
+                                      FROM
+                                          #Tmp_Items_19_157 AS I ( NOLOCK )
+                                      WHERE
+                                          I.ParentName = ''
+                                  )
                     BEGIN
-                        BEGIN TRY
-                            DECLARE @SoPhieu VARCHAR(40);
-                            EXEC SV_BETA_FRT_INSIDE.FRTInsideV2.dbo.CallLog_InsertViolationVoteRecord
-                                @MonthRecord = @p__Loop__MonthRecord -- int
-                              , @YearRecord = @p__Loop__YearRecord -- int
-                              , @EmpViolation = @p__Loop__EmpViolation -- varchar(40)
-                              , @ViolationContentID = @p__Loop__ViolationContentID -- int
-                              , @CallLogID = @p__Loop__CallLogID -- bigint
-                              , @Remark = @p__Loop__Remark -- nvarchar(500)
-                              , @HeSoPhat = @p__Loop__HeSoPhat -- float
-                              , @SoTienPhatThem = 0.0 -- float
-                              , @SoTienBoiThuong = @p__Loop__SoTienBoiThuong -- float
-                              , @NguoiGhiNhan = @p__Loop__NguoiGhiNhan -- varchar(50)
-                              , @HDQuyDinh = N'' -- nvarchar(1000)
-                              , @HDTaiLieu = N'' -- nvarchar(1000)
-                              , @SoPhieu = @SoPhieu OUTPUT; -- varchar(40)
-
-                            --	===Ghi Log===
-                            INSERT INTO dbo.Log_CallLog_InsertViolationVoteRecord
-                            (
-                                CreateDateTime
-                              , StoreName
-                              , TypeId
-                              , CallLogID
-                              , EmpViolation
-                              , ViolationContentID
-                              , HeSoPhat
-                              , Remark
-                              , SoTienPhatThem
-                              , SoTienBoiThuong
-                              , MonthRecord
-                              , YearRecord
-                              , NguoiGhiNhan
-                              , OUTPUT_SoPhieu
-                            )
-                            SELECT
-                                GETDATE() -- CreateDateTime - datetime
-                              , N'sp__RefundPayment__GetPending__InsertViolationVoteRecord' -- StoreName - nvarchar(50)
-                              , 153 -- TypeId - int -- * Loại CallLog: 153:Duyệt hoàn tiền thanh toán dư cho KH
-                              , @p__Loop__CallLogID -- CallLogID - int
-                              , @p__Loop__EmpViolation -- EmpViolation - nvarchar(50)
-                              , @p__Loop__ViolationContentID -- ViolationContentID - int
-                              , @p__Loop__HeSoPhat -- HeSoPhat - float
-                              , @p__Loop__Remark -- Remark - nvarchar(500)
-                              , 0.0 -- SoTienPhatThem - float
-                              , @p__Loop__SoTienBoiThuong -- SoTienBoiThuong - float
-                              , @p__Loop__MonthRecord -- MonthRecord - int
-                              , @p__Loop__YearRecord -- YearRecord - int
-                              , @p__Loop__NguoiGhiNhan
-                              , @SoPhieu;
-
-                        END TRY
-                        BEGIN CATCH
-                            DECLARE @ErrorMessage_FRTInsideV2 NVARCHAR(MAX) = N'';
-                            SET @ErrorMessage_FRTInsideV2 = N'Lỗi: [FRTInsideV2.dbo.CallLog_InsertViolationVoteRecord]';
-                            SET @ErrorMessage_FRTInsideV2 += N' - ERROR_MESSAGE: ' + ERROR_MESSAGE() + N' - ERROR_LINE: ' + CONVERT(NVARCHAR, ERROR_LINE());
-
-                            --	===Ghi Log===
-                            INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
-                            VALUES (
-                                       N'sp__RefundPayment__GetPending__InsertViolationVoteRecord' -- Title - nvarchar(300)
-                                     , @ErrorMessage_FRTInsideV2 -- Error - nvarchar(max)
-                                     , 1 -- Status - tinyint
-                                     , GETDATE() -- TimeCreate - datetime
-                                   );
-                        END CATCH;
+                        SET @Loop_Item = 0;
                     END;
-
-                    SET @p__Loop__STT += 1;
                 END;
             END;
 
-            DROP TABLE #Tmp__XLVP__PushInside;
+            --▼ ChuongNT3 - 11/03/2018 - update timecreate
+            IF ( @TypeId = 19 OR @TypeId = 157 )
+            BEGIN
 
-            DROP TABLE #Tmp__XLVP;
+                --▼	Edit - VietMXH - 31/10/2020 - Tối ưu==================================================
+                UPDATE
+                    #Tmp_Requests
+                SET
+                    RequestTimeCreate = FORMAT(DATEADD(DAY, -1, RequestTimeCreate), 'yyyy-MM-dd 23:59:00')
+                  , TimeCreate_HOUR = 23
+                WHERE
+                    TimeCreate_HOUR >= 0
+                    AND TimeCreate_HOUR < 6; -- Edit - ThuongNM2 - 26/04/2019 - Thay đổi 08 -> 06 PhatBA yêu cầu
 
-            DROP TABLE #Tmp__Ass;
+                DECLARE
+                    @maPhieu                    NVARCHAR(MAX)
+                  , @R_RequestId_MaPhieuBaoHanh BIGINT = 0;
+                DECLARE @index_MaPhieuBaoHanh INT = 1;
+                DECLARE @count_MaPhieuBaoHanh INT;
+
+                CREATE TABLE #Tmp_Data_MaPhieuBaoHanh
+                (
+                    STT INT IDENTITY(1, 1)
+                  , R_RequestId INT
+                  , MaPhieuBaoHanh NVARCHAR(MAX)
+                  , MaPhieuBH BIGINT
+                );
+                INSERT INTO #Tmp_Data_MaPhieuBaoHanh ( R_RequestId, MaPhieuBaoHanh, MaPhieuBH )
+                SELECT
+                    D.RequestId AS R_RequestId
+                  , D.Property5 AS MaPhieuBaoHanh
+                  , TRY_CONVERT(INT, D.Property5) AS MaPhieuBH
+                FROM
+                    #Tmp_RequestDetails AS D
+                WHERE
+                    D.Property5 <> '';
+
+                CREATE TABLE #Tmp_LayThongTin_Callog
+                (
+                    MaPhieuBH NVARCHAR(MAX)
+                  , MaTTBH1 NVARCHAR(MAX)
+                  , MaNganhHang NVARCHAR(MAX)
+                  , MaLoaiHang NVARCHAR(MAX)
+                  , TenSanPham NVARCHAR(MAX)
+                  , TenTTBH NVARCHAR(MAX)
+                  , TenNganhHang NVARCHAR(MAX)
+                  , TenLoaiHang NVARCHAR(MAX)
+                );
+
+                --	===Lấy data từ Bảo hành===
+                BEGIN
+                    SELECT
+                        P.MaPhieuBH AS MaPhieuBH
+                      , P.MaTTBH1 AS MaTTBH1
+                    INTO
+                        #Tmp__WAR__PhieuTTBHHang
+                    FROM
+                        [10.96.254.143].FRTWARRANTY_BETA.dbo.PhieuBH AS P WITH ( NOLOCK )
+                    WHERE
+                        P.MaPhieuBH IN ( SELECT D.MaPhieuBH FROM #Tmp_Data_MaPhieuBaoHanh AS D );
+
+                    SELECT
+                        S.SoPhieuBH AS SoPhieuBH
+                      , S.MaNganhHang AS MaNganhHang
+                      , S.MaLoaiHang AS MaLoaiHang
+                      , S.TenSanPham AS TenSanPham
+                    INTO
+                        #Tmp__WAR__PhieuNganhHang
+                    FROM
+                        [10.96.254.143].FRTWARRANTY_BETA.dbo.PhieuBH_SanPhamBH AS S WITH ( NOLOCK )
+                    WHERE
+                        S.SoPhieuBH IN ( SELECT D.MaPhieuBH FROM #Tmp_Data_MaPhieuBaoHanh AS D );
+
+                    SELECT
+                        H.MaPhieuBH AS MaPhieuBH
+                      , H.MaTTBH1 AS MaTTBH1
+                      , P.MaNganhHang AS MaNganhHang
+                      , P.MaLoaiHang AS MaLoaiHang
+                      , P.TenSanPham AS TenSanPham
+                    INTO
+                        #Tmp__WAR__Result
+                    FROM
+                        #Tmp__WAR__PhieuTTBHHang AS H
+                        INNER JOIN #Tmp__WAR__PhieuNganhHang AS P ON H.MaPhieuBH = P.SoPhieuBH;
+
+                    DROP TABLE #Tmp__WAR__PhieuTTBHHang;
+                    DROP TABLE #Tmp__WAR__PhieuNganhHang;
+
+                    SELECT
+                        H.MaTTBH AS MaTTBH
+                      , H.TenTTBH AS TenTTBH
+                    INTO
+                        #Tmp__WAR__MTTBHHang
+                    FROM
+                        [10.96.254.143].FRTWARRANTY_BETA.dbo.MTTBHHang AS H WITH ( NOLOCK )
+                    WHERE
+                        H.MaTTBH IN ( SELECT R.MaTTBH1 FROM #Tmp__WAR__Result AS R );
+
+                    SELECT
+                        L.MaNganhHang AS MaNganhHang
+                      , L.TenNganhHang AS TenNganhHang
+                      , L.MaLoaiHang AS MaLoaiHang
+                      , L.TenLoaiHang AS TenLoaiHang
+                    INTO
+                        #Tmp__WAR__NganhLoaiHang
+                    FROM
+                        [10.96.254.143].FRTWARRANTY_BETA.dbo.MDinhNghiaNhomHangCRM_LoaiHang AS L WITH ( NOLOCK );
+
+                    INSERT #Tmp_LayThongTin_Callog
+                    (
+                        MaPhieuBH
+                      , MaTTBH1
+                      , MaNganhHang
+                      , MaLoaiHang
+                      , TenSanPham
+                      , TenTTBH
+                      , TenNganhHang
+                      , TenLoaiHang
+                    )
+                    SELECT DISTINCT
+                           R.MaPhieuBH AS MaPhieuBH
+                         , R.MaTTBH1 AS MaTTBH1
+                         , R.MaNganhHang AS MaNganhHang
+                         , R.MaLoaiHang AS MaLoaiHang
+                         , R.TenSanPham AS TenSanPham
+                         , H.TenTTBH AS TenTTBH
+                         , L.TenNganhHang AS TenNganhHang
+                         , L.TenLoaiHang AS TenLoaiHang
+                    FROM
+                        #Tmp__WAR__Result AS R
+                        INNER JOIN #Tmp__WAR__MTTBHHang AS H ON H.MaTTBH = R.MaTTBH1
+                        INNER JOIN #Tmp__WAR__NganhLoaiHang AS L ON R.MaLoaiHang = L.MaLoaiHang
+                                                                    AND R.MaNganhHang = L.MaNganhHang;
+
+                    DROP TABLE #Tmp__WAR__Result;
+                    DROP TABLE #Tmp__WAR__MTTBHHang;
+                    DROP TABLE #Tmp__WAR__NganhLoaiHang;
+                END;
+
+                INSERT #Tmp_MaPhieuBaoHanh
+                (
+                    R_RequestId_MaPhieuBaoHanh
+                  , TTBH_Hang_MaPhieuBaoHanh
+                  , NganhHang_MaPhieuBaoHanh
+                  , LoaiHang_MaPhieuBaoHanh
+                  , TenSanPham_MaPhieuBaoHanh
+                )
+                SELECT
+                    D.R_RequestId AS R_RequestId_MaPhieuBaoHanh -- bigint
+                  , T.TenTTBH AS TTBH_Hang -- nvarchar(max)
+                  , T.TenNganhHang AS NganhHang_MaPhieuBaoHanh -- nvarchar(max)
+                  , T.TenLoaiHang AS LoaiHang_MaPhieuBaoHanh -- nvarchar(max)
+                  , T.TenSanPham AS TenSanPham_MaPhieuBaoHanh -- nvarchar(max)
+                FROM
+                    #Tmp_Data_MaPhieuBaoHanh AS D
+                    INNER JOIN #Tmp_LayThongTin_Callog AS T ON D.MaPhieuBaoHanh = T.MaPhieuBH;
+
+                DROP TABLE #Tmp_LayThongTin_Callog;
+                --▲	Edit - VietMXH - 31/10/2020 - Tối ưu==================================================
+
+                DROP TABLE #Tmp_Data_MaPhieuBaoHanh;
+            END;
+            --▲ ChuongNT3 - 11/03/2018 - update timecreate
+
+            --▼	Edit - VietMXH - 31/10/2020 - Tối ưu==================================================
+            CREATE TABLE #Tmp__TypeId_19_157__DSNVVP
+            (
+                RequestDetails_Id BIGINT
+              , DSNVVP NVARCHAR(MAX)
+              , PBShopNVVP NVARCHAR(MAX)
+            );
+            IF ( @TypeId IN (19, 157))
+            BEGIN
+                UPDATE
+                    #Tmp_RequestDetails
+                SET
+                    TypeId_19_157_DSNVVP = REPLACE(ISNULL(Property13, Property12), '.', ',');
+
+                INSERT INTO #Tmp__TypeId_19_157__DSNVVP ( RequestDetails_Id, DSNVVP, PBShopNVVP )
+                SELECT
+                    D.RequestDetails_Id AS RequestDetails_Id
+                  , STUFF((
+                              SELECT
+                                  ',' + E.EmployeeCode_Name
+                              FROM
+                                  dbo.ufn_SplitStringToTable(D.TypeId_19_157_DSNVVP, ',', 0) AS L
+                                  INNER JOIN #Emp AS E ON L.GiaTri = E.EmployeeCode
+                              FOR XML PATH('')
+                          )
+                        , 1
+                        , 1
+                        , ''
+                         ) AS DSNVVP
+                  , STUFF((
+                              SELECT DISTINCT
+                                     ',' + E.ShopOrOffice
+                              FROM
+                                  dbo.ufn_SplitStringToTable(D.TypeId_19_157_DSNVVP, ',', 0) AS L
+                                  INNER JOIN #Emp AS E ON L.GiaTri = E.EmployeeCode
+                              FOR XML PATH('')
+                          )
+                        , 1
+                        , 1
+                        , ''
+                         ) AS PBShopNVVP
+                FROM
+                    #Tmp_RequestDetails AS D;
+            END;
+
+            SELECT DISTINCT
+                   ROW_NUMBER() OVER ( ORDER BY R.Id ) 'STT'
+                 , R.Id
+                 , CT.RequestGroup 'RequestGroup' -- Nhóm yc
+                 , CT.RequestType 'RequestType' -- Loại yc
+                 , CASE
+                       --	===Xét theo Loại CL===
+                       WHEN ( R.TypeId IN (19, 157)) THEN CASE
+                                                              --	===Xét theo RD.Property8===
+                                                              WHEN ( RD.Property8 = N'Bảo hành' ) THEN 'PBH'
+                                                              WHEN ( RD.Property8 <> '' ) THEN 'CSKH'
+                                                              --	===Xét theo EMS.WarehouseCode===
+                                                              WHEN EMS.WarehouseCode <> '' THEN 'Shop'
+                                                              WHEN ( ISNULL(EMS.WarehouseCode, '') = '' ) THEN CASE
+                                                                                                                   WHEN ( EXISTS (
+                                                                                                                                     SELECT
+                                                                                                                                         1
+                                                                                                                                     FROM
+                                                                                                                                         #Tmp__JobtitleCSKH AS J_CSKH
+                                                                                                                                     WHERE
+                                                                                                                                         J_CSKH.JobTitleCode = EMS.JobTitle
+                                                                                                                                 )
+                                                                                                                        ) THEN 'CSKH'
+                                                                                                                   ELSE ISNULL(EMS.OrganizationHierachyName, '')
+                                                                                                               END
+                                                              --	===ELSE===
+                                                              ELSE ISNULL(EMS.OrganizationHierachyName, '')
+                                                          END
+                       --	===Xét theo Shop===
+                       WHEN EMS.WarehouseCode <> '' THEN 'Shop'
+                       --	===ELSE===
+                       ELSE ISNULL(EMS.OrganizationHierachyName, '')
+                   END AS ReceivingOrigin --Nguồn tiếp nhận
+                 , CASE
+                       WHEN ( R.TypeId = 19 ) THEN I2.ParentName
+                       WHEN ( R.TypeId = 134 ) THEN ''
+                       ELSE RD.Property3
+                   END AS ComplaintType -- Loại khiếu nại
+                 , LTRIM(REPLACE(RD.Property1, '-', '')) 'ComplaintTypeDetail' -- Chi tiết phân loại
+                 --▼ ChuongNT3 - 18/01/2019 - add tên hãng bảo hành
+                 , ISNULL(RD.CustomerCode, PBH.NganhHang_MaPhieuBaoHanh) AS NganhHang
+                 , ISNULL(RD.CustomerName, PBH.LoaiHang_MaPhieuBaoHanh) AS LoaiHang
+                 , ISNULL(RD.ProductName, PBH.TenSanPham_MaPhieuBaoHanh) AS ProductName
+                 --▲ ChuongNT3 - 18/01/2019 - add tên hãng bảo hành
+                 , ISNULL(F03J.Property7, '') 'JobTitleName' --cột Chức danh
+                 , I.Name 'System' -- Hệ thống
+                 , EMS.ShopOrOffice AS FromShopOrOffice -- Shop hoặc phòng ban gửi
+                 , ER.Name 'Error'
+                 , R.Title -- Tiêu đề
+                 , C.RequestContent AS 'Description' --Mô tả
+                 , C.Sender --Người gửi yc	
+                 , R.TimeCreate --Ngày gửi yc
+                 , CASE
+                       WHEN ( RD.ShopNhan <> '' ) THEN PP.WarehouseName
+                       ELSE PB.OrganizationHierachyName
+                   END AS ReceptionShop -- Shop nhận
+                 , 'RegionReceptionShop' = ISNULL(PP.RegionHierachyName, '') -- Vùng miền của shop nhận
+                 , CF.Message 'ConversationFirst' --Nội dung phản hồi lần đầu
+                 , CF.ShopOrOffice AS PartFirst --Bộ phận phản hồi lần đầu
+                 , CF.Sender 'SenderFirst' -- Người phản hồi lần đầu
+                 , FORMAT(CF.TimeCreate, 'dd/MM/yyyy HH:mm') AS TimeFirst -- Thời gian phản hồi lần đầu
+                 , CS.ConversationSecond -- Nội dung trao đổi
+                 , CS.SenderSecond -- Người trao đổi
+                 , CS.TimeSecond -- Thời gian trao đổi
+                 , EM.ShopOrOffice AS ToShopOrOffice
+                 , EM.RegionHierachyName 'ToRegion'
+                 , ISNULL(T.Sender, '') 'LastEmpUpdate' --Người cập nhật hướng xử lý kh cuối cùng
+                 , T.Message 'ConversationTrouble' -- Hướng xử lý khách hàng
+                 , FORMAT(T.TimeCreate, 'dd/MM/yyyy HH:mm') AS ConversationTroubleTime -- Thời gian hướng xử lý cuối cùng
+                 , ISNULL(RD.Property9, '') 'CSKHCostConfirm' --Chi phí CSKH confirm
+                 , ISNULL(RD.Imei + '-' + EMU.EmployeeName, '') AS CostCfUpdateBy -- CSKH cập nhật chi phí
+                 , FORMAT(RD.Time1, 'dd/MM/yyyy HH:mm') AS DateCSKHCostConfirm --Ngày CSKH confirm phí
+                 , RD.SaleCode AS SoSO --Diễn giải vi phạm
+                 , RD.Property5 'SoPhieuBaoHanh' --Số phiếu bảo hành
+                 , CFT.Message 'SolutionInternal' --Hướng xử lý nội bộ
+                 --ChuongNT3 - 27/06/2018 - sửa hxl nội bộ
+                 , CASE
+                       --	===Xét theo Loại CL===
+                       WHEN ( @TypeId = 19 ) THEN CASE
+                                                      WHEN (
+                                                               RD.Quantity1 = 0
+                                                               AND RD.Property8 IN ('Inbound', 'Happy call')
+                                                               AND RD.Property12 <> ''
+                                                               AND RD.Property4 = N'Khiếu nại'
+                                                               AND RD.Property1 = N'Thái độ'
+                                                               AND RD.Property3 IN (N'Thái độ', N'Công nghệ') -- Edit - TuanNA89 - 11/05/2020 - Thêm value Công Nghệ
+                                                               AND ISNULL(RD.Property10, '') <> 'noError'
+                                                           ) THEN N'Có ghi nhận lỗi nội bộ'
+                                                      WHEN RD.Property10 = 'error' THEN N'Có ghi nhận lỗi nội bộ' --ChuongNT3 - 13/03/2019 - fix ghi nhận lỗi
+                                                      WHEN RD.Property10 = 'noError' THEN N'Không ghi nhận lỗi nội bộ'
+                                                      ELSE ''
+                                                  END
+                       --	===Xét theo RD.Property10===
+                       WHEN RD.Property10 = 'error' THEN N'Có ghi nhận lỗi nội bộ'
+                       WHEN RD.Property10 = 'noError' THEN N'Không ghi nhận lỗi nội bộ'
+                       ELSE ''
+                   END AS Huongxlnoibo
+                 , CASE
+                       --	===Xét theo Loại CL===
+                       WHEN ( @TypeId = 19 ) THEN CASE
+                                                      WHEN (
+                                                               RD.Quantity1 = 0 -- ChuongNT3 - 15/11/2018 - tách loại GQKN
+                                                               AND ISNULL(CFT.Sender, '') = ''
+                                                               AND RD.Property8 IN ('Inbound', 'Happy call')
+                                                               AND RD.Property4 = N'Khiếu nại'
+                                                               AND RD.Property1 = N'Thái độ'
+                                                               AND RD.Property3 IN (N'Thái độ', N'Công nghệ') -- Edit - TuanNA89 - 11/05/2020 - Thêm value Công Nghệ
+                                                           ) THEN N'Hệ thống'
+                                                      ELSE CFT.Sender
+                                                  END
+                       ELSE CFT.Sender
+                   END AS PersionUpdateSolution --Người cập nhật hướng XL nội bộ
+                 , FORMAT(CFT.TimeCreate, 'dd/MM/yyyy HH:mm') AS TimeUpdateSolution --Thời gian cập nhật hướng XL nội bộ
+                 , CFI.Message AS 'ConversationInfomation'
+                 , CASE WHEN ( RD.EmpCode2 IN (N'OK', N'NOK')) THEN RD.EmpCode2 ELSE NULL END AS CSKHQuality
+                 , R.RequestIdRefer AS MaCLCon
+                 , MD.Name AS RequestStatus -- Trạng thái CallLog
+                 , CASE WHEN ( R.TypeId <> 134 ) THEN RD.Property4 ELSE '' END AS CalllogType -- Loại Calllog
+                 , ISNULL(FORMAT(CFT.TimeCreate, 'yyyy-MM-dd'), '') AS ExtendTime
+                 , ISNULL(EC.EmployeeCode_Name, '') AS UpdateByExTime
+                 , RD.Money1 AS CSKHCostSave
+                 , RD.Property11 AS NoteCSKHCostSave
+                 --▼ chuongnt3-09/01/2018
+                 , CASE
+                       WHEN ( CF.TimeCreate IS NULL ) THEN ''
+                       ELSE CASE
+                                WHEN ( RD.Property8 <> '' ) THEN ''
+                                ELSE CONCAT(DATEDIFF(MINUTE, R.RequestTimeCreate, CF.TimeCreate), ' phút')
+                            END
+                   END AS TimeHandlingOneHour
+                 , CASE
+                       WHEN ( CF.TimeCreate IS NULL ) THEN CASE
+                                                               WHEN (
+                                                                        R.TimeCreate_HOUR < 21
+                                                                        AND ISNULL(RD.Property8, '') = ''
+                                                                        AND DATEDIFF(MINUTE, R.RequestTimeCreate, GETDATE()) > 180 -- Edit - ThuongNM2 - 16/04/2019 Đổi 60 thành 180 BA.Phát Yêu cầu
+                                                                    ) THEN N'Không đạt'
+                                                               ELSE ''
+                                                           END
+                       ELSE CASE
+                                WHEN (
+                                         ISNULL(RD.Property8, '') = ''
+                                         AND (
+                                                 R.TimeCreate_HOUR < 21
+                                                 OR (
+                                                        R.TimeCreate_HOUR >= 21
+                                                        AND CONVERT(DATE, R.RequestTimeCreate) = CONVERT(DATE, CF.TimeCreate)
+                                                    )
+                                             )
+                                         AND DATEDIFF(MINUTE, R.RequestTimeCreate, CF.TimeCreate) <= 180 -- Edit - ThuongNM2 - 16/04/2019 Đổi 60 thành 180 BA.Phát Yêu cầu
+
+                                     ) THEN N'Đạt'
+                                WHEN (
+                                         ISNULL(RD.Property8, '') = ''
+                                         AND (
+                                                 (
+                                                     R.TimeCreate_HOUR < 21
+                                                     AND DATEDIFF(MINUTE, R.RequestTimeCreate, CF.TimeCreate) > 180 -- Edit - ThuongNM2 - 16/04/2019 Đổi 60 thành 180 BA.Phát Yêu cầu
+                                                 )
+                                                 OR (
+                                                        R.TimeCreate_HOUR >= 21
+                                                        AND DATEPART(HOUR, CF.TimeCreate) < 10
+                                                        AND CONVERT(DATE, CF.TimeCreate) > CONVERT(DATE, DATEADD(DAY, 1, R.RequestTimeCreate))
+                                                    )
+                                                 OR (
+                                                        R.TimeCreate_HOUR >= 21
+                                                        AND DATEPART(HOUR, CF.TimeCreate) >= 10
+                                                        AND CONVERT(DATE, CF.TimeCreate) > CONVERT(DATE, R.RequestTimeCreate)
+                                                    )
+                                             )
+                                     ) THEN N'Không đạt'
+                                WHEN (
+                                         R.TimeCreate_HOUR >= 21
+                                         AND DATEPART(HOUR, CF.TimeCreate) < 10
+                                         AND CONVERT(DATE, CF.TimeCreate) = CONVERT(DATE, DATEADD(DAY, 1, R.RequestTimeCreate))
+                                     ) THEN N'Đạt'
+                                ELSE ''
+                            END
+                   END AS QualityFeedback
+                 , CASE
+                       WHEN T.TimeCreate IS NULL THEN ''
+                       ELSE CONCAT(DATEDIFF(MINUTE, R.RequestTimeCreate, T.TimeCreate), ' phút')
+                   END AS FinalTimeHandling
+                 , CASE
+                       WHEN T.TimeCreate IS NULL
+                            AND GETDATE() < DATEADD(DAY, 1, R.RequestTimeCreate) THEN ''
+                       WHEN T.TimeCreate IS NOT NULL
+                            AND T.TimeCreate < DATEADD(DAY, 1, R.RequestTimeCreate) THEN N'Đạt'
+                       ELSE N'Không đạt'
+                   END AS FinalQualityFeedback
+                 , CASE
+                       WHEN T.TimeCreate IS NULL
+                            AND GETDATE() < DATEADD(DAY, 1, R.RequestTimeCreate) THEN ''
+                       WHEN T.TimeCreate IS NOT NULL
+                            AND T.TimeCreate < DATEADD(DAY, 1, R.RequestTimeCreate) THEN CASE
+                                                                                             WHEN ( RD.Property8 <> '' ) THEN N'Đạt'
+                                                                                             WHEN (
+                                                                                                      ISNULL(RD.Property8, '') = ''
+                                                                                                      AND CF.TimeCreate IS NOT NULL
+                                                                                                      AND (
+                                                                                                              (
+                                                                                                                  (
+                                                                                                                      R.TimeCreate_HOUR < 21
+                                                                                                                      OR (
+                                                                                                                             R.TimeCreate_HOUR >= 21
+                                                                                                                             AND CONVERT(DATE, CF.TimeCreate) = CONVERT(DATE, R.RequestTimeCreate)
+                                                                                                                         )
+                                                                                                                  )
+                                                                                                                  AND DATEDIFF(MINUTE, R.RequestTimeCreate, CF.TimeCreate) <= 180 -- TuanNA89 - 17/12/2019 - Phát BA yêu cầu
+                                                                                                              )
+                                                                                                              OR (
+                                                                                                                     R.TimeCreate_HOUR >= 21
+                                                                                                                     AND DATEPART(HOUR, CF.TimeCreate) < 10
+                                                                                                                     AND CONVERT(DATE, CF.TimeCreate) = CONVERT(DATE, DATEADD(DAY, 1, R.RequestTimeCreate))
+                                                                                                                 )
+                                                                                                          )
+                                                                                                  ) THEN N'Đạt'
+                                                                                             ELSE N'Không đạt'
+                                                                                         END
+                       ELSE N'Không đạt'
+                   END Note
+                 --▲ chuongnt3-09/01/2018
+                 , FORMAT(R.RequestTimeCreate + 1, 'yyyy-MM-dd') AS test
+                 , CASE WHEN ( @TypeId = 215 ) THEN '' ELSE RD.Note END AS KQXuLy --// LuanNT44-10/10/2019-148-add col ghi chú
+                 , RD.Note AS Ghichu --// LuanNT44-10/10/2019-148-add col ghi chú
+                 , CONCAT(TRS.Sender, ' (' + FORMAT(TRS.TimeCreate, 'yyyy-MM-dd HH:mm:ss') + ')') AS UpdateKQXuLy
+                 , CF.TimeCreate AS thoi_gian_xu_ly_1h
+                 , T.TimeCreate AS thoi_gian_xu_ly_cuoi_cung
+                 , R.RequestTimeCreate AS thoi_gian_tao_CL
+                 , ISNULL(RD.Property15, '') AS SDT
+                 , EU.EmployeeCode_Name AS UserUpdateLoaiKN
+                 , RD.Property13
+                 , RD.Property12
+                 , CASE
+                       WHEN ( R.TypeId IN (19, 157)) THEN ISNULL((
+                                                                     SELECT TOP 1
+                                                                            L_DSNVVP.DSNVVP
+                                                                     FROM
+                                                                         #Tmp__TypeId_19_157__DSNVVP AS L_DSNVVP
+                                                                     WHERE
+                                                                         L_DSNVVP.RequestDetails_Id = RD.RequestDetails_Id
+                                                                 )
+                                                               , ''
+                                                                )
+                       ELSE N''
+                   END AS DSNVVP
+                 , CASE
+                       WHEN ( R.TypeId IN (19, 157)) THEN ISNULL((
+                                                                     SELECT TOP 1
+                                                                            L_DSNVVP.PBShopNVVP
+                                                                     FROM
+                                                                         #Tmp__TypeId_19_157__DSNVVP AS L_DSNVVP
+                                                                     WHERE
+                                                                         L_DSNVVP.RequestDetails_Id = RD.RequestDetails_Id
+                                                                 )
+                                                               , ''
+                                                                )
+                       ELSE N''
+                   END AS PBShopNVVP
+                 , ISNULL(FORMAT(RD.Time2, 'yyyy-MM-dd HH:mm:ss'), '') AS TimeUpdateLoaiKN
+                 , PBH.TTBH_Hang_MaPhieuBaoHanh AS TTBHHang ----- ChuongNT3 - 18/01/2019 - add tên hãng bảo hành
+                 , TTND.Message AS ConversationSummary -- Add - TuanNA89 - 20/04/2020 - Thêm field nội dung tóm tắt
+                 , TTND.Sender AS SenderSummary -- Add - TuanNA89 - 20/04/2020 - Thêm field nội dung tóm tắt
+                 , R.TimeFinish -- TuanNA89 - 09/09/2020 - Thêm cột
+                 , PP.ASM AS ASMVungMienShopNhan
+                 , PP.RegionHierachyName AS MienShopViPham
+				 , '' AS NoiDungThongTinCaiTienHeThong
+				 , '' ChatLuongXuLyCSKH
+            FROM
+                #Tmp_Requests AS R
+                --▼ Add - TuanNA89 - 07/02/2020 - Lấy data ra bảng tạm
+                LEFT JOIN #Tmp_Items_19_157 AS I ON I.Id = R.GroupId
+                LEFT JOIN #Emp AS EMS ON EMS.EmployeeCode = R.Sender
+                LEFT JOIN #Emp AS EM ON EM.EmployeeCode = R.Assigner
+                LEFT JOIN #MasterDatas AS ER ON ER.Code = R.ErrorCode
+                                                AND ER.[Group] = 'Error'
+                LEFT JOIN #Tmp_Conversations AS C ON C.RequestId = R.Id
+                                                     AND C.StepNo = 0
+                                                     AND C.Type = 1
+                LEFT JOIN #Tmp_Conversations AS T ON T.RequestId = R.Id
+                                                     AND T.Type = 4
+                LEFT JOIN #Tmp_Conversations AS TRS ON TRS.RequestId = R.Id
+                                                       AND TRS.Type = 13
+                LEFT JOIN #ConversationsFirst AS CF ON CF.RequestId = R.Id
+                LEFT JOIN #Tmp_Conversations AS CFT ON CFT.RequestId = R.Id
+                                                       AND CFT.Type = 6
+                LEFT JOIN #MasterDatas AS MD ON MD.Code = R.Status
+                                                AND MD.[Group] = 'RequestStatus'
+                LEFT JOIN #Tmp_Categories AS CT ON R.TypeId = CT.Id
+                LEFT JOIN #Tmp_Requests_ConversationsSecond AS CS ON R.Id = CS.Id
+                LEFT JOIN #Tmp_RequestDetails AS RD ON RD.RequestId = R.Id
+                LEFT JOIN #Tmp_ChucDanh AS F03J ON RD.RequestId = F03J.RequestId
+                                                   AND RD.RequestDetails_Id = F03J.RequestDetails_Id
+                LEFT JOIN #Tmp_ShopNhan AS PP ON R.Id = PP.Id
+                LEFT JOIN #Tmp_PhongBanNhan AS PB ON R.Id = PB.RequestId
+                LEFT JOIN #Tmp_Employees EC ON EC.EmployeeCode = RD.EmpCode3
+                LEFT JOIN #Tmp_Employees EU
+                --ChuongNT3 - 11/09/2018 - thêm sđt
+                ON EU.EmployeeCode = RD.EmpCode
+                LEFT JOIN #Emp EMU ON EMU.EmployeeCode = RD.Imei
+                LEFT JOIN #Tmp_Conversations AS CFI ON CFI.RequestId = R.Id
+                                                       AND CFI.Type = 10
+                LEFT JOIN #Tmp_MaPhieuBaoHanh PBH ON R.Id = PBH.R_RequestId_MaPhieuBaoHanh ----- ChuongNT3 - 18/01/2019 - add tên hãng bảo hành
+                --▼ Add - TuanNA89 - 07/02/2020 - Lấy data ra bảng tạm
+                LEFT JOIN #Tmp_Items_19_157 AS I2 ON I2.Name = RD.Property1
+                                                     AND I2.ParentName LIKE N'%' + RD.Property3 + ''
+                -- Add - TuanNA89 - 20/04/2020 - Thêm field nội dung tóm tắt
+                LEFT JOIN #Tmp_Conversations AS TTND ON TTND.RequestId = R.Id
+                                                        AND TTND.Type = 16
+            -- Add - TuanNA89 - 20/04/2020 - Thêm field nội dung tóm tắt
+            ORDER BY
+                R.TimeCreate;
+
+            DROP TABLE
+                #Tmp_MaPhieuBaoHanh
+              , #Tmp_Items_19_157;
+            DROP TABLE #Tmp__TypeId_19_157__DSNVVP;
+        --▲	Edit - VietMXH - 31/10/2020 - Tối ưu==================================================
+
         END;
 
-        PRINT ( N'@p__Count__XLVP__PushInside: ' + ISNULL(CONVERT(NVARCHAR(50), @p__Count__XLVP__PushInside), 'NULL'));
-
-        DROP TABLE #Tmp__Req;
+        --	===Xóa bảng tạm===
+        DROP TABLE
+            #Emp
+          , #Tmp_Conversations
+          , #Items
+          , #Status
+          , #ConversationsFirst
+          , #ConversationsSecond
+          , #MasterDatas
+          , #Tmp_ShopNhan
+          , #Tmp_PhongBanNhan
+          , #Tmp_Requests
+          , #Tmp_ItemsMaster
+          , #Tmp_Categories
+          , #Tmp_Requests_ConversationsSecond
+          , #Tmp_RequestDetails
+          , #Tmp_ChucDanh;
+        DROP TABLE
+            #Tmp_Employees
+          , #Tmp_Warehouse
+          , #Tmp_OrganizationHierachies
+          , #Tmp_RegionHierachies
+          , #Tmp_JobTitles
+          , #Tmp__JobtitleCSKH;
     END TRY
     BEGIN CATCH
         DECLARE @ErrorMessage NVARCHAR(MAX) = N'';
-        SET @ErrorMessage = N'Lỗi: [sp__RefundPayment__GetPending__InsertViolationVoteRecord]';
+        SET @ErrorMessage = N'Lỗi: [Report_Conversation]';
+        SET @ErrorMessage += N', @TypeId=''' + ISNULL(CONVERT(NVARCHAR(50), @TypeId), 'NULL') + N'''';
+        SET @ErrorMessage += N', @RequestId=''' + ISNULL(CONVERT(NVARCHAR(50), @RequestId), 'NULL') + N'''';
+        SET @ErrorMessage += N', @RequestName=''' + ISNULL(CONVERT(NVARCHAR(300), @RequestName), 'NULL') + N'''';
+        SET @ErrorMessage += N', @Status=''' + ISNULL(CONVERT(NVARCHAR(50), @Status), 'NULL') + N'''';
+        SET @ErrorMessage += N', @ItemId=''' + ISNULL(CONVERT(NVARCHAR(50), @ItemId), 'NULL') + N'''';
+        SET @ErrorMessage += N', @TimeCreate=''' + ISNULL(CONVERT(NVARCHAR(50), @TimeCreate, 121), 'NULL') + N'''';
+        SET @ErrorMessage += N', @TimeEnd=''' + ISNULL(CONVERT(NVARCHAR(50), @TimeEnd, 121), 'NULL') + N'''';
+        SET @ErrorMessage += N', @UserCode=''' + ISNULL(CONVERT(NVARCHAR(50), @UserCode), 'NULL') + N'''';
         SET @ErrorMessage += N' - ERROR_MESSAGE: ' + ERROR_MESSAGE() + N' - ERROR_LINE: ' + CONVERT(NVARCHAR, ERROR_LINE());
 
         --	===Ghi Log===
         INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
         VALUES (
-                   N'sp__RefundPayment__GetPending__InsertViolationVoteRecord' -- Title - nvarchar(300)
+                   N'Report_Conversation' -- Title - nvarchar(300)
                  , @ErrorMessage -- Error - nvarchar(max)
                  , 1 -- Status - tinyint
                  , GETDATE() -- TimeCreate - datetime
@@ -364,7 +1843,6 @@ BEGIN
     END CATCH;
 END;
 
-----SELECT * FROM dbo.Logs(NOLOCK) WHERE Title=N'sp__RefundPayment__GetPending__InsertViolationVoteRecord' AND CHARINDEX(N'', Error)>0 ORDER BY Id DESC
-----SELECT * FROM dbo.Log_CallLog_InsertViolationVoteRecord(NOLOCK) ORDER BY ID DESC
+----SELECT * FROM dbo.Logs(NOLOCK) WHERE Title=N'Report_Conversation' ORDER BY Id DESC
 GO
 

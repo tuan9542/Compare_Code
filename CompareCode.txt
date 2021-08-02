@@ -1,5 +1,5 @@
-﻿SET QUOTED_IDENTIFIER ON
-SET ANSI_NULLS ON
+﻿SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;
 GO
 /*
 ==================================================
@@ -724,13 +724,13 @@ ORDER BY TimeCreate
         IF ( @TypeId IN (19))
         BEGIN
             INSERT INTO #Tmp_ShopNhan ( Id, WarehouseCode, WarehouseCodeB1, WarehouseName, RegionHierachyName, ASM )
-            SELECT 
-                   RD.RequestId AS Id
-                 , W.WarehouseCode AS WarehouseCode
-                 , W.WarehouseCodeB1 AS WarehouseCodeB1
-                 , W.WarehouseName AS WarehouseName
-                 , RH.RegionHierachyName AS RegionHierachyName
-                 , STRING_AGG(E.EmployeeCode_Name,CHAR(13))
+            SELECT
+                RD.RequestId AS Id
+              , W.WarehouseCode AS WarehouseCode
+              , W.WarehouseCodeB1 AS WarehouseCodeB1
+              , W.WarehouseName AS WarehouseName
+              , RH.RegionHierachyName AS RegionHierachyName
+              , STRING_AGG(E.EmployeeCode_Name, CHAR(13))
             FROM
                 #Tmp_RequestDetails AS RD
                 INNER JOIN #Tmp_Warehouse AS W ON RD.TypeId = 19
@@ -738,13 +738,15 @@ ORDER BY TimeCreate
                                                   OR W.WarehouseCodeB1 = RD.ShopNhan
                 LEFT JOIN #Tmp_RegionHierachies AS RH -- TuanNA89 - 07/07/2020 - Thêm item Shop mới
                 ON RH.RegionHierachyCode = W.RegionL2
-                LEFT JOIN dbo.F03_EmployeeJobTitles AS EJ ( NOLOCK ) ON W.RegionL3 = EJ.RegionHierachyCode AND EJ.Status = 'A'
+                LEFT JOIN dbo.F03_EmployeeJobTitles AS EJ ( NOLOCK ) ON W.RegionL3 = EJ.RegionHierachyCode
+                                                                        AND EJ.Status = 'A'
                 LEFT JOIN #Tmp_Employees AS E ON EJ.EmployeeCode = E.EmployeeCode
-			GROUP BY RD.RequestId,
-					W.WarehouseCode,
-					W.WarehouseCodeB1,
-					W.WarehouseName,
-					RH.RegionHierachyName
+            GROUP BY
+                RD.RequestId
+              , W.WarehouseCode
+              , W.WarehouseCodeB1
+              , W.WarehouseName
+              , RH.RegionHierachyName;
         END;
 
         SELECT DISTINCT
@@ -1739,8 +1741,8 @@ ORDER BY TimeCreate
                  , R.TimeFinish -- TuanNA89 - 09/09/2020 - Thêm cột
                  , PP.ASM AS ASMVungMienShopNhan
                  , PP.RegionHierachyName AS MienShopViPham
-				 , '' AS NoiDungThongTinCaiTienHeThong
-				 , '' ChatLuongXuLyCSKH
+                 , '' AS NoiDungThongTinCaiTienHeThong
+                 , '' ChatLuongXuLyCSKH
             FROM
                 #Tmp_Requests AS R
                 --▼ Add - TuanNA89 - 07/02/2020 - Lấy data ra bảng tạm

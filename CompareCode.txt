@@ -1,193 +1,609 @@
 ﻿SET QUOTED_IDENTIFIER ON;
 SET ANSI_NULLS ON;
 GO
--- =============================================
--- Author:		<Author,,Name>
--- Create date: <Create Date,,>
--- Description:	<Description,,>
--- =============================================
-ALTER PROC dbo.sp_MdelPhar_Grab_Cancel_Delivery
-    @TransactionCode VARCHAR(100)
-  , @Reason NVARCHAR(500)
+ALTER PROC dbo.sp_MDELPHAR_API_UpdateTransportBy ( @XmlData XML )
 AS
 BEGIN
-    SET NOCOUNT ON;
+    --ANHTVH - 20180521 - Cap nhat nguoi giao hang , Cap nhat trang thai 4 , neu trang thai la 3
+    --///////////////////////////////////////////////
+    --ANHTVH - add 20180526 : @TransportBy = '00590' nhan vien giao hang nhanh
+    --///////////////////////////////////////////////
+    --ANHTVH - add 20180614 : @TransportBy = '00617' nhan vien viettelpost
+    --///////////////////////////////////////////////
+    --ANHTVH - add 20180710 : @TransportBill van don doi vs GHN or ViettelPOST
+    --///////////////////////////////////////////////
+    --ANHTVH - add 20180710 chuc danh NVGH
+    --00640 Quản lý kho_BK
+    --00614 NV Bảo Vệ
+    --00615 Quản lý kho
+    --///////////////////////////////////////////////
+    --ANHTVH - add 201807101 them quyen thao tac DH cho chuc danh
+    --00619	NV Thủ Quỹ = > 5
+    --00653	Thủ Quỹ_BK = > 6
+    --///////////////////////////////////////////////
+    --add 20180730 Add them chuc danh Bao ve chop phep di GH
+    --00652 Bảo vệ_BK
+    --add 20180808 ANHTVH Add cho chon nhieu user GH
+    INSERT INTO dbo.Logs ( Store, Message, CreateBy, CreateDate, IsSendMail )
+    VALUES (
+               N'sp_MDELPHAR_API_UpdateTransportBy' -- Store - nvarchar(max)
+             , CONVERT(NVARCHAR(MAX), @XmlData) -- Message - nvarchar(max)
+             , '-1' -- CreateBy - varchar(50)
+             , GETDATE() -- CreateDate - datetime
+             , NULL -- IsSendMail - bit
+           );
+
     DECLARE
-        @IDORDR          BIGINT     = 0
-      , @PosNum          INT
-      , @EcomNum         VARCHAR(50)
-      , @TransportStatus INT        = 0;
+        @ResultID INT           = 0
+      , @Message  NVARCHAR(MAX) = N''
+      , @ID       INT           = 0
+      , @PosNum   INT;
+    DECLARE
+        @IDMdel        INT
+      , @EcomNum       VARCHAR(50)
+      , @UpdateBy      VARCHAR(40)
+      , @TransportBill NVARCHAR(50);
 
     SELECT
-        @IDORDR = ID
-      , @PosNum = PosNum
-      , @EcomNum = EcomNum
-      , @TransportStatus = TransportStatus
+        T.C.value('(EcomNum/text())[1]', 'varchar(50)') AS EcomNum
+      , T.C.value('(IDMdel/text())[1]', 'int') AS IDMdel
+      , T.C.value('(UpdateBy/text())[1]', 'varchar(40)') AS UpdateBy
+      , T.C.value('(TransportBill/text())[1]', 'nvarchar(50)') AS TransportBill
+    INTO
+        #tmp_Info
     FROM
-        dbo.PE_ORDR ( NOLOCK )
-    WHERE
-        Transaction_Code_Grab = @TransactionCode;
+        @XmlData.nodes('(XmlData)') T(C);
 
-    IF ( @IDORDR <> 0 AND ( @TransportStatus > 3 AND @TransportStatus <> 13 ))
+    SELECT
+        T.C.value('(text())[1]', 'varchar(40)') AS TransportBy
+    INTO
+        #tmp_TransportBy
+    FROM
+        @XmlData.nodes('(XmlData/TransportBys/TransportBy)') T(C);
+
+    SELECT TOP 1
+           @EcomNum = EcomNum
+         , @IDMdel = IDMdel
+         , @UpdateBy = UpdateBy
+         , @TransportBill = TransportBill
+    FROM
+        #tmp_Info;
+
+    IF EXISTS (
+                  SELECT TOP 1
+                         1
+                  FROM
+                      dbo.PE_ORDR a ( NOLOCK )
+                  WHERE
+                      a.ID = @IDMdel
+                      AND a.EcomNum = @EcomNum
+              )
     BEGIN
-        SELECT
-            0 AS ResultID
-          , N'Không thể cập nhật hủy Grab sau trạng thái hoàn tất POS!' AS Message;
-    END;
-    ELSE IF ( @IDORDR <> 0 )
-    BEGIN
-        -- log transportstatus
-        --INSERT INTO dbo.TransportStatus_Log
-        --(
-        --	IDORDR,
-        --	PosNum,
-        --	EcomNum,
-        --	TransportStatus,
-        --	CreateBy,
-        --	CreateDate
-        --)
-        --VALUES
-        --(
-        --	@IDORDR,
-        --	@PosNum,
-        --	@EcomNum,
-        --	15,
-        --	'Grab',
-        --	GETDATE()
-        --)
-
-        -- noti
-        SELECT
-            s.EmployeeCode AS UserID
-          , a.Token
-          , a.DeviceType
-          , s.PosNum
-          , s.EcomNum AS EcomNum
-          --N'Grab huy ' + s.EcomNum + 
-          --CASE WHEN s.HinhThucGiaoHang = '1' THEN N' giao tại nhà' WHEN s.HinhThucGiaoHang = '2' THEN N' giao tại shop' ELSE N' không rõ hình thức giao' END 
-          --+ N' khách hàng '+ '' + ISNULL(s.TenKhachHang,'')  AS Mess ,
-          , N'Đơn hàng giao hàng Grab ' + s.EcomNum + N' tìm tài xế thất bại hoặc bị tài xế hủy. Vui lòng chọn NV Shop tự giao' AS Mess
-          , CASE WHEN a.UserID IS NULL THEN 'E' ELSE 'P' END AS NotifyStatus
-        INTO
-            #tmp_Notify
-        FROM
-            dbo.Assign_ORDR ( NOLOCK ) s
-            INNER JOIN dbo.UserToken a ( NOLOCK ) ON s.EmployeeCode = a.UserID
-        WHERE
-            s.IDORDR = @IDORDR;
-
-        CREATE TABLE #Tmp_PushNotiAPI
-        (
-            Row INT IDENTITY(1, 1)
-          , ID BIGINT
-          , Messages NVARCHAR(1000)
-          , Token NVARCHAR(1000)
-        );
-
-        INSERT INTO dbo.MDELPHAR_PUSHNOTIFY
-        (
-            PosNum
-          , EcomNum
-          , UserCode
-          , Title
-          , Messages
-          , Updatetdate
-          , createdate
-          , Status
-          , Token
-          , Dervicetype
-          , comment
-          , TThai
-          , Typeapp
-          , Sound
-        )
-        OUTPUT
-            Inserted.ID
-          , Inserted.Messages
-          , Inserted.Token
-        INTO #Tmp_PushNotiAPI ( ID, Messages, Token )
-        SELECT DISTINCT
-               a.PosNum AS PosNum
-             , a.EcomNum AS EcomNum
-             , a.UserID AS UserCode
-             , N'MDel Thuốc' AS Title
-             , a.Mess AS Messages
-             , NULL AS UpdateDate
-             , GETDATE() AS CreateDate
-             , a.NotifyStatus AS STATUS
-             , a.Token
-             , a.DeviceType
-             , NULL AS Commend
-             , NULL AS TThai
-             , 1 AS Typeapp
-             , ''
-        FROM
-            #tmp_Notify a
-        WHERE
-            ISNULL(a.Token, '') <> '';
-
-        DECLARE
-            @IndexN      INT = 1
-          , @TotalIndexN INT = ( SELECT COUNT(1)FROM #Tmp_PushNotiAPI );
-
-        WHILE ( @IndexN <= @TotalIndexN )
+        IF EXISTS (
+                      SELECT TOP 1
+                             1
+                      FROM
+                          dbo.PE_ORDR a ( NOLOCK )
+                      WHERE
+                          a.ID = @IDMdel
+                          AND a.EcomNum = @EcomNum
+                          AND
+                          -- TuanNA89 - 20/07/2021 - Thêm rule Grab hủy
+                          (
+                              TransportStatus IN (3, 4, 14)
+                              OR ( a.IsCancelGrab = 1 AND TransportStatus = 13 )
+                          )
+                  ) -- 3 POS Hoan tat don hang , 4 -- Cho giao, 14 đang trả hàng
         BEGIN
-            DECLARE
-                @strRes       NVARCHAR(3000)
-              , @MessagesNoti NVARCHAR(2000)
-              , @TokenNoti    NVARCHAR(1000)
-              , @IDNoti       BIGINT;
-            SELECT
-                @IDNoti = ID
-              , @MessagesNoti = Messages
-              , @TokenNoti = Token
-            FROM
-                #Tmp_PushNotiAPI
-            WHERE
-                Row = @IndexN;
 
-            EXEC LOCAL.master.dbo.sp_MdelPhar_Send_Notification_Firebase
-                @Title = N'MDel Thuốc' -- nvarchar(500)
-              , @Messages = @MessagesNoti -- nvarchar(2000)
-              , @Token = @TokenNoti -- nvarchar(1000)
-              , @Sound = 'default.wav' -- varchar(200)
-              , @TypeOrder = 'GrabCancel'
-              , @strRes = @strRes OUTPUT; -- nvarchar(max)
-            UPDATE
-                dbo.MDELPHAR_PUSHNOTIFY
-            SET
-                Response = @strRes
-              , Status = 'C'
-              , Updatetdate = GETDATE()
-            WHERE
-                ID = @IDNoti;
+            IF EXISTS (
+                          SELECT TOP 1
+                                 1
+                          FROM
+                              dbo.Assign_ORDR a ( NOLOCK )
+                          WHERE
+                              a.IDORDR = @IDMdel
+                              AND a.EcomNum = @EcomNum
+                              AND EmployeeCode = @UpdateBy
+                              AND EmployeeType IN (1, 2, 4, 5, 6)
+                      ) -- 1 : SM 2 : PSM : 4 : Ban chinh 5: TQ 6:TQ_BK
+            BEGIN
+                --JobCode 00616 : Nhan vien giao hang
+                DECLARE @SOShopCode VARCHAR(40);
 
-            SET @IndexN += 1;
+                DECLARE @IsValid INT = 1;
+
+                IF @IsValid = 1
+                   AND NOT EXISTS ( SELECT TOP 1 1 FROM #tmp_TransportBy )
+                BEGIN
+                    SET @IsValid = 0;
+                    SELECT @Message = N'Chọn nhân viên giao hàng';
+                END;
+
+                SELECT TOP 1
+                       @SOShopCode = ShopCode
+                FROM
+                    dbo.PE_ORDR a ( NOLOCK )
+                WHERE
+                    a.ID = @IDMdel
+                    AND a.EcomNum = @EcomNum;
+
+                --check GHN - VietellPost - VNCPOST
+                IF @IsValid = 1
+                   AND EXISTS (
+                                  SELECT TOP 1
+                                         1
+                                  FROM
+                                      #tmp_TransportBy
+                                  WHERE
+                                      TransportBy IN ('00590', '00617', '01588', '04879')
+                              )
+                   AND ( SELECT COUNT(1)FROM #tmp_TransportBy ) > 1
+                BEGIN
+                    SET @IsValid = 0;
+                    SELECT
+                        @Message = N'Nhân viên GHN hoặc VietellPost hoặc VNCPost chỉ được chọn một';
+                END;
+                ELSE IF EXISTS (
+                                   SELECT
+                                       1
+                                   FROM
+                                       dbo.PE_ORDR ( NOLOCK )
+                                   WHERE
+                                       ID = @IDMdel
+                                       AND ISNULL(Delivery_Type, '') <> 'Grab'
+                                       AND EXISTS ( SELECT 1 FROM #tmp_TransportBy WHERE TransportBy IN ('04879'))
+                               )
+                BEGIN
+                    SET @IsValid = 0;
+                    SELECT @Message = N'Đơn hàng không hỗ trợ giao hàng Grab';
+                END;
+                ELSE IF EXISTS (
+                                   SELECT
+                                       1
+                                   FROM
+                                       dbo.PE_ORDR ( NOLOCK )
+                                   WHERE
+                                       ID = @IDMdel
+                                       AND ISNULL(Delivery_Type, '') = 'Grab'
+                                       AND ISNULL(IsCancelGrab, 0) = 0
+                                       AND NOT EXISTS ( SELECT 1 FROM #tmp_TransportBy WHERE TransportBy IN ('04879'))
+                               )
+                BEGIN
+                    SET @IsValid = 0;
+                    SELECT
+                        @Message = N'Đơn đang được giao bởi Grab, vui lòng không chọn nhân viên Shop giao';
+                END;
+                ELSE IF EXISTS (
+                                   SELECT
+                                       1
+                                   FROM
+                                       dbo.PE_ORDR ( NOLOCK )
+                                   WHERE
+                                       ID = @IDMdel
+                                       AND ISNULL(Delivery_Type, '') = 'Grab'
+                                       AND ISNULL(IsCancelGrab, 0) = 1
+                                       AND EXISTS ( SELECT 1 FROM #tmp_TransportBy WHERE TransportBy IN ('04879'))
+                               )
+                BEGIN
+                    SET @IsValid = 0;
+                    SELECT
+                        @Message = N'Đơn hàng Grab tìm tài xế thất bại hoặc bị tài xế hủy. Vui lòng chọn NV Shop tự giao';
+                END;
+
+                SELECT
+                    EmployeeCode
+                  , EmployeeName
+                  , JobTitle
+                  , Status
+                  , WarehouseCode
+                INTO
+                    #tmp_CheckTransportBy
+                FROM
+                    dbo.F03_Employees a ( NOLOCK )
+                WHERE
+                    EmployeeCode IN ( SELECT s.TransportBy FROM #tmp_TransportBy s );
+
+                --Check user GH hop le
+                IF @IsValid = 1
+                   AND EXISTS (
+                                  SELECT TOP 1
+                                         1
+                                  FROM
+                                      #tmp_TransportBy a
+                                      LEFT JOIN #tmp_CheckTransportBy b ON a.TransportBy = b.EmployeeCode
+                                  WHERE
+                                      b.EmployeeCode IS NULL
+                              )
+                BEGIN
+                    SET @IsValid = 0;
+
+                    SET @Message = N'Nhân viên ';
+
+                    DECLARE @userNotExists VARCHAR(MAX) = '';
+
+                    SELECT
+                        @userNotExists = @userNotExists + a.TransportBy + ','
+                    FROM
+                        #tmp_TransportBy a
+                        LEFT JOIN #tmp_CheckTransportBy b ON a.TransportBy = b.EmployeeCode
+                    WHERE
+                        b.EmployeeCode IS NULL;
+
+                    IF @userNotExists IS NOT NULL
+                       AND LEN(@userNotExists) > 0
+                    BEGIN
+                        SET @userNotExists = LEFT(@userNotExists, LEN(@userNotExists) - 1);
+                    END;
+
+                    SET @Message += ISNULL(@userNotExists, '') + N' không tìm thấy';
+
+                END;
+
+                --Check user GH lam viec
+                IF @IsValid = 1
+                   AND EXISTS ( SELECT TOP 1 1 FROM #tmp_CheckTransportBy WHERE Status <> 'A' )
+                BEGIN
+                    SET @IsValid = 0;
+
+                    SET @Message = N'Nhân viên giao hàng ';
+
+                    DECLARE @userNotActive VARCHAR(MAX) = '';
+
+                    SELECT
+                        @userNotActive = @userNotActive + a.EmployeeCode + ','
+                    FROM
+                        #tmp_CheckTransportBy a
+                    WHERE
+                        a.Status <> 'A';
+
+                    IF @userNotActive IS NOT NULL
+                       AND LEN(@userNotActive) > 0
+                    BEGIN
+                        SET @userNotActive = LEFT(@userNotActive, LEN(@userNotActive) - 1);
+                    END;
+
+                    SET @Message += ISNULL(@userNotActive, '') + N' không còn làm việc';
+                END;
+
+                --Check chuc danh NV GH
+                IF @IsValid = 1
+                   AND NOT EXISTS (
+                                      SELECT TOP 1
+                                             1
+                                      FROM
+                                          #tmp_TransportBy
+                                      WHERE
+                                          TransportBy IN ('00590', '00617', '01588', '04879')
+                                  ) --K phai GHN , ViettelPOST, VNCPOST
+                   AND EXISTS (
+                                  SELECT TOP 1
+                                         1
+                                  FROM
+                                      #tmp_CheckTransportBy
+                                  WHERE
+                                      JobTitle NOT IN ('00616', '00640', '00614', '00615', '00652', '00614', '00723', '00640', '00616', '00611', '00620', '00621', '00612', '00653', '00619', '00615', '00667', '00613', '00736', '00737', '00740', '00764', '00769', '00772', '00791', '00773', '00823', '00820')
+                              )
+                BEGIN
+                    SELECT
+                        a.EmployeeCode
+                      , a.JobTitleCode
+                    INTO
+                        #tmp_CheckJobTitle
+                    FROM
+                        dbo.F03_EmployeeJobTitles a ( NOLOCK )
+                    WHERE
+                        a.EmployeeCode IN ( SELECT s.TransportBy FROM #tmp_TransportBy s )
+                        AND a.JobTitleCode IN ('00616', '00640', '00614', '00615', '00652', '00614', '00723', '00640', '00616', '00611', '00620', '00621', '00612', '00653', '00619', '00615', '00667', '00613', '00736', '00737', '00740', '00764', '00769', '00772', '00791', '00773', '00823', '00820')
+                        AND Status = 'A';
+
+                    UPDATE
+                        #tmp_CheckTransportBy
+                    SET
+                        JobTitle = b.JobTitleCode
+                    FROM
+                        #tmp_CheckTransportBy a
+                        INNER JOIN #tmp_CheckJobTitle b ON a.EmployeeCode = b.EmployeeCode;
+
+                    DROP TABLE #tmp_CheckJobTitle;
+
+                    IF EXISTS (
+                                  SELECT TOP 1
+                                         1
+                                  FROM
+                                      #tmp_CheckTransportBy
+                                  WHERE
+                                      JobTitle NOT IN ('00616', '00640', '00614', '00615', '00652', '00614', '00723', '00640', '00616', '00611', '00620', '00621', '00612', '00653', '00619', '00615', '00667', '00613', '00736', '00737', '00740', '00764', '00769', '00772', '00791', '00790', '00773', '00823', '00820')
+                              )
+                    BEGIN
+                        SET @IsValid = 0;
+
+                        SET @Message = N'Nhân viên ';
+
+                        DECLARE @userJobTitle VARCHAR(MAX) = '';
+
+                        SELECT
+                            @userJobTitle = @userJobTitle + a.EmployeeCode + ','
+                        FROM
+                            #tmp_CheckTransportBy a
+                        WHERE
+                            a.JobTitle NOT IN ('00616', '00640', '00614', '00615', '00652', '00614', '00723', '00640', '00616', '00611', '00620', '00621', '00612', '00653', '00619', '00615', '00667', '00613', '00736', '00737', '00740', '00764', '00769', '00772', '00791', '00773', '00823', '00820');
+
+                        IF @userJobTitle IS NOT NULL
+                           AND LEN(@userJobTitle) > 0
+                        BEGIN
+                            SET @userJobTitle = LEFT(@userJobTitle, LEN(@userJobTitle) - 1);
+                        END;
+
+                        SET @Message += ISNULL(@userJobTitle, '') + N' không phải nhân viên giao hàng';
+                    END;
+                END;
+
+                --Check NV GH thuoc shop
+                IF @IsValid = 1
+                   AND (
+                           ISNULL(@SOShopCode, '') = ''
+                           OR EXISTS (
+                                         SELECT TOP 1
+                                                1
+                                         FROM
+                                             #tmp_CheckTransportBy s
+                                         WHERE
+                                             s.WarehouseCode <> @SOShopCode
+                                             AND s.JobTitle IN ('00616', '00640', '00614', '00615', '00621')
+                                     )
+                       )
+                BEGIN
+                    SET @IsValid = 0;
+
+                    SET @Message = N'Nhân viên giao hàng ';
+
+                    DECLARE @userShop VARCHAR(MAX) = '';
+
+                    SELECT
+                        @userShop = @userShop + a.EmployeeCode + ','
+                    FROM
+                        #tmp_CheckTransportBy a
+                    WHERE
+                        a.WarehouseCode <> @SOShopCode
+                        AND a.JobTitle IN ('00616', '00640', '00614', '00615', '00621');
+
+                    IF @userShop IS NOT NULL
+                       AND LEN(@userShop) > 0
+                    BEGIN
+                        SET @userShop = LEFT(@userShop, LEN(@userShop) - 1);
+                    END;
+
+                    SET @Message += ISNULL(@userShop, '') + N' không thuộc shop';
+                END;
+
+                IF @IsValid = 1
+                BEGIN
+                    IF (
+                           EXISTS ( SELECT TOP 1 1 FROM #tmp_TransportBy s WHERE s.TransportBy IN ('00590'))
+                           AND LEN(@TransportBill) <> 8
+                       ) --GHN là 8 
+                       OR (
+                              EXISTS ( SELECT TOP 1 1 FROM #tmp_TransportBy s WHERE s.TransportBy IN ('00617'))
+                              AND LEN(@TransportBill) <> 13
+                          ) --viettelPOST là 13
+                       OR (
+                              EXISTS ( SELECT TOP 1 1 FROM #tmp_TransportBy s WHERE s.TransportBy IN ('01588'))
+                              AND LEN(@TransportBill) <> 17
+                          ) --VNCPost là 17
+                    BEGIN
+                        SET @IsValid = 0;
+                        SET @ResultID = 0;
+                        SET @Message = N'Độ dài vận đơn Giao hàng nhanh là 8 , ViettelPost là 13, VNCPost là 17';
+                    END;
+
+                    IF @IsValid = 1
+                    BEGIN
+                        IF EXISTS (
+                                      SELECT TOP 1
+                                             1
+                                      FROM
+                                          #tmp_TransportBy s
+                                      WHERE
+                                          s.TransportBy IN ('00590', '00617', '01588', '04879')
+                                  )
+                        BEGIN
+                            --13 Giao Hang Nhanh                              
+                            UPDATE
+                                dbo.PE_ORDR
+                            SET
+                                TransportStatus = 13
+                              , TransportBill = @TransportBill
+                            WHERE
+                                ID = @IDMdel
+                                AND EcomNum = @EcomNum;
+                        END;
+                        ELSE
+                        BEGIN
+                            --3 DH hoan tat POS | 4 Cho giao hang
+                            UPDATE
+                                dbo.PE_ORDR
+                            SET
+                                TransportStatus = 4
+                            WHERE
+                                ID = @IDMdel
+                                AND EcomNum = @EcomNum
+                                AND TransportStatus IN (3, 14);
+                        END;
+
+                        DECLARE @FullTrsprtBy NVARCHAR(MAX) = N'';
+
+                        SELECT
+                            @FullTrsprtBy = @FullTrsprtBy + a.EmployeeCode + N' - ' + a.EmployeeName + N'_'
+                        FROM
+                            #tmp_CheckTransportBy a;
+
+                        IF ISNULL(@FullTrsprtBy, '') <> ''
+                           AND LEN(@FullTrsprtBy) > 1
+                        BEGIN
+                            SET @FullTrsprtBy = LEFT(@FullTrsprtBy, LEN(@FullTrsprtBy) - 1);
+                        END;
+
+                        UPDATE
+                            dbo.PE_ORDR
+                        SET
+                            TransportBy = @FullTrsprtBy
+                          , UpdateBy = @UpdateBy
+                          , UpdateDate = GETDATE()
+                          -- TuanNA89 - 20/07/2021 - Thêm rule Grab hủy
+                          , TransportStatus = CASE WHEN IsCancelGrab = 1 THEN 4 ELSE TransportStatus END
+                        WHERE
+                            ID = @IDMdel
+                            AND EcomNum = @EcomNum;
+
+                        --EmployeeType : 1 quan ly thuoc , 2 pho quan ly thuoc , 3 nhan vien giao hang
+                        UPDATE
+                            dbo.Assign_ORDR
+                        SET
+                            IsDelete = 1
+                          , UpdateBy = @UpdateBy
+                          , UpdateDate = GETDATE()
+                        WHERE
+                            EmployeeType = 3
+                            AND IDORDR = @IDMdel
+                            AND EcomNum = @EcomNum
+                            AND ISNULL(IsDelete, 0) = 0;
+
+                        SELECT TOP 1
+                               *
+                        INTO
+                            #tmp_Assign
+                        FROM
+                            dbo.Assign_ORDR a ( NOLOCK )
+                        WHERE
+                            a.IDORDR = @IDMdel
+                            AND a.EcomNum = @EcomNum;
+
+                        INSERT INTO dbo.Assign_ORDR
+                        (
+                            IDORDR
+                          , PosNum
+                          , EcomNum
+                          , EmployeeCode
+                          , EmployeeName
+                          , EmployeeType
+                          , IsDelete
+                          , Note
+                          , CreateDate
+                          , CreateBy
+                          , UpdateDate
+                          , UpdateBy
+                        )
+                        SELECT DISTINCT
+                               a.IDORDR
+                             , a.PosNum
+                             , a.EcomNum
+                             , b.EmployeeCode AS EmployeeCode
+                             , b.EmployeeName AS EmployeeName
+                             , 3 AS EmployeeType -- 3 Nhan vien giao hang
+                             , 0 AS IsDelete
+                             , '' AS Note
+                             , GETDATE() AS CreateDate
+                             , @UpdateBy AS CreateBy
+                             , NULL AS UpdateDate
+                             , '' AS UpdateBy
+                        FROM
+                            #tmp_Assign a
+                            INNER JOIN #tmp_CheckTransportBy b ON 1 = 1;
+
+
+                        DROP TABLE #tmp_Assign;
+
+                        INSERT INTO dbo.TransportStatus_Log ( IDORDR, PosNum, EcomNum, TransportStatus, CreateBy, CreateDate )
+                        SELECT
+                            a.ID AS IDORDR
+                          , a.PosNum
+                          , a.EcomNum
+                          , a.TransportStatus
+                          , @UpdateBy AS CreateBy
+                          , GETDATE() AS CreateDate
+                        FROM
+                            dbo.PE_ORDR a ( NOLOCK )
+                        WHERE
+                            a.ID = @IDMdel
+                            AND a.EcomNum = @EcomNum;
+
+                        -- TuanNA89 - 20/07/2021 - Thêm rule Grab hủy: Chuyển code sang store cập nhật lại nv shop
+                        IF EXISTS (
+                                      SELECT
+                                          1
+                                      FROM
+                                          dbo.PE_ORDR ( NOLOCK )
+                                      WHERE
+                                          ID = @IDMdel
+                                          AND Delivery_Type = 'Grab'
+                                          AND IsCancelGrab = 1
+                                  )
+                        BEGIN
+                            --CREATE TABLE #ResultApi(
+                            --	result INT,
+                            --	msg NVARCHAR(500)
+                            --)
+                            --INSERT INTO #ResultApi
+                            --(
+                            --	result,
+                            --	msg
+                            --)
+                            SELECT TOP 1
+                                   @PosNum = PO.PosNum
+                            FROM
+                                dbo.PE_ORDR AS PO ( NOLOCK )
+                            WHERE
+                                PO.ID = @IDMdel;
+                            DECLARE
+                                @Out_Result NVARCHAR(200)
+                              , @Out_Msg    NVARCHAR(500);
+                            EXEC master.dbo.sp_MdelPhar_Cancel_GiaoHang_Grab_POS
+                                @Posnum = @PosNum -- int
+                              , @Out_Result = @Out_Result OUTPUT -- nvarchar(200)
+                              , @Out_Msg = @Out_Msg OUTPUT; -- nvarchar(500)
+
+                            INSERT INTO dbo.Logs ( Store, Message, CreateBy, CreateDate )
+                            SELECT
+                                'sp_MdelPhar_Cancel_GiaoHang_Grab_POS'
+                              , CONCAT(N'API POS, posnum: ', CONVERT(VARCHAR(50), @PosNum), ', result: ', CONVERT(VARCHAR(50), @Out_Result), ', msg: ', @Out_Msg)
+                              , 'HT'
+                              , GETDATE();
+                        --FROM #ResultApi
+                        END;
+
+
+                        SET @ResultID = 1;
+                        SET @Message = N'Cập nhật nhân viên giao hàng thành công';
+                    END;
+                END;
+
+                DROP TABLE #tmp_CheckTransportBy;
+            END;
+            ELSE
+            BEGIN
+                SET @ResultID = 0;
+                SET @Message = N'Bạn không phụ trách đơn hàng này , không thể cập nhật người giao hàng';
+            END;
+
         END;
-
-        DROP TABLE
-            #Tmp_PushNotiAPI
-          , #tmp_Notify;
-
-        -- update transportstatus
-        UPDATE
-            dbo.PE_ORDR
-        SET --TransportStatus = 4,
-            IsCancelGrab = 1
-          , ReasonCancelGrab = @Reason
-          -- TuanNA89 - 20/07/2021 - Thêm rule Grab hủy
-          , TransportBy = NULL
-        WHERE
-            Transaction_Code_Grab = @TransactionCode;
-
-        SELECT 1 AS ResultID, N'Success' AS Message;
+        ELSE
+        BEGIN
+            SET @ResultID = 0;
+            SET @Message = N'Chỉ được cập nhật người giao hàng khi POS đã hoàn tất đơn hàng';
+        END;
     END;
     ELSE
     BEGIN
-        SELECT 0 AS ResultID, N'Không tìm thấy đơn hàng!' AS Message;
+        SET @ResultID = 0;
+        SET @Message = N'Không tìm thấy đơn hàng';
     END;
 
+    SELECT @ResultID AS ResultID, @Message AS [Message], @ID AS ID;
 
+    DROP TABLE
+        #tmp_Info
+      , #tmp_TransportBy;
 END;
 GO
 

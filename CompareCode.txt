@@ -1,5 +1,5 @@
-﻿SET QUOTED_IDENTIFIER ON
-SET ANSI_NULLS ON
+﻿SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;
 GO
 -- =============================================
 -- Author:		<Author,,Name>
@@ -7,143 +7,187 @@ GO
 -- Description:	<Description,,>
 -- =============================================
 ALTER PROC dbo.sp_MdelPhar_Grab_Cancel_Delivery
-@TransactionCode VARCHAR(100),
-@Reason NVARCHAR(500)
+    @TransactionCode VARCHAR(100)
+  , @Reason NVARCHAR(500)
 AS
 BEGIN
-	SET NOCOUNT ON;
-	DECLARE @IDORDR BIGINT = 0, @PosNum INT, @EcomNum VARCHAR(50), @TransportStatus INT = 0
+    SET NOCOUNT ON;
+    DECLARE
+        @IDORDR          BIGINT     = 0
+      , @PosNum          INT
+      , @EcomNum         VARCHAR(50)
+      , @TransportStatus INT        = 0;
 
-	SELECT @IDORDR = ID, @PosNum = PosNum, @EcomNum = EcomNum, @TransportStatus = TransportStatus 
-	FROM dbo.PE_ORDR (NOLOCK)
-	WHERE Transaction_Code_Grab = @TransactionCode
+    SELECT
+        @IDORDR = ID
+      , @PosNum = PosNum
+      , @EcomNum = EcomNum
+      , @TransportStatus = TransportStatus
+    FROM
+        dbo.PE_ORDR ( NOLOCK )
+    WHERE
+        Transaction_Code_Grab = @TransactionCode;
 
-	IF (@IDORDR <> 0 AND (@TransportStatus > 3 AND @TransportStatus <> 13))
-	BEGIN
-		SELECT 0 AS ResultID, N'Không thể cập nhật hủy Grab sau trạng thái hoàn tất POS!' AS Message
-	END
-	ELSE IF (@IDORDR <> 0)
-	BEGIN
-		-- log transportstatus
-		--INSERT INTO dbo.TransportStatus_Log
-		--(
-		--	IDORDR,
-		--	PosNum,
-		--	EcomNum,
-		--	TransportStatus,
-		--	CreateBy,
-		--	CreateDate
-		--)
-		--VALUES
-		--(
-		--	@IDORDR,
-		--	@PosNum,
-		--	@EcomNum,
-		--	15,
-		--	'Grab',
-		--	GETDATE()
-		--)
+    IF ( @IDORDR <> 0 AND ( @TransportStatus > 3 AND @TransportStatus <> 13 ))
+    BEGIN
+        SELECT
+            0 AS ResultID
+          , N'Không thể cập nhật hủy Grab sau trạng thái hoàn tất POS!' AS Message;
+    END;
+    ELSE IF ( @IDORDR <> 0 )
+    BEGIN
+        -- log transportstatus
+        --INSERT INTO dbo.TransportStatus_Log
+        --(
+        --	IDORDR,
+        --	PosNum,
+        --	EcomNum,
+        --	TransportStatus,
+        --	CreateBy,
+        --	CreateDate
+        --)
+        --VALUES
+        --(
+        --	@IDORDR,
+        --	@PosNum,
+        --	@EcomNum,
+        --	15,
+        --	'Grab',
+        --	GETDATE()
+        --)
 
-		-- noti
-		SELECT 
-		s.EmployeeCode AS UserID,
-		a.Token,
-		a.DeviceType,
-		s.PosNum,
-		s.EcomNum AS EcomNum , 
-		--N'Grab huy ' + s.EcomNum + 
-		--CASE WHEN s.HinhThucGiaoHang = '1' THEN N' giao tại nhà' WHEN s.HinhThucGiaoHang = '2' THEN N' giao tại shop' ELSE N' không rõ hình thức giao' END 
-		--+ N' khách hàng '+ '' + ISNULL(s.TenKhachHang,'')  AS Mess ,
-		N'Đơn hàng giao hàng Grab ' + s.EcomNum + N' tìm tài xế thất bại hoặc bị tài xế hủy. Vui lòng chọn NV Shop tự giao' AS Mess,
-		CASE WHEN a.UserID IS NULL THEN 'E' ELSE 'P' END AS NotifyStatus 
-		INTO #tmp_Notify
-		FROM dbo.Assign_ORDR (NOLOCK) s 
-		INNER JOIN dbo.UserToken a (NOLOCK) ON s.EmployeeCode = a.UserID
-		WHERE s.IDORDR = @IDORDR
+        -- noti
+        SELECT
+            s.EmployeeCode AS UserID
+          , a.Token
+          , a.DeviceType
+          , s.PosNum
+          , s.EcomNum AS EcomNum
+          --N'Grab huy ' + s.EcomNum + 
+          --CASE WHEN s.HinhThucGiaoHang = '1' THEN N' giao tại nhà' WHEN s.HinhThucGiaoHang = '2' THEN N' giao tại shop' ELSE N' không rõ hình thức giao' END 
+          --+ N' khách hàng '+ '' + ISNULL(s.TenKhachHang,'')  AS Mess ,
+          , N'Đơn hàng giao hàng Grab ' + s.EcomNum + N' tìm tài xế thất bại hoặc bị tài xế hủy. Vui lòng chọn NV Shop tự giao' AS Mess
+          , CASE WHEN a.UserID IS NULL THEN 'E' ELSE 'P' END AS NotifyStatus
+        INTO
+            #tmp_Notify
+        FROM
+            dbo.Assign_ORDR ( NOLOCK ) s
+            INNER JOIN dbo.UserToken a ( NOLOCK ) ON s.EmployeeCode = a.UserID
+        WHERE
+            s.IDORDR = @IDORDR;
 
-		CREATE TABLE #Tmp_PushNotiAPI(
-			Row INT IDENTITY(1, 1),
-			ID BIGINT,
-			Messages NVARCHAR(1000), 
-			Token NVARCHAR(1000)
-		)
+        CREATE TABLE #Tmp_PushNotiAPI
+        (
+            Row INT IDENTITY(1, 1)
+          , ID BIGINT
+          , Messages NVARCHAR(1000)
+          , Token NVARCHAR(1000)
+        );
 
-		INSERT INTO dbo.MDELPHAR_PUSHNOTIFY
-				(   PosNum ,
-				    EcomNum ,
-				    UserCode ,
-				    Title ,
-				    Messages ,
-				    Updatetdate ,
-				    createdate ,
-				    Status ,
-				    Token ,
-				    Dervicetype ,
-				    comment ,
-				    TThai ,
-				    Typeapp,
-					Sound
-				)
-		OUTPUT Inserted.ID, Inserted.Messages, Inserted.Token
-		INTO #Tmp_PushNotiAPI(ID, Messages, Token) 
-		SELECT DISTINCT a.PosNum AS PosNum,
-		a.EcomNum AS EcomNum,
-		a.UserID AS UserCode,
-		N'MDel Thuốc' AS Title,
-		a.Mess AS Messages,
-		NULL AS UpdateDate ,
-		GETDATE() AS CreateDate,
-		a.NotifyStatus AS STATUS,
-		a.Token,
-		a.DeviceType,
-		NULL AS Commend,
-		NULL AS TThai,
-		1 AS Typeapp,
-		''
-		FROM #tmp_Notify a
-		WHERE ISNULL(a.Token,'') <> ''		
-		
-		DECLARE @IndexN INT = 1, @TotalIndexN INT = (SELECT COUNT(1) FROM #Tmp_PushNotiAPI);
+        INSERT INTO dbo.MDELPHAR_PUSHNOTIFY
+        (
+            PosNum
+          , EcomNum
+          , UserCode
+          , Title
+          , Messages
+          , Updatetdate
+          , createdate
+          , Status
+          , Token
+          , Dervicetype
+          , comment
+          , TThai
+          , Typeapp
+          , Sound
+        )
+        OUTPUT
+            Inserted.ID
+          , Inserted.Messages
+          , Inserted.Token
+        INTO #Tmp_PushNotiAPI ( ID, Messages, Token )
+        SELECT DISTINCT
+               a.PosNum AS PosNum
+             , a.EcomNum AS EcomNum
+             , a.UserID AS UserCode
+             , N'MDel Thuốc' AS Title
+             , a.Mess AS Messages
+             , NULL AS UpdateDate
+             , GETDATE() AS CreateDate
+             , a.NotifyStatus AS STATUS
+             , a.Token
+             , a.DeviceType
+             , NULL AS Commend
+             , NULL AS TThai
+             , 1 AS Typeapp
+             , ''
+        FROM
+            #tmp_Notify a
+        WHERE
+            ISNULL(a.Token, '') <> '';
 
-		WHILE (@IndexN <= @TotalIndexN)
-		BEGIN
-			DECLARE @strRes NVARCHAR(3000), @MessagesNoti NVARCHAR(2000), @TokenNoti NVARCHAR(1000), @IDNoti BIGINT
-			SELECT @IDNoti = ID, @MessagesNoti = Messages, @TokenNoti = Token FROM #Tmp_PushNotiAPI WHERE Row = @IndexN
+        DECLARE
+            @IndexN      INT = 1
+          , @TotalIndexN INT = ( SELECT COUNT(1)FROM #Tmp_PushNotiAPI );
 
-			EXEC LOCAL.master.dbo.sp_MdelPhar_Send_Notification_Firebase @Title = N'MDel Thuốc',            -- nvarchar(500)
-                                                             @Messages = @MessagesNoti,         -- nvarchar(2000)
-                                                             @Token = @TokenNoti,            -- nvarchar(1000)
-                                                             @Sound = 'default.wav',             -- varchar(200)
-															 @TypeOrder = 'GrabCancel',
-                                                             @strRes = @strRes OUTPUT -- nvarchar(max)
-			UPDATE dbo.MDELPHAR_PUSHNOTIFY
-			SET Response = @strRes,
-				Status = 'C',
-                Updatetdate = GETDATE()
-			WHERE ID = @IDNoti
+        WHILE ( @IndexN <= @TotalIndexN )
+        BEGIN
+            DECLARE
+                @strRes       NVARCHAR(3000)
+              , @MessagesNoti NVARCHAR(2000)
+              , @TokenNoti    NVARCHAR(1000)
+              , @IDNoti       BIGINT;
+            SELECT
+                @IDNoti = ID
+              , @MessagesNoti = Messages
+              , @TokenNoti = Token
+            FROM
+                #Tmp_PushNotiAPI
+            WHERE
+                Row = @IndexN;
 
-			SET @IndexN += 1		
-		END
+            EXEC LOCAL.master.dbo.sp_MdelPhar_Send_Notification_Firebase
+                @Title = N'MDel Thuốc' -- nvarchar(500)
+              , @Messages = @MessagesNoti -- nvarchar(2000)
+              , @Token = @TokenNoti -- nvarchar(1000)
+              , @Sound = 'default.wav' -- varchar(200)
+              , @TypeOrder = 'GrabCancel'
+              , @strRes = @strRes OUTPUT; -- nvarchar(max)
+            UPDATE
+                dbo.MDELPHAR_PUSHNOTIFY
+            SET
+                Response = @strRes
+              , Status = 'C'
+              , Updatetdate = GETDATE()
+            WHERE
+                ID = @IDNoti;
 
-		DROP TABLE #Tmp_PushNotiAPI, #tmp_Notify
+            SET @IndexN += 1;
+        END;
 
-		-- update transportstatus
-		UPDATE dbo.PE_ORDR
-		SET --TransportStatus = 4,
-			IsCancelGrab = 1,
-			ReasonCancelGrab = @Reason,
-			-- TuanNA89 - 20/07/2021 - Thêm rule Grab hủy
-			TransportBy = NULL
-		WHERE Transaction_Code_Grab = @TransactionCode
+        DROP TABLE
+            #Tmp_PushNotiAPI
+          , #tmp_Notify;
 
-		SELECT 1 AS ResultID, N'Success' AS Message
-	END
-	ELSE
-	BEGIN
-		SELECT 0 AS ResultID, N'Không tìm thấy đơn hàng!' AS Message
-	END
+        -- update transportstatus
+        UPDATE
+            dbo.PE_ORDR
+        SET --TransportStatus = 4,
+            IsCancelGrab = 1
+          , ReasonCancelGrab = @Reason
+          -- TuanNA89 - 20/07/2021 - Thêm rule Grab hủy
+          , TransportBy = NULL
+        WHERE
+            Transaction_Code_Grab = @TransactionCode;
 
-    
-END
+        SELECT 1 AS ResultID, N'Success' AS Message;
+    END;
+    ELSE
+    BEGIN
+        SELECT 0 AS ResultID, N'Không tìm thấy đơn hàng!' AS Message;
+    END;
+
+
+END;
 GO
 

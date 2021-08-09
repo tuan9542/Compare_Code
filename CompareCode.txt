@@ -1,206 +1,232 @@
 ﻿SET QUOTED_IDENTIFIER ON;
 SET ANSI_NULLS ON;
 GO
-ALTER PROC dbo.sp_MDELPHAR_API_ChangeTransportStatus_DangGiaoHang ( @IDMdel INT, @EcomNum VARCHAR(50), @TransportBy VARCHAR(40))
+/*
+==================================================
+Author			:	TuanNA89
+Create date		:	22/07/2020
+Description		:	Xử lý callLog 229
+Note			:	
+==================================================
+*/
+ALTER PROCEDURE CallLogPOSM_DuyetHinhAnh_Type229_XuLy @RequestId BIGINT = 0
 AS
 BEGIN
-    --RETURN;--ANHTVH - 20180521 - K XAI - Su dung store upload img de chuyen trang thai khi up anh thanh cong
-    --20180526 SU dung lai do user k upload hinh 1
-    --20180808 Edit AnhTVH -Chon nhieu NV GH , huy quyen cua cac NVGH con lai , khi DH da co nguoi GH
-    INSERT INTO dbo.Logs ( Store, Message, CreateBy, CreateDate, IsSendMail )
-    VALUES (
-               N'sp_MDELPHAR_API_ChangeTransportStatus_DangGiaoHang' -- Store - nvarchar(max)
-             , CONCAT('@IDMdel = ', @IDMdel, ', @EcomNum = ', @EcomNum, ', @TransportBy = ', @TransportBy) -- Message - nvarchar(max)
-             , '-1' -- CreateBy - varchar(50)
-             , GETDATE() -- CreateDate - datetime
-             , NULL -- IsSendMail - bit
-           );
-
     DECLARE
-        @ResultID INT
-      , @Message  NVARCHAR(MAX)
-      , @ID       INT          = 0
-      , @PosNum   INT;
+        @StoreName    VARCHAR(50)   = OBJECT_NAME(@@PROCID)
+      , @ErrorMessage NVARCHAR(MAX) = N'';
+    BEGIN TRY
+        SET @ErrorMessage = N'[' + @StoreName + N']';
+        SET @ErrorMessage = CONCAT(@ErrorMessage, N' @RequestId =N''', ISNULL(@RequestId, NULL), '''');
 
-    IF EXISTS (
-                  SELECT TOP 1
-                         1
-                  FROM
-                      dbo.PE_ORDR a ( NOLOCK )
-                  WHERE
-                      a.ID = @IDMdel
-                      AND a.EcomNum = @EcomNum
-              )
-    BEGIN
-        IF EXISTS (
-                      SELECT TOP 1
-                             1
-                      FROM
-                          dbo.PE_ORDR a ( NOLOCK )
-                      WHERE
-                          a.ID = @IDMdel
-                          AND a.EcomNum = @EcomNum
-                          AND TransportStatus IN (4, 14)
-                  ) --Cho giao hang
+
+        INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+        VALUES (
+                   @StoreName -- Title - nvarchar(300)
+                 , @ErrorMessage -- Error - nvarchar(max)
+                 , 0 -- Status - tinyint
+                 , GETDATE() -- TimeCreate - datetime
+               );
+
+        DECLARE @StepNo INT = 0;
+        DECLARE
+            @p_Notify_EmpCode_String VARCHAR(300)  = ''
+          , @p_Notify_Title          NVARCHAR(500) = N'Công việc cần thực hiện'
+          , @p_Notify_NoiDung        NVARCHAR(500) = N'';
+        SELECT
+            @StepNo = R.StepNo
+        FROM
+            dbo.Requests AS R ( NOLOCK )
+        WHERE
+            R.Id = @RequestId;
+
+        SELECT
+            RD.RequestId
+          , RD.Id
+          , RD.Approved
+          , RD.Property1 AS TenHangMuc
+          , RD.Property7 AS LinkHinh
+          , RD.Property8 AS LyDoKhongDuyet
+        INTO
+            #tmp_Details
+        FROM
+            dbo.RequestDetails AS RD ( NOLOCK )
+        WHERE
+            RD.RequestId = @RequestId
+            AND RD.Approved = 0
+            AND ISNULL(RD.Property7, '') <> '';
+
+
+        UPDATE
+            dbo.RequestDetails
+        SET
+            Property7 = ''
+          , Property11 = ''
+        WHERE
+            RequestId = @RequestId
+            AND Approved = 0;
+
+        UPDATE
+            F
+        SET
+            F.Status = 0
+        FROM
+            #tmp_Details AS D
+            INNER JOIN dbo.FileAttachs AS F ON F.RequestId = D.RequestId
+                                               AND F.RequestDetailId = D.Id
+        WHERE
+            D.Approved = 0
+            AND F.Status = 1;
+
+        IF ( @StepNo = 3 )
         BEGIN
-            IF EXISTS (
-                          SELECT TOP 1
-                                 1
-                          FROM
-                              dbo.Assign_ORDR a ( NOLOCK )
-                          WHERE
-                              a.IDORDR = @IDMdel
-                              AND a.EcomNum = @EcomNum
-                              AND EmployeeCode = @TransportBy
-                              AND ISNULL(IsDelete, 0) = 0
-                              AND EmployeeType IN (3)
-                      ) -- Nguoi giao hang
-            BEGIN
-                DECLARE @EmployeeName NVARCHAR(255) = (
-                                                          SELECT TOP 1
-                                                                 EmployeeName
-                                                          FROM
-                                                              dbo.Assign_ORDR a ( NOLOCK )
-                                                          WHERE
-                                                              a.IDORDR = @IDMdel
-                                                              AND a.EcomNum = @EcomNum
-                                                              AND EmployeeCode = @TransportBy
-                                                      );
+            EXEC dbo.Assigners_InsertForRequest
+                @RequestId = @RequestId -- bigint
+              , @StepNo = @StepNo -- int
+              , @Is_NotView = 1; -- bit
 
-                --5 Dang giao hang                
-                UPDATE
-                    dbo.PE_ORDR
-                SET
-                    TransportStatus = 5
-                  , UpdateDate = GETDATE()
-                  , UpdateBy = @TransportBy
-                  , TransportBy = @TransportBy + ' - ' + @EmployeeName
-                WHERE
-                    ID = @IDMdel
-                    AND EcomNum = @EcomNum;
+            SELECT
+                @p_Notify_EmpCode_String = ''
+              , @p_Notify_Title = N'Công việc cần thực hiện'
+              , @p_Notify_NoiDung = CONCAT(N'Calllog Hình ảnh triển khai POSM ', @RequestId, N' bị từ chối hình ảnh, bạn vui lòng kiểm tra lại và xử lý theo thông tin được gửi về.');
 
-                UPDATE
-                    dbo.Assign_ORDR
-                SET
-                    IsDelete = 1
-                  , UpdateDate = GETDATE()
-                  , UpdateBy = @TransportBy
-                WHERE
-                    IDORDR = @IDMdel
-                    AND EcomNum = @EcomNum
-                    AND EmployeeCode <> @TransportBy
-                    AND EmployeeType = 3
-                    AND ISNULL(IsDelete, 0) = 0;
+            SELECT
+                @p_Notify_EmpCode_String = COALESCE(@p_Notify_EmpCode_String, '') + EmployeeCode + ','
+            FROM
+                Assigners ( NOLOCK )
+            WHERE
+                RequestId = @RequestId
+                AND StepNo = @StepNo
+                AND Type = 1
+                AND Status = 1;
 
-                SET @PosNum = (
-                                  SELECT TOP 1
-                                         PosNum
-                                  FROM
-                                      dbo.PE_ORDR a ( NOLOCK )
-                                  WHERE
-                                      a.ID = @IDMdel
-                                      AND a.EcomNum = @EcomNum
-                              );
+            EXEC MPOS.dbo.FRT_SP_InsertNotify_oneapp
+                @UserID = @p_Notify_EmpCode_String
+              , @Title = @p_Notify_Title
+              , @NoiDung = @p_Notify_NoiDung
+              , @sys_name = N'mCallLog'
+              , @is_level = 2 -- * Mức độ: 2:Chú ý
+              , @type = 0 -- int
+              , @URL = N'' -- nvarchar(500)
+              , @CallLog_ReqId = @RequestId -- int
+              , @CallLog_TypeId = 229 -- int
+              , @url_picture = N''; -- nvarchar(200)
 
-                INSERT INTO dbo.TransportStatus_Log ( IDORDR, PosNum, EcomNum, TransportStatus, CreateBy, CreateDate )
-                VALUES (
-                           @IDMdel -- IDORDR - int
-                         , @PosNum -- PosNum - int
-                         , @EcomNum -- EcomNum - varchar(50)
-                         , 5 -- TransportStatus - int
-                         , @TransportBy -- CreateBy - varchar(40)
-                         , GETDATE() -- CreateDate - datetime
-                       );
+            DECLARE
+                @Request_StepNo_Current         INT = 0
+              , @Request_StepNo_Current_TimeEnd DATETIME;
+            SELECT TOP 1
+                   @Request_StepNo_Current = RS.StepNo
+            FROM
+                dbo.RequestSteps AS RS ( NOLOCK )
+            WHERE
+                RS.RequestId = @RequestId
+                AND RS.StepNo IN (2, 4)
+            ORDER BY
+                RS.StepNo DESC;
 
-                --********************* update trang thai huy grab sang pos qua API *********************--
-                ---- TuanNA89 - 20/07/2021 - Thêm rule Grab hủy: Chuyển code sang store cập nhật lại nv shop sp_MDELPHAR_API_UpdateTransportBy
-                --            IF EXISTS (
-                --                          SELECT
-                --                              1
-                --                          FROM
-                --                              dbo.PE_ORDR ( NOLOCK )
-                --                          WHERE
-                --                              ID = @IDMdel
-                --                              AND Delivery_Type = 'Grab'
-                --                              AND IsCancelGrab = 1
-                --                      )
-                --            BEGIN
-                --                --CREATE TABLE #ResultApi(
-                --                --	result INT,
-                --                --	msg NVARCHAR(500)
-                --                --)
-                --                --INSERT INTO #ResultApi
-                --                --(
-                --                --	result,
-                --                --	msg
-                --                --)
-                --                DECLARE
-                --                    @Out_Result NVARCHAR(200)
-                --                  , @Out_Msg    NVARCHAR(500);
-                --                EXEC master.dbo.sp_MdelPhar_Cancel_GiaoHang_Grab_POS
-                --                    @Posnum = @PosNum -- int
-                --                  , @Out_Result = @Out_Result OUTPUT -- nvarchar(200)
-                --                  , @Out_Msg = @Out_Msg OUTPUT; -- nvarchar(500)
+            DECLARE @Conversation NVARCHAR(MAX) = N'';
+            SELECT
+                @Conversation = STRING_AGG(CONCAT(TD.TenHangMuc, ' - ', N'Lý do từ chối: ', TD.LyDoKhongDuyet, ' - Link hình: <a href="', TD.LinkHinh, '" target="_blank">', TD.LinkHinh, '</a>'), '<br>')
+            FROM
+                #tmp_Details AS TD ( NOLOCK );
 
-                --                INSERT INTO dbo.Logs ( Store, Message, CreateBy, CreateDate )
-                --                SELECT
-                --                    'sp_MDELPHAR_API_ChangeTransportStatus_DangGiaoHang'
-                --                  , CONCAT(N'API POS, posnum: ', CONVERT(VARCHAR(50), @PosNum), ', result: ', CONVERT(VARCHAR(50), @Out_Result), ', msg: ', @Out_Msg)
-                --                  , 'HT'
-                --                  , GETDATE();
-                --            --FROM #ResultApi
-                --            END;
+            INSERT INTO dbo.Conversations
+            (
+                RequestId
+              , StepNo
+              , Sender
+              , Message
+              , CreateBy
+              , Type
+              , Status
+              , RequestDetailId
+              , TimeCreate
+              , Requests_ARCH_Id
+              , IPClient
+              , FromForm
+            )
+            SELECT
+                @RequestId
+              , @StepNo
+              , '-1'
+              , @Conversation
+              , '-1'
+              , 2
+              , 1
+              , NULL
+              , GETDATE()
+              , NULL
+              , NULL
+              , NULL;
 
-
-                --*****************    ********************
-
-                SET @ResultID = 1;
-                SET @Message = N'Đơn hàng đã chuyển trạng thái Đang giao hàng';
-            END;
-            ELSE
-            BEGIN
-                SET @ResultID = 0;
-                SET @Message = N'Bạn không được phân công giao đơn hàng này';
-            END;
+            SELECT 0 Result, N'Chuyển bước thành công' Message;
         END;
-        ELSE
+        ELSE IF ( @StepNo = 4 )
         BEGIN
-            SET @ResultID = 0;
-            IF EXISTS (
-                          SELECT TOP 1
-                                 1
-                          FROM
-                              dbo.PE_ORDR a ( NOLOCK )
-                          WHERE
-                              a.ID = @IDMdel
-                              AND a.EcomNum = @EcomNum
-                              AND TransportStatus = 5
-                      )
-            BEGIN
-                DECLARE @currentTrsprtBy NVARCHAR(MAX) = (
-                                                             SELECT TOP 1
-                                                                    TransportBy
-                                                             FROM
-                                                                 dbo.PE_ORDR a ( NOLOCK )
-                                                             WHERE
-                                                                 a.ID = @IDMdel
-                                                                 AND a.EcomNum = @EcomNum
-                                                         );
-                SET @Message = N'Nhân viên ' + ISNULL(@currentTrsprtBy, '') + N' đang giao đơn hàng này';
-            END;
-            ELSE
-            BEGIN
-                SET @Message = N'Chỉ có thể giao đơn hàng khi đơn hàng ở trạng thái Chờ giao hàng';
-            END;
-        END;
-    END;
-    ELSE
-    BEGIN
-        SET @ResultID = 0;
-        SET @Message = N'Không tìm thấy đơn hàng';
-    END;
+            UPDATE dbo.Requests SET StepNo = 3, Status = 2 WHERE Id = @RequestId;
 
-    SELECT @ResultID AS ResultID, @Message AS [Message], @ID AS ID;
+            SELECT
+                @p_Notify_EmpCode_String = ''
+              , @p_Notify_Title = N'Công việc cần thực hiện'
+              , @p_Notify_NoiDung = CONCAT(N'Calllog Hình ảnh triển khai POSM ', @RequestId, N' bị từ chối duyệt vì có hình ảnh không đạt yêu cầu');
+
+            SELECT
+                @p_Notify_EmpCode_String = COALESCE(@p_Notify_EmpCode_String, '') + A.EmployeeCode + ','
+            FROM
+                dbo.Assigners AS A ( NOLOCK )
+            WHERE
+                RequestId = @RequestId
+                AND StepNo = 3
+                AND Type = 1
+                AND Status = 1
+            GROUP BY
+                A.EmployeeCode;
+
+            EXEC MPOS.dbo.FRT_SP_InsertNotify_oneapp
+                @UserID = @p_Notify_EmpCode_String
+              , @Title = @p_Notify_Title
+              , @NoiDung = @p_Notify_NoiDung
+              , @sys_name = N'mCallLog'
+              , @is_level = 2 -- * Mức độ: 2:Chú ý
+              , @type = 0 -- int
+              , @URL = N'' -- nvarchar(500)
+              , @CallLog_ReqId = @RequestId -- int
+              , @CallLog_TypeId = 229 -- int
+              , @url_picture = N''; -- nvarchar(200)
+
+            INSERT INTO dbo.Conversations ( RequestId, StepNo, Sender, Message, CreateBy, TimeCreate, Type, Status )
+            VALUES (
+                       @RequestId -- RequestId - bigint
+                     , @StepNo -- StepNo - int
+                     , N'-1' -- Sender - nvarchar(40)
+                     , N'Hệ thống auto cập nhật tình trạng duyệt công việc là Không duyệt vì trên calllog tồn tại hình ảnh không được duyệt' -- Message - nvarchar(max)
+                     , N'-1' -- CreateBy - nvarchar(max)
+                     , GETDATE()
+                     , 2 -- Type - tinyint
+                     , 1 -- Status - tinyint
+                   );
+            EXEC dbo.sp_Requests_Temporary_Delete @RequestID = @RequestId; -- bigint
+
+            SELECT 1 Result, N'' Message;
+        END;
+    END TRY
+    BEGIN CATCH
+        SET @ErrorMessage += N' - ERROR_MESSAGE: ' + ERROR_MESSAGE() + N' - ERROR_LINE: ' + CONVERT(NVARCHAR, ERROR_LINE());
+        PRINT @ErrorMessage;
+        --	===Ghi Log===
+        INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+        VALUES (
+                   @StoreName -- Title - nvarchar(300)
+                 , CONCAT(N'Lỗi ', @ErrorMessage) -- Error - nvarchar(max)
+                 , 1 -- Status - tinyint
+                 , GETDATE() -- TimeCreate - datetime
+               );
+
+    END CATCH;
 END;
+
+----SELECT * FROM dbo.Logs(NOLOCK) WHERE Title=N'CallLog_POSMHinhAnh_Type_Create' AND CHARINDEX(N'', Error)>0 ORDER BY Id DESC
+
 GO
 

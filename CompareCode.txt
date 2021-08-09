@@ -4,212 +4,111 @@ GO
 /*
 ==================================================
 Author			:	TuanNA89
-Create date		:	22/07/2020
-Description		:	Xử lý callLog 229
+Create date		:	23/07/2020
+Description		:	Load detail CL lên Mobile
 Note			:	
 ==================================================
+EXEC dbo.sp__mCallLog__POSM__DuyetHA__Type229__GetDetail_ByReqId
+    @RequestId = 5933515 -- bigint
 */
-ALTER PROCEDURE CallLogPOSM_DuyetHinhAnh_Type229_XuLy @RequestId BIGINT = 0
+ALTER PROCEDURE dbo.sp__mCallLog__POSM__DuyetHA__Type229__GetDetail_ByReqId @RequestId BIGINT = 0
 AS
 BEGIN
     DECLARE
         @StoreName    VARCHAR(50)   = OBJECT_NAME(@@PROCID)
       , @ErrorMessage NVARCHAR(MAX) = N'';
     BEGIN TRY
-        SET @ErrorMessage = N'[' + @StoreName + N']';
-        SET @ErrorMessage = CONCAT(@ErrorMessage, N' @RequestId =N''', ISNULL(@RequestId, NULL), '''');
-
-
-        INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
-        VALUES (
-                   @StoreName -- Title - nvarchar(300)
-                 , @ErrorMessage -- Error - nvarchar(max)
-                 , 0 -- Status - tinyint
-                 , GETDATE() -- TimeCreate - datetime
-               );
-
-        DECLARE @StepNo INT = 0;
-        DECLARE
-            @p_Notify_EmpCode_String VARCHAR(300)  = ''
-          , @p_Notify_Title          NVARCHAR(500) = N'Công việc cần thực hiện'
-          , @p_Notify_NoiDung        NVARCHAR(500) = N'';
         SELECT
-            @StepNo = R.StepNo
+            R.Id
+          , R.Title
+          , R.TimeCreate
+          , R.Status
+          , R.ToShop
+          , R.StepNo
+        INTO
+            #tmp_Request
         FROM
             dbo.Requests AS R ( NOLOCK )
         WHERE
             R.Id = @RequestId;
 
         SELECT
-            RD.RequestId
-          , RD.Id
-          , RD.Approved
-          , RD.Property1 AS TenHangMuc
-          , RD.Property7 AS LinkHinh
-          , RD.Property8 AS LyDoKhongDuyet
+            MD.Code
+          , MD.Name
+          , MD.Status
         INTO
-            #tmp_Details
+            #tmp_Status
+        FROM
+            dbo.MasterDatas AS MD ( NOLOCK )
+        WHERE
+            MD.[Group] = 'RequestStatus';
+
+        DECLARE
+            @LyDoKhongUpHinh           NVARCHAR(MAX) = N''
+          , @StepNo_Request            INT           = 0
+          , @StepNo_LayLyDoKhongUpHinh INT           = 0
+          , @Status                    INT           = 0;
+
+        SELECT TOP 1
+               @StepNo_Request = TR.StepNo
+             , @StepNo_LayLyDoKhongUpHinh = CASE WHEN TR.StepNo < 3 THEN 1 ELSE 3 END
+             , @Status = TR.Status
+        FROM
+            #tmp_Request AS TR ( NOLOCK );
+
+        SELECT
+            R.Id AS RequestId
+          , CONCAT(N'Báo cáo hình ảnh POSM', CHAR(10), N'Số CallLog ', R.Id) AS RequestTitle
+        FROM
+            #tmp_Request AS R ( NOLOCK );
+
+        SELECT
+            RD.Id AS RequestDetailId
+          , RD.RequestId AS RequestId
+          , RD.Property1 AS TenCongViecChiTiet
+          , RD.Property2 AS LinkHinhMau
+          , CASE
+                WHEN @StepNo_Request IN (1, 3)
+                     AND ISNULL(RD.Approved, 0) = 0 THEN 1
+                ELSE 0
+            END ChoPhepUpHinh
+          , CASE
+                WHEN @Status = 4 THEN N'<label style=''color:red''>Từ chối</label>'
+                ELSE CASE
+                         WHEN @StepNo_Request = 1 THEN N'Chưa up hình'
+                         WHEN @StepNo_Request = 2 THEN N'Chờ duyệt'
+                         WHEN @StepNo_Request = 3 THEN N'Từ chối'
+                         WHEN @StepNo_Request = 4 THEN N'Chờ duyệt'
+                         ELSE ''
+                     --     AND @Status < 4 THEN N'Chờ duyệt'
+                     --ELSE CASE WHEN ISNULL(RD.Approved, 0) = 0 THEN N'Từ chối' ELSE N'Duyệt' END
+                     END
+            END AS TinhTrangDuyet_Text
+          , CASE
+                WHEN @Status = 4 THEN 3
+                ELSE CASE
+                         WHEN @StepNo_Request IN (1, 2, 4) THEN 1
+                         WHEN RD.Approved = 1 THEN 2
+                         WHEN RD.Approved = 0 THEN 3
+                         ELSE 0
+                     END
+            END AS TinhTrangDuyet
+          , CASE
+                WHEN @StepNo_Request = 3
+                     AND RD.Approved = 0 THEN ''
+                ELSE CASE
+                         WHEN ISNULL(RD.Property7, '') = '' THEN RD.Property2
+                         ELSE N'https://imagescore.fptshop.com.vn:1233/' + RD.Property7
+                     END
+            END AS LinkHinhShopUp
+          , CASE WHEN RD.Approved = 0 THEN RD.Property8 ELSE '' END AS LyDoKhongDuyet
+          , RD.Property11 AS LyDoKhongUpHinh
         FROM
             dbo.RequestDetails AS RD ( NOLOCK )
         WHERE
             RD.RequestId = @RequestId
-            AND RD.Approved = 0
-            AND ISNULL(RD.Property7, '') <> '';
-
-
-        UPDATE
-            dbo.RequestDetails
-        SET
-            Property7 = ''
-          , Property11 = ''
-        WHERE
-            RequestId = @RequestId
-            AND Approved = 0;
-
-        UPDATE
-            F
-        SET
-            F.Status = 0
-        FROM
-            #tmp_Details AS D
-            INNER JOIN dbo.FileAttachs AS F ON F.RequestId = D.RequestId
-                                               AND F.RequestDetailId = D.Id
-        WHERE
-            D.Approved = 0
-            AND F.Status = 1;
-
-        IF ( @StepNo = 3 )
-        BEGIN
-            EXEC dbo.Assigners_InsertForRequest
-                @RequestId = @RequestId -- bigint
-              , @StepNo = @StepNo -- int
-              , @Is_NotView = 1; -- bit
-
-            SELECT
-                @p_Notify_EmpCode_String = ''
-              , @p_Notify_Title = N'Công việc cần thực hiện'
-              , @p_Notify_NoiDung = CONCAT(N'Calllog Hình ảnh triển khai POSM ', @RequestId, N' bị từ chối hình ảnh, bạn vui lòng kiểm tra lại và xử lý theo thông tin được gửi về.');
-
-            SELECT
-                @p_Notify_EmpCode_String = COALESCE(@p_Notify_EmpCode_String, '') + EmployeeCode + ','
-            FROM
-                Assigners ( NOLOCK )
-            WHERE
-                RequestId = @RequestId
-                AND StepNo = @StepNo
-                AND Type = 1
-                AND Status = 1;
-
-            EXEC MPOS.dbo.FRT_SP_InsertNotify_oneapp
-                @UserID = @p_Notify_EmpCode_String
-              , @Title = @p_Notify_Title
-              , @NoiDung = @p_Notify_NoiDung
-              , @sys_name = N'mCallLog'
-              , @is_level = 2 -- * Mức độ: 2:Chú ý
-              , @type = 0 -- int
-              , @URL = N'' -- nvarchar(500)
-              , @CallLog_ReqId = @RequestId -- int
-              , @CallLog_TypeId = 229 -- int
-              , @url_picture = N''; -- nvarchar(200)
-
-            DECLARE
-                @Request_StepNo_Current         INT = 0
-              , @Request_StepNo_Current_TimeEnd DATETIME;
-            SELECT TOP 1
-                   @Request_StepNo_Current = RS.StepNo
-            FROM
-                dbo.RequestSteps AS RS ( NOLOCK )
-            WHERE
-                RS.RequestId = @RequestId
-                AND RS.StepNo IN (2, 4)
-            ORDER BY
-                RS.StepNo DESC;
-
-            DECLARE @Conversation NVARCHAR(MAX) = N'';
-            SELECT
-                @Conversation = STRING_AGG(CONCAT(TD.TenHangMuc, ' - ', N'Lý do từ chối: ', TD.LyDoKhongDuyet, ' - Link hình: <a href="', TD.LinkHinh, '" target="_blank">', TD.LinkHinh, '</a>'), '<br>')
-            FROM
-                #tmp_Details AS TD ( NOLOCK );
-
-            INSERT INTO dbo.Conversations
-            (
-                RequestId
-              , StepNo
-              , Sender
-              , Message
-              , CreateBy
-              , Type
-              , Status
-              , RequestDetailId
-              , TimeCreate
-              , Requests_ARCH_Id
-              , IPClient
-              , FromForm
-            )
-            SELECT
-                @RequestId
-              , @StepNo
-              , '-1'
-              , @Conversation
-              , '-1'
-              , 2
-              , 1
-              , NULL
-              , GETDATE()
-              , NULL
-              , NULL
-              , NULL;
-
-            SELECT 0 Result, N'Chuyển bước thành công' Message;
-        END;
-        ELSE IF ( @StepNo = 4 )
-        BEGIN
-            UPDATE dbo.Requests SET StepNo = 3, Status = 2 WHERE Id = @RequestId;
-
-            SELECT
-                @p_Notify_EmpCode_String = ''
-              , @p_Notify_Title = N'Công việc cần thực hiện'
-              , @p_Notify_NoiDung = CONCAT(N'Calllog Hình ảnh triển khai POSM ', @RequestId, N' bị từ chối duyệt vì có hình ảnh không đạt yêu cầu');
-
-            SELECT
-                @p_Notify_EmpCode_String = COALESCE(@p_Notify_EmpCode_String, '') + A.EmployeeCode + ','
-            FROM
-                dbo.Assigners AS A ( NOLOCK )
-            WHERE
-                RequestId = @RequestId
-                AND StepNo = 3
-                AND Type = 1
-                AND Status = 1
-            GROUP BY
-                A.EmployeeCode;
-
-            EXEC MPOS.dbo.FRT_SP_InsertNotify_oneapp
-                @UserID = @p_Notify_EmpCode_String
-              , @Title = @p_Notify_Title
-              , @NoiDung = @p_Notify_NoiDung
-              , @sys_name = N'mCallLog'
-              , @is_level = 2 -- * Mức độ: 2:Chú ý
-              , @type = 0 -- int
-              , @URL = N'' -- nvarchar(500)
-              , @CallLog_ReqId = @RequestId -- int
-              , @CallLog_TypeId = 229 -- int
-              , @url_picture = N''; -- nvarchar(200)
-
-            INSERT INTO dbo.Conversations ( RequestId, StepNo, Sender, Message, CreateBy, TimeCreate, Type, Status )
-            VALUES (
-                       @RequestId -- RequestId - bigint
-                     , @StepNo -- StepNo - int
-                     , N'-1' -- Sender - nvarchar(40)
-                     , N'Hệ thống auto cập nhật tình trạng duyệt công việc là Không duyệt vì trên calllog tồn tại hình ảnh không được duyệt' -- Message - nvarchar(max)
-                     , N'-1' -- CreateBy - nvarchar(max)
-                     , GETDATE()
-                     , 2 -- Type - tinyint
-                     , 1 -- Status - tinyint
-                   );
-            EXEC dbo.sp_Requests_Temporary_Delete @RequestID = @RequestId; -- bigint
-
-            SELECT 1 Result, N'' Message;
-        END;
+            AND RD.Status = 1
+            AND ISNULL(RD.Approved, 0) = 0;
     END TRY
     BEGIN CATCH
         SET @ErrorMessage += N' - ERROR_MESSAGE: ' + ERROR_MESSAGE() + N' - ERROR_LINE: ' + CONVERT(NVARCHAR, ERROR_LINE());
@@ -226,7 +125,6 @@ BEGIN
     END CATCH;
 END;
 
-----SELECT * FROM dbo.Logs(NOLOCK) WHERE Title=N'CallLog_POSMHinhAnh_Type_Create' AND CHARINDEX(N'', Error)>0 ORDER BY Id DESC
-
+----SELECT * FROM dbo.Logs(NOLOCK) WHERE Title=N'procedure_name' AND CHARINDEX(N'', Error)>0 ORDER BY Id DESC
 GO
 

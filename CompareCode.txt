@@ -1,331 +1,683 @@
-﻿        public async Task<FRTUService_RES_DTO<object>> Integration_DuyetTyLeTieuChuanDinhGiaBanMayCu_ToPOS(int TicketId)
-        {
-            var res = new FRTUService_RES_DTO<object>();
-            try
-            {
-                string l__ProcessKey = "DuyetTyLeTieuChuanDinhGiaBanMayCu";
+﻿SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;
+GO
+/*
+==================================================
+Author			:	HienDT23 - VietMXH
+Create date		:	18/08/2016 - 09/01/2019 20:00
+Description		:	Tạo CallLog Hàng Demo
+Note			:	
+==================================================
+Test:
+EXEC CreateCallLogProductDemo_New
+  @listIds = '12061'
+, @splipt = 0
+, @title = N'VietMXH-Test'
+, @content = N'VietMXH-Test'
+, @sender = '6087'
+, @imges = N''
+*/
+ALTER PROCEDURE dbo.CreateCallLogProductDemo_New
+(
+    @listIds NVARCHAR(MAX)
+  , @splipt BIT
+  , @title NVARCHAR(MAX)
+  , @content NVARCHAR(MAX)
+  , @sender NVARCHAR(200)
+  , @imges NVARCHAR(MAX)
+)
+AS
+BEGIN
 
-                string l__PhaseName = "POS xử lý";
+    DECLARE @StoreName VARCHAR(50) = OBJECT_NAME(@@PROCID);
 
-                #region ===Check Input===
-                if (TicketId <= 0)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call " + MethodBase.GetCurrentMethod().Name + " Fail ( - TicketId: Phải lớn hơn 0)!";
-                    res.Data = null;
-                    return res;
-                }
-                #endregion ===Check Input===
+    DECLARE @ErrorMessage_Log NVARCHAR(MAX) = N'';
+    SET @ErrorMessage_Log = N'Log: [CreateCallLogProductDemo_New]';
+    SET @ErrorMessage_Log += N', @listIds=''' + ISNULL(CONVERT(NVARCHAR(MAX), @listIds), 'NULL') + N'''';
+    SET @ErrorMessage_Log += N', @splipt=''' + ISNULL(CONVERT(NVARCHAR(50), @splipt), 'NULL') + N'''';
+    SET @ErrorMessage_Log += N', @title=''' + ISNULL(CONVERT(NVARCHAR(MAX), @title), 'NULL') + N'''';
+    SET @ErrorMessage_Log += N', @content=''' + ISNULL(CONVERT(NVARCHAR(MAX), @content), 'NULL') + N'''';
+    SET @ErrorMessage_Log += N', @sender=''' + ISNULL(CONVERT(NVARCHAR(200), @sender), 'NULL') + N'''';
+    SET @ErrorMessage_Log += N', @imges=''' + ISNULL(CONVERT(NVARCHAR(MAX), @imges), 'NULL') + N'''';
+    SET @ErrorMessage_Log += N' ! ';
 
-                int l__TicketInfos__ProcessId = 0;
+    --	===Ghi Log===
+    INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+    VALUES (
+               N'CreateCallLogProductDemo_New' -- Title - nvarchar(300)
+             , @ErrorMessage_Log -- Error - nvarchar(max)
+             , 0 -- Status - tinyint
+             , GETDATE() -- TimeCreate - datetime
+           );
 
-                #region ===Call FRTUService_Ticket_Detail===
-                var l__Ticket_Detail = await FRTUService_Ticket_Detail__V2(new FRTUService_Ticket_Detail_REQ_DTO
-                {
-                    Email = g__Email__System,
-                    Token = g__Token__System,
-                    Id = TicketId,
-                    GetHidden = true
-                });
-                if (l__Ticket_Detail.Result != 1)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Ticket_Detail Fail ( - Result: " + l__Ticket_Detail.Result + " - Msg: " + l__Ticket_Detail.Msg + ")!";
-                    res.Data = null;
-                    return res;
-                }
-                if (l__Ticket_Detail.Data == null)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Ticket_Detail Fail ( - Data: null)!";
-                    res.Data = null;
-                    return res;
-                }
+    ----SET NOCOUNT ON;
 
-                var l__Ticket_Detail__Data = l__Ticket_Detail.Data;
-                if (l__Ticket_Detail__Data.ResultCode != 200)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Ticket_Detail Fail ( - ResultCode: " + l__Ticket_Detail__Data.ResultCode + " - Message: " + l__Ticket_Detail__Data.Message + ")!";
-                    res.Data = null;
-                    return res;
-                }
-                if (l__Ticket_Detail__Data.TicketInfos.TicketId <= 0)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Ticket_Detail Fail ( - TicketInfos.TicketId: " + l__Ticket_Detail__Data.TicketInfos.TicketId + ")!";
-                    res.Data = null;
-                    return res;
-                }
-                if (l__Ticket_Detail__Data.TicketInfos.ProcessId <= 0)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Ticket_Detail Fail ( - TicketInfos.ProcessId: " + l__Ticket_Detail__Data.TicketInfos.ProcessId + ")!";
-                    res.Data = null;
-                    return res;
-                }
-                l__TicketInfos__ProcessId = l__Ticket_Detail__Data.TicketInfos.ProcessId;
-                if (string.IsNullOrEmpty(l__Ticket_Detail__Data.TicketInfos.Current_Phase))
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Ticket_Detail Fail ( - TicketInfos.Current_Phase: null/rỗng)!";
-                    res.Data = null;
-                    return res;
-                }
-                if (l__Ticket_Detail__Data.TicketInfos.Current_Phase != l__PhaseName)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Ticket_Detail Fail ( - TicketInfos.Current_Phase: Không phải \"" + l__PhaseName + "\")!";
-                    res.Data = null;
-                    return res;
-                }
+    SET XACT_ABORT ON;
+    BEGIN TRY
 
-                #endregion ===Call FRTUService_Ticket_Detail===
+        --▲ ----------------------- split list id (Tách mã ProductDemos)
+        SELECT
+            [Index]
+          , Value
+        INTO
+            #temp_Ids
+        FROM
+            dbo.fnSplitString(@listIds, ',');
 
-                #region ===Call FRTUService_Process_GetIdByProcessKey===
-                var l__GetIdByProcessKey = await FRTUService_Process_GetIdByProcessKey__V2(l__ProcessKey, g__Email__System);
-                if (l__GetIdByProcessKey.Result != 1)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Process_GetIdByProcessKey Fail ( - Result: " + l__GetIdByProcessKey.Result + " - Msg: " + l__GetIdByProcessKey.Msg + ")!";
-                    res.Data = null;
-                    return res;
-                }
-                if (l__GetIdByProcessKey.Data == null)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Process_GetIdByProcessKey Fail ( - Data: null)!";
-                    res.Data = null;
-                    return res;
-                }
+        ----SELECT * FROM #temp_Ids
 
-                var l__GetIdByProcessKey__Data = l__GetIdByProcessKey.Data;
-                if (l__GetIdByProcessKey__Data.Result != 1)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Process_GetIdByProcessKey Fail ( - Data.Result: " + l__GetIdByProcessKey__Data.Result + " - Data.Msg: " + l__GetIdByProcessKey__Data.Msg + ")!";
-                    res.Data = null;
-                    return res;
-                }
-                if (l__GetIdByProcessKey__Data.ProcessId <= 0)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Process_GetIdByProcessKey Fail ( - Data.ProcessId: <= 0)!";
-                    res.Data = null;
-                    return res;
-                }
-                if (l__GetIdByProcessKey__Data.ProcessId != l__TicketInfos__ProcessId)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Process_GetIdByProcessKey Fail ( - ProcessId: Khác loại quy trình tích hợp)!";
-                    res.Data = null;
-                    return res;
-                }
-                #endregion ===Call FRTUService_Process_GetIdByProcessKey===
+        --▲ ----------------------- splip Images
+        SELECT
+            [Index]
+          , Value
+        INTO
+            #temp_Images
+        FROM
+            dbo.fnSplitString(@imges, ',');
 
-                #region ===Call FRTUService_Ticket_TicketWorkflowWithData===
-                var l__TicketWorkflowWithData = await FRTUService_Ticket_TicketWorkflowWithData__V2(new FRTUService_Ticket_TicketWorkflowWithData_REQ_DTO
-                {
-                    Email = g__Email__System,
-                    Token = g__Token__System,
-                    TicketId = TicketId
-                });
-                if (l__TicketWorkflowWithData.Result != 1)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Ticket_TicketWorkflowWithData Fail ( - Result: " + l__TicketWorkflowWithData.Result + " - Msg: " + l__TicketWorkflowWithData.Msg + ")!";
-                    res.Data = null;
-                    return res;
-                }
-                if (l__TicketWorkflowWithData.Data == null)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Ticket_TicketWorkflowWithData Fail ( - Data: null)!";
-                    res.Data = null;
-                    return res;
-                }
+        --▲ ----------------------- Bảng Warehouse
+        SELECT
+            WarehouseCode
+          , WarehouseName
+          , WarehouseCodeB1
+          , RegionL4
+          , OrganizationHierachyCode
+        INTO
+            #temp_Warehouse
+        FROM
+            dbo.Warehouse WITH ( NOLOCK );
+        ----WHERE
+        ----    Status = 'A';
 
-                var l__TicketWorkflowWithData__Data = l__TicketWorkflowWithData.Data;
-                if (l__TicketWorkflowWithData__Data.ResultCode != 200)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Ticket_TicketWorkflowWithData Fail ( - ResultCode: " + l__TicketWorkflowWithData__Data.ResultCode + ")!";
-                    res.Data = null;
-                    return res;
-                }
+        --▲ ----------------------- Bảng FPTWHS_TYPE
+        SELECT
+            U_CODE 'WhsCode'
+          , U_NAME 'WhsName'
+        INTO
+            #temp_FPTWHS_TYPE
+        FROM
+            FRT_MDM.dbo.[@FPTWHS_TYPE] WITH ( NOLOCK );
 
-                var l__Relationship_1020 = l__TicketWorkflowWithData__Data.Data.Relationships.Where(p => p.Id == -1020).FirstOrDefault();
-                if (l__Relationship_1020 == null)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Ticket_TicketWorkflowWithData Fail ( - Data.Relationships: Id -1020 không tồn tại)!";
-                    res.Data = null;
-                    return res;
-                }
-                if (l__Relationship_1020.RelationshipId <= 0)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Ticket_TicketWorkflowWithData Fail ( - Data.Relationships: Id -1020 - RelationshipId: <= 0)!";
-                    res.Data = null;
-                    return res;
-                }
-                var l__StatusApprove = l__Relationship_1020.Detail.Individual.Where(p => p.DefinedId == -30000).FirstOrDefault().Value;
+        --▲ ----------------------- list product demo all - Danh sách tất cả mã Product Demo
+        SELECT
+            P.Id
+          , P.WarehouseCode
+          , P.StockOut
+          , P.Quantity
+          , P.QuantityImei
+          , P.ProductionCode
+          , P.ProductionName
+          , P.ImeiCode
+          , P.ColorCode
+          , P.Reason
+          , P.GroupProduct
+          , P.Subject AS 'Subject'
+          , P.IdReferLeft
+        INTO
+            #temp_ProductDemos
+        FROM
+            dbo.ProductDemos ( NOLOCK ) P
+        WHERE
+            P.Id IN ( SELECT Value FROM #temp_Ids )
+            AND P.Status <> 0
+            AND Type = 0
+            AND ISNULL(RequestId, 0) = 0;
 
-                var l__Relative_10 = l__TicketWorkflowWithData__Data.Data.Relatives.Where(p => p.Id == -10).FirstOrDefault();
-                if (l__Relative_10 == null)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Ticket_TicketWorkflowWithData Fail ( - Data.Relatives: Id -10 không tồn tại)!";
-                    res.Data = null;
-                    return res;
-                }
-                if (string.IsNullOrEmpty(l__Relative_10.Summary))
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Ticket_TicketWorkflowWithData Fail ( - Data.Relatives: Id -10 - Summary: null/rỗng)!";
-                    res.Data = null;
-                    return res;
-                }
-                var l__Approver = l__Relative_10.Owner;
-                
-                
-                #endregion ===Call FRTUService_Ticket_TicketWorkflowWithData===
+        --▲ ----------------------- imei callog trung - Kiểm tra trùng mã IEMI của CL
 
-                #region ===Call POS_DuyetTyLeTieuChuanDinhGiaBanMayCu_UpdateStatus===
-                var l__PushInfoToPOS = await POS_Order_DuyetTyLeGiaBanMayCu(new POS_Order_DuyetTyLeGiaBanMayCu_REQ_DTO
-                {
-                    ticketId = TicketId.ToString(),
-                    docentry = "",
-                    status = l__StatusApprove,
-                    user = l__Approver
-                });
-                if (l__PushInfoToPOS.Result != 1)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call POS_Order_DuyetTyLeGiaBanMayCu Fail ( - Result: " + l__PushInfoToPOS.Result + " - Msg: " + l__PushInfoToPOS.Msg + ")!";
-                    res.Data = null;
-                    return res;
-                }
-                if (l__PushInfoToPOS.Data == null)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call POS_Order_DuyetTyLeGiaBanMayCu Fail ( - Data: null)!";
-                    res.Data = null;
-                    return res;
-                }
-                #endregion ===Call POS_DuyetTyLeTieuChuanDinhGiaBanMayCu_UpdateStatus===  
+        CREATE TABLE #tmp_RequestId ( Id_ProductDemos BIGINT, RequestId BIGINT );
 
-                var l__PushInfoToPOS__Data0 = l__PushInfoToPOS.Data[0];
-                if (l__PushInfoToPOS__Data0.Result == 1)
-                {
-                    res.Result = 1;
-                    res.Msg += " - Call POS_Order_DuyetTyLeGiaBanMayCu Success ( - Result: " + l__PushInfoToPOS__Data0.Result + " - Msg: " + l__PushInfoToPOS__Data0.Msg + ")!";
-                    res.Data = null;
-                }
-                else
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call POS_Order_DuyetTyLeGiaBanMayCu Fail ( - Result: " + l__PushInfoToPOS__Data0.Result + " - Msg: " + l__PushInfoToPOS__Data0.Msg + ")!";
-                    res.Data = null;
-                }
+        -- Gộp xuất hàng demo và nhập hàng demo
+        BEGIN
+            SELECT
+                DENSE_RANK() OVER ( PARTITION BY T.WarehouseCode, T.Subject
+ORDER BY T.Id
+                                  ) STT
+              , T.Id
+              , T.WarehouseCode
+              , T.StockOut
+              , T.Quantity
+              , T.QuantityImei
+              , T.ProductionCode
+              , T.ProductionName
+              , T.ImeiCode
+              , T.ColorCode
+              , T.Reason
+              , T.GroupProduct
+              , CAST(T.Subject AS INT) AS Subject
+              , T.IdReferLeft
+              , W.WarehouseName
+              , W.OrganizationHierachyCode
+              , FT.WhsName
+              , W.WarehouseCodeB1
+              , CONVERT(INT, 0) Pos_output_result
+              , CONVERT(NVARCHAR(500), '') AS Pos_output_Msg
+              , CONVERT(BIGINT, 0) Pos_output_ycdc
+            INTO
+                #temp_Group
+            FROM
+                #temp_ProductDemos T
+                LEFT JOIN #temp_Warehouse W ON W.WarehouseCode = T.WarehouseCode
+                LEFT JOIN #temp_FPTWHS_TYPE FT ON FT.WhsCode = T.StockOut COLLATE SQL_Latin1_General_CP1_CI_AS;
 
-                var l__Relationship_2001 = l__TicketWorkflowWithData__Data.Data.Relationships.Where(p => p.Id == -2001).FirstOrDefault();
+            -- lay dang sach shop ra de duyet
+            SELECT DISTINCT WarehouseCode INTO #temp_Shop FROM #temp_ProductDemos;
 
-                if (l__Relationship_2001 == null)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Ticket_TicketWorkflowWithData Fail ( - Data.Relationships: Id -2001 không tồn tại)!";
-                    res.Data = null;
-                    return res;
-                }
-                if (l__Relationship_2001.RelationshipId <= 0)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Ticket_TicketWorkflowWithData Fail ( - Data.Relationships: Id -2001 - RelationshipId: <= 0)!";
-                    res.Data = null;
-                    return res;
-                }
-                var l__Relationship_DoApprove__PhaseOutputId = l__Relationship_2001.RelationshipId;
+            SELECT
+                ROW_NUMBER() OVER ( ORDER BY WarehouseCode ) AS ROW
+              , WarehouseCode
+            INTO
+                #temp_shopDisRow
+            FROM
+                #temp_Shop;
 
-                JObject l__DetailTemplate = new JObject();
+            SELECT
+                WhsCode AS WhsCode
+              , U_WHS_TYPE AS U_WHS_TYPE
+              , U_Code_SH AS U_Code_SH
+            INTO
+                #tmp_OWHS
+            FROM
+                [SV_THUC_FRT_POS].FRT_MDM.dbo.OWHS WITH ( NOLOCK );
 
-                #region ===Call FRTUService_Relationship_GetDetailTemplate===
-                var l__Relationship_GetDetailTemplate = await FRTUService_Relationship_GetDetailTemplate__V2(new FRTUService_Relationship_Detail_REQ_DTO
-                {
-                    Email = g__Email__System,
-                    Token = g__Token__System,
-                    PhaseOutputId = l__Relationship_DoApprove__PhaseOutputId
-                });
-                if (l__Relationship_GetDetailTemplate.Result != 1)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Relationship_GetDetailTemplate Fail ( - Result: " + l__Relationship_GetDetailTemplate.Result + " - Msg: " + l__Relationship_GetDetailTemplate.Msg + ")!";
-                    res.Data = null;
-                    return res;
-                }
-                if (l__Relationship_GetDetailTemplate.Data == null)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Relationship_GetDetailTemplate Fail ( - Data: null)!";
-                    res.Data = null;
-                    return res;
-                }
-                l__DetailTemplate = JObject.FromObject(l__Relationship_GetDetailTemplate.Data);
-                #endregion ===Call FRTUService_Relationship_GetDetailTemplate===
+            DECLARE
+                @CoutShop                       BIGINT
+              , @IndexShop                      BIGINT        = 1
+              , @ShopCodeIns                    NVARCHAR(100)
+              , @ShopName                       NVARCHAR(200) = N''
+              , @TitleCallog                    NVARCHAR(500) = N''
+              , @ShopCodeB1                     NVARCHAR(20)
+              , @OrganizationHierachyCodeShopB1 NVARCHAR(20)
+              , @CallogId                       BIGINT;
 
-                string l__Relationship_DoApprove__Detail = "{}";
+            DECLARE
+                @detail_STT        INT           = 1
+              , @detail_STT_Max    INT           = 1
+              , @detail_Xml        NVARCHAR(MAX) = N''
+              , @detail_out_result INT           = 0
+              , @detail_out_msg    NVARCHAR(500) = N''
+              , @detail_out_YCDC   BIGINT        = 0
+              , @detail_log        NVARCHAR(MAX) = N'';
 
-                #region ===Xử lý Detail Template===
-                if (l__DetailTemplate != null && l__DetailTemplate.ToString() != "{}")
-                {
-                    var l__JArray__Individual = (JArray)l__DetailTemplate["individual"];
-                    if (l__JArray__Individual != null)
-                    {
-                        var l__30200 = l__JArray__Individual.Where(p => p["id"].ToString() == "-30200").FirstOrDefault();
-                        if (l__30200 != null && l__30200["value"] != null) l__30200["value"] = (l__PushInfoToPOS__Data0.Result + " - " + l__PushInfoToPOS__Data0.Msg);
-                    }
-                    l__Relationship_DoApprove__Detail = l__DetailTemplate.ToString();
-                }
-                #endregion ===Xử lý Detail Template===
+            CREATE TABLE #Request_Complete_Fail ( RequestId BIGINT );
 
-                #region ===Call FRTUService_Relationship_DoApprove===
-                var l__Relationship_DoApprove = await FRTUService_Relationship_DoApprove__V2(new FRTUService_Relationship_DoApprove_REQ_DTO
-                {
-                    Email = g__Email__System,
-                    Token = g__Token__System,
-                    PhaseOutputId = l__Relationship_DoApprove__PhaseOutputId,
-                    Detail = l__Relationship_DoApprove__Detail
-                });
-                if (l__Relationship_DoApprove.Result != 1)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Relationship_DoApprove Fail ( - Result: " + l__Relationship_DoApprove.Result + " - Msg: " + l__Relationship_DoApprove.Msg + ")!";
-                    res.Data = null;
-                    return res;
-                }
-                if (l__Relationship_DoApprove.Data == null)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Relationship_DoApprove Fail ( - Data: null)!";
-                    res.Data = null;
-                    return res;
-                }
-                if (l__Relationship_DoApprove.Data.ResultCode != 200)
-                {
-                    res.Result = 0;
-                    res.Msg += " - Call FRTUService_Relationship_DoApprove Fail ( - ResultCode: " + l__Relationship_DoApprove.Data.ResultCode + " - Message: " + l__Relationship_DoApprove.Data.Message + ")!";
-                    res.Data = null;
-                    return res;
-                }
-                #endregion ===Call FRTUService_Relationship_DoApprove===
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError("FRTUService.AppService - " + MethodBase.GetCurrentMethod().Name + "() - TicketId: {0} - ex: {1}", TicketId, ex);
+            SELECT @CoutShop = COUNT(1)FROM #temp_shopDisRow;
 
-                res.Result = 0;
-                res.Msg += " - Call " + MethodBase.GetCurrentMethod().Name + " Error ( - ex.Message: " + ex.Message + ")!";
-                res.Data = null;
-            }
-            return res;
-        }
+            WHILE ( @IndexShop <= @CoutShop )
+            BEGIN
+                SELECT
+                    @ShopCodeIns = NULL
+                  , @ShopName = N''
+                  , @TitleCallog = N''
+                  , @ShopCodeB1 = NULL
+                  , @OrganizationHierachyCodeShopB1 = NULL
+                  , @CallogId = NULL;
+
+                SELECT
+                    @ShopCodeIns = WarehouseCode
+                FROM
+                    #temp_shopDisRow
+                WHERE
+                    ROW = @IndexShop;
+
+                SELECT TOP 1
+                       @ShopName = WarehouseName
+                     --, @TitleCallog = @title + N'--Xuất – Bỏ mẫu demo--' + WarehouseCodeB1 + N'--' + WarehouseName + N'--' + CONVERT(NVARCHAR(50), GETDATE(), 103)
+                     , @ShopCodeB1 = WarehouseCodeB1
+                     , @OrganizationHierachyCodeShopB1 = OrganizationHierachyCode
+                     , @ShopCodeIns = WarehouseCode
+                FROM
+                    #temp_Group
+                WHERE
+                    WarehouseCode = @ShopCodeIns;
+
+                IF EXISTS (
+                              SELECT TOP 1
+                                     1
+                              FROM
+                                  #temp_Group
+                              WHERE
+                                  WarehouseCode = @ShopCodeIns
+                                  AND Subject = 65
+                          )
+                BEGIN
+                    SET @TitleCallog = CONCAT(@title, N'--Xuất demo--', @ShopCodeB1, N'--', @ShopName, N'--', FORMAT(GETDATE(), 'dd/MM/yyyy'));
+                    -- tao callog
+                    EXECUTE dbo.Request_InsertProductDemo
+                        @RequestID = @CallogId OUTPUT -- bigint
+                      , @Sender = @sender -- varchar(40)
+                      , @Assigner = '' -- varchar(3000)
+                      , @Title = @TitleCallog -- nvarchar(300)
+                      , @Content = @content -- nvarchar(max)
+                      , @TypeId = 210 -- int
+                      , @StepNo = 1 -- int
+                      , @FromShop = @ShopCodeIns -- varchar(40)
+                      , @FromOffice = @OrganizationHierachyCodeShopB1 -- varchar(40)
+                      , @IsHighlight = 0 -- bit
+                      , @Status = 1 -- tinyint
+                      , @CreateBy = @sender; -- varchar(10)
+
+                    -- insert chi tiet va chi tiet hinh anh
+                    IF ( ISNULL(@CallogId, 0) > 0 )
+                    BEGIN
+                        UPDATE
+                            dbo.Requests
+                        SET -- Edit - TuanNA89 - 17/1/2019 - Cập nhật TimeAppear
+                            TimeAppear = NULL
+                        WHERE
+                            Id = @CallogId;
+
+                        INSERT INTO dbo.RequestDetails
+                        (
+                            RequestId -- ma callog
+                          , Quantity -- so luong
+                          , Status
+                          , QuantityAvaiable -- so luong bat buoc
+                          , ShopCode -- ma shop
+                          , ProductCode -- ma san pham
+                          , ProductName -- ten san pham
+                          , Property1 -- imei
+                          , Property2 -- mau sac
+                          , Property3 -- ly do
+                          , Property4 -- ten kho
+                          , SaleCode -- Id ProductDemos
+                          , Property10 -- GroupProduct
+                          , ItemId -- subject (TypeId)
+                          , Property5 -- loai kho
+                          , Quantity2
+                        )
+                        SELECT
+                            @CallogId
+                          , Quantity
+                          , 1
+                          , QuantityImei
+                          , WarehouseCode
+                          , ProductionCode
+                          , ProductionName
+                          , ImeiCode
+                          , ColorCode
+                          , Reason
+                          , WhsName
+                          , Id
+                          , GroupProduct
+                          , Subject
+                          , StockOut
+                          , Id
+                        FROM
+                            #temp_Group
+                        WHERE
+                            WarehouseCode = @ShopCodeIns
+                            AND Subject = 65;
+
+                        IF ( @imges <> '' )
+                        BEGIN
+                            INSERT INTO dbo.FileAttachs
+                            (
+                                RequestId
+                              , RequestDetailId
+                              , StepNo
+                              , Uri
+                              , TimeCreate
+                              , CreateBy
+                              , Status
+                              , ApproveStatus
+                              , Domain
+                            )
+                            SELECT DISTINCT
+                                   @CallogId
+                                 , NULL
+                                 , 1
+                                 , Value
+                                 , GETDATE()
+                                 , @sender
+                                 , 1
+                                 , 0
+                                 , NULL
+                            FROM
+                                #temp_Images;
+                        END;
+
+                        INSERT INTO #tmp_RequestId ( Id_ProductDemos, RequestId )
+                        SELECT
+                            Id
+                          , @CallogId
+                        FROM
+                            #temp_Group
+                        WHERE
+                            WarehouseCode = @ShopCodeIns
+                            AND Subject = 65;
+                    END;
+                END;
+
+                SET @CallogId = NULL;
+
+                IF EXISTS (
+                              SELECT TOP 1
+                                     1
+                              FROM
+                                  #temp_Group
+                              WHERE
+                                  WarehouseCode = @ShopCodeIns
+                                  AND Subject = 114
+                          )
+                BEGIN
+                    SET @TitleCallog = CONCAT(@title, N'--Bỏ mẫu demo--', @ShopCodeB1, N'--', @ShopName, N'--', FORMAT(GETDATE(), 'dd/MM/yyyy'));
+                    -- tao callog
+                    EXECUTE dbo.Request_InsertProductDemo
+                        @RequestID = @CallogId OUTPUT -- bigint
+                      , @Sender = @sender -- varchar(40)
+                      , @Assigner = '-1' -- varchar(3000)
+                      , @Title = @TitleCallog -- nvarchar(300)
+                      , @Content = @content -- nvarchar(max)
+                      , @TypeId = 210 -- int
+                      , @StepNo = 1 -- int
+                      , @FromShop = @ShopCodeIns -- varchar(40)
+                      , @FromOffice = @OrganizationHierachyCodeShopB1 -- varchar(40)
+                      , @IsHighlight = 0 -- bit
+                      , @Status = 1 -- tinyint
+                      , @CreateBy = @sender; -- varchar(10)			
+
+                    -- insert chi tiet va chi tiet hinh anh
+                    IF ( ISNULL(@CallogId, 0) > 0 )
+                    BEGIN
+                        UPDATE dbo.Requests SET Status = 0 WHERE Id = @CallogId AND TypeId = 114;
+
+                        SELECT
+                            @detail_STT = 1
+                          , @detail_STT_Max = (
+                                                  SELECT
+                                                      MAX(STT)
+                                                  FROM
+                                                      #temp_Group
+                                                  WHERE
+                                                      WarehouseCode = @ShopCodeIns
+                                                      AND Subject = 114
+                                              )
+                          , @detail_log = N'';
+
+                        WHILE ( @detail_STT <= @detail_STT_Max )
+                        BEGIN
+                            SELECT
+                                @detail_Xml = N''
+                              , @detail_out_result = 0
+                              , @detail_out_msg = N''
+                              , @detail_out_YCDC = 0;
+
+                            SET @detail_Xml = (
+                                                  SELECT
+                                                      ProductionCode AS 'ItemCode'
+                                                    , ImeiCode AS 'IMEI'
+                                                    , Quantity AS 'Quantity'
+                                                    , WarehouseCodeB1 AS 'Shop'
+                                                    , WhsCode AS 'WhsCode'
+                                                    , @sender AS 'Createby'
+                                                  FROM
+                                                      #temp_Group
+                                                      INNER JOIN #tmp_OWHS ON WarehouseCodeB1 = U_Code_SH
+                                                                              AND U_WHS_TYPE = StockOut
+                                                  WHERE
+                                                      WarehouseCode = @ShopCodeIns
+                                                      AND Subject = 114
+                                                      AND STT = @detail_STT
+                                                  FOR XML PATH('LineItem'), ROOT('DATA')
+                                              );
+                            PRINT @detail_Xml;
+
+                            EXEC POS_HNI.dbo.sp_POS_CLG_Demo_ExIm
+                                @CallLogID = @CallogId
+                              -- int
+                              , @DetailDemoXML = @detail_Xml
+                              -- nvarchar(max)  --- Cần Mã sản phẩm, Imei, Số lượng, Mã Shop, Mã kho, Người xử lý
+                              , @TypeCallLog = 114
+                              -- int ---0 Xuất demo --- 1 Bỏ mẫu
+                              , @ResultOut = @detail_out_result OUT
+                              -- int  --- 0 Là Có lỗi, 1 là Thành công
+                              , @MsgOut = @detail_out_msg OUT
+                              -- nvarchar(500) --- Mô tả
+                              , @YCDCDocEntry = @detail_out_YCDC OUT; -- int -- Số chứng từ YCDC
+
+                            SELECT
+                                @detail_log = CONCAT(@detail_log, CASE WHEN ISNULL(@detail_out_msg, '') = '' THEN '' ELSE '<br>' END, N'-Thông tin kiểm tra sản phẩm ', ProductionCode, N' và imei ', ImeiCode, N' từ Hệ thống POS: ', @detail_out_result, N'-', @detail_out_msg)
+                            FROM
+                                #temp_Group
+                            WHERE
+                                WarehouseCode = @ShopCodeIns
+                                AND Subject = 114
+                                AND STT = @detail_STT;
+
+                            UPDATE
+                                #temp_Group
+                            SET
+                                Pos_output_result = @detail_out_result
+                              , Pos_output_Msg = @detail_out_msg
+                              , Pos_output_ycdc = @detail_out_YCDC
+                            WHERE
+                                WarehouseCode = @ShopCodeIns
+                                AND Subject = 114
+                                AND STT = @detail_STT;
+
+                            SET @detail_STT = @detail_STT + 1;
+                        END;
+
+                        IF ( @detail_log <> '' )
+                        BEGIN
+                            INSERT INTO dbo.Conversations
+                            (
+                                RequestId
+                              , StepNo
+                              , Sender
+                              , Message
+                              , CreateBy
+                              , Type
+                              , Status
+                              , RequestDetailId
+                              , TimeCreate
+                              , Requests_ARCH_Id
+                            )
+                            VALUES (
+                                       @CallogId -- RequestId - bigint
+                                     , 1 -- StepNo - int
+                                     , N'-1' -- Sender - nvarchar(40)
+                                     , @detail_log -- Message - nvarchar(max)
+                                     , N'-1' -- CreateBy - nvarchar(max)
+                                     , 2 -- Type - tinyint
+                                     , 1 -- Status - tinyint
+                                     , NULL -- RequestDetailId - bigint
+                                     , GETDATE() -- TimeCreate - datetime
+                                     , NULL -- Requests_ARCH_Id - bigint
+                                   );
+                        END;
+
+                        -- Insert detail
+                        BEGIN
+                            INSERT INTO dbo.RequestDetails
+                            (
+                                RequestId -- mã calllog
+                              , Quantity -- số lượng
+                              , Status
+                              , QuantityAvaiable
+                              , ShopCode -- Mã shop Ins
+                              , ProductCode -- Mã sản phẩm
+                              , ProductName -- Tên sản phẩm
+                              , SaleCode -- Id ProductDemos
+                              , Property1 -- Imei
+                              , Property2 -- mau sac
+                              , Property3 -- ly do
+                              , Property4 -- ten kho
+                              , Property5 -- Loại kho
+                              , Property10 -- GroupProduct
+                              , ItemId
+                              , Quantity2
+                              , Quantity1
+                              , Property11
+                              , Property12
+                              , Time1
+                            )
+                            SELECT
+                                @CallogId
+                              , Quantity
+                              , 1
+                              , QuantityImei
+                              , WarehouseCode
+                              , ProductionCode
+                              , ProductionName
+                              , Id
+                              , ImeiCode
+                              , ColorCode
+                              , Reason
+                              , WhsName
+                              , StockOut
+                              , GroupProduct
+                              , Subject
+                              , ISNULL(IdReferLeft, Id)
+                              , Pos_output_result
+                              , Pos_output_Msg
+                              , Pos_output_ycdc
+                              , GETDATE()
+                            FROM
+                                #temp_Group
+                            WHERE
+                                WarehouseCode = @ShopCodeIns
+                                AND Subject = 114;
+                        END;
+
+                        UPDATE dbo.Requests SET Status = 4 WHERE Id = @CallogId;
+
+                        IF EXISTS (
+                                      SELECT TOP 1
+                                             1
+                                      FROM
+                                          #temp_Group AS TG ( NOLOCK )
+                                      WHERE
+                                          WarehouseCode = @ShopCodeIns
+                                          AND Subject = 114
+                                          AND TG.Pos_output_result <> 1
+                                  )
+                        BEGIN
+                            EXEC dbo.sp_CallLog_XuatBoMauDemo_SendMail_Success @RequestId = @CallogId; -- bigint
+                        END;
+
+                        INSERT INTO #Request_Complete_Fail ( RequestId ) VALUES ( @CallogId );
+
+                        IF ( @imges <> '' )
+                        BEGIN
+                            INSERT INTO dbo.FileAttachs
+                            (
+                                RequestId
+                              , RequestDetailId
+                              , StepNo
+                              , Uri
+                              , TimeCreate
+                              , CreateBy
+                              , Status
+                              , ApproveStatus
+                              , Domain
+                            )
+                            SELECT DISTINCT
+                                   @CallogId
+                                 , NULL
+                                 , 1
+                                 , Value
+                                 , GETDATE()
+                                 , @sender
+                                 , 1
+                                 , 0
+                                 , NULL
+                            FROM
+                                #temp_Images;
+                        END;
+
+                        INSERT INTO #tmp_RequestId ( Id_ProductDemos, RequestId )
+                        SELECT
+                            Id
+                          , @CallogId
+                        FROM
+                            #temp_Group
+                        WHERE
+                            WarehouseCode = @ShopCodeIns
+                            AND Subject = 114;
+                    END;
+                END;
+
+                SET @IndexShop = @IndexShop + 1;
+            END;
+
+            IF EXISTS ( SELECT 1 FROM #Request_Complete_Fail AS R ( NOLOCK ))
+            BEGIN
+                DECLARE @Requests_fail_sendmail NVARCHAR(MAX) = N'';
+                SELECT
+                    @Requests_fail_sendmail = STRING_AGG(R.RequestId, ',')
+                FROM
+                    #Request_Complete_Fail AS R ( NOLOCK );
+
+                EXEC dbo.sp_CallLog_XuatBoMauDemo_SendMail_Fail
+                    @RequestIds = @Requests_fail_sendmail; -- bigint
+
+            END;
+
+            DROP TABLE #Request_Complete_Fail;
+        END;
+
+        UPDATE
+            P
+        SET
+            P.RequestId = R.RequestId
+          , P.Type = CASE WHEN P.Subject = '65' THEN 1 ELSE P.Type END
+        FROM
+            dbo.ProductDemos P
+            INNER JOIN #tmp_RequestId R ON P.Id = R.Id_ProductDemos
+        WHERE
+            P.Id IN ( SELECT C.Id_ProductDemos FROM #tmp_RequestId AS C );
+
+        --▲================================= Hiền.Đoàn. 27.07.2016 Insert mã calllog vào bảng Callog_Demo_Push 
+        --INSERT INTO POS_HNI.dbo.Callog_Demo_Push ( CallogID, status, createdate, ERR, createBy )
+        --SELECT DISTINCT
+        --       RequestId
+        --     , 1
+        --     , GETDATE()
+        --     , NULL
+        --     , @sender
+        --FROM
+        --    #tmp_RequestId;
+
+        SELECT DISTINCT RequestId AS 'IdCallLog' FROM #tmp_RequestId;
+
+        DROP TABLE
+            #temp_FPTWHS_TYPE
+          , #temp_Group
+          , #temp_Ids
+          , #temp_Images
+          , #temp_ProductDemos
+          , #temp_Shop
+          , #temp_shopDisRow
+          , #temp_Warehouse
+          , #tmp_RequestId;
+
+    --▲============= End
+    END TRY
+    BEGIN CATCH
+        DECLARE @ErrorMessage NVARCHAR(MAX) = N'';
+        SET @ErrorMessage = N'Lỗi: [CreateCallLogProductDemo_New]';
+        SET @ErrorMessage += N', @listIds=''' + ISNULL(CONVERT(NVARCHAR(MAX), @listIds), 'NULL') + N'''';
+        SET @ErrorMessage += N', @splipt=''' + ISNULL(CONVERT(NVARCHAR(50), @splipt), 'NULL') + N'''';
+        SET @ErrorMessage += N', @title=''' + ISNULL(CONVERT(NVARCHAR(MAX), @title), 'NULL') + N'''';
+        SET @ErrorMessage += N', @content=''' + ISNULL(CONVERT(NVARCHAR(MAX), @content), 'NULL') + N'''';
+        SET @ErrorMessage += N', @sender=''' + ISNULL(CONVERT(NVARCHAR(200), @sender), 'NULL') + N'''';
+        SET @ErrorMessage += N', @imges=''' + ISNULL(CONVERT(NVARCHAR(MAX), @imges), 'NULL') + N'''';
+        SET @ErrorMessage += N' - ' + ERROR_MESSAGE();
+
+        --	===Ghi Log===
+        INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+        VALUES (
+                   @StoreName -- Title - nvarchar(300)
+                 , @ErrorMessage -- Error - nvarchar(max)
+                 , 1 -- Status - tinyint
+                 , GETDATE() -- TimeCreate - datetime
+               );
+    END CATCH;
+END;
+
+----SELECT * FROM dbo.Logs(NOLOCK) WHERE Title='CreateCallLogProductDemo' ORDER BY Id DESC
+----DELETE FROM dbo.Logs WHERE Title='CreateCallLogProductDemo'
+GO
+

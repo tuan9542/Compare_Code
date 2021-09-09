@@ -4,100 +4,163 @@
     string typeId = TempData.GetData<string>("TypeId");
     string step = TempData.GetData<string>("Step");
 }
-
+<style>
+    select:required:invalid {
+       box-shadow:none;
+    }
+    .modify{
+        position:absolute;
+        top:0;
+        right:0;
+        bottom:0;
+        left:0;
+        background:#000;
+        opacity:0.5;
+        text-align:center;
+        z-index:100;
+        display:none;
+        color:#FFF;
+    }
+</style>
 
 <div class="row">
     <div class="col-md-12">
-        <form action="@Url.Action("Create","Permission")" method="post" autocomplete="off" id="frm-permission">
+        <form action="#" method="post" autocomplete="off" id="frm-assign">
             <div class="p-2 mb-3 border position-relative box-shadow-bottom" style="background:#FFF">
-                <h5>Phân quyền</h5>
+                <h5>Phân công</h5>
                 <hr class="mt-2 mb-0" />
                 <div class="form-row mb-1">
-                    <div class="form-group col-md-6 mb-0">
+                    <div class="form-group col-md-6 mb-0 position-relative">
+                        <div class="modify"></div>
                         <label for="CalllogType" class="mb-0 col-form-label-sm">Loại yêu cầu </label>
                         <div class="dropdown">
                             <button onclick="$('.dropdown-calllog-type').toggleClass('show')"
-                                    class="form-control form-control-sm text-left"
+                                    class="form-control form-control-sm  text-left"
                                     type="button" id="btn-calllog-type" aria-haspopup="true" aria-expanded="false">
                                 Chọn loại yêu cầu
                                 <span class="dropdown-toggle float-right"></span>
                             </button>
-                            <div class="dropdown-menu dropdown-calllog-type w-100 p-2" style="overflow:scroll;max-height:400px;" aria-labelledby="btn-calllog-type">
 
+                            <div class="dropdown-menu dropdown-calllog-type w-100 p-2"
+                                 style="overflow:scroll;max-height:400px;" aria-labelledby="btn-calllog-type">
                             </div>
                         </div>
                         <input type="text" hidden id="in-calllog-type" required data-error-valueMissing="Chọn loại yêu cầu" name="TypeId"
-                               class="form-control form-control-sm bg-transparent f-validate" value="">
+                               class="form-control form-control-sm bg-transparent  f-validate" value="">
                     </div>
                     <div class="form-group col-md-6 mb-0">
                         <label class="mb-0 col-form-label-sm">Phân cấp tổ chức</label>
                         <div class="dropdown">
-                            <button onclick="$('.dropdown-org-type').toggleClass('show')"
-                                    class="form-control form-control-sm text-left"
-                                    type="button" id="btn-org-type" aria-haspopup="true" aria-expanded="false">
-                                Tất cả phân cấp
-                                <span class="dropdown-toggle float-right"></span>
-                            </button>
-                            <div class="dropdown-menu dropdown-org-type w-100 p-2" style="overflow:scroll;max-height:400px;" aria-labelledby="btn-calllog-type">
-
+                            <div class="input-group">
+                                <button onclick="$('.dropdown-org-type').toggleClass('show')"
+                                        class="form-control form-control-sm  text-left"
+                                        type="button" id="btn-org-type" aria-haspopup="true" aria-expanded="false">
+                                    Tất cả phân cấp
+                                    <span class="dropdown-toggle float-right"></span>
+                                </button>
+                                <div class="input-group-append">
+                                    <button onclick="assignment.refeshOrg();"
+                                            id="btn-org-refesh" class="btn btn-sm border " type="button">
+                                        <i style="color:rgba(0,0,0,0.7)" class="fas fa-redo-alt"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="dropdown-menu dropdown-org-type w-100 p-2"
+                                 style="overflow:scroll;max-height:400px;" aria-labelledby="btn-calllog-type">
                             </div>
                         </div>
-                        <input type="hidden" class="form-control form-control-sm bg-transparent rounded-0" id="in-org-type">
+                        <input type="hidden" name="OrgCode" class="form-control form-control-sm bg-transparent " id="in-org-type">
                     </div>
                 </div>
                 <div class="form-row mb-1">
-                    <div class="form-group col-md-6 mb-0">
-                        <label class="mb-0 col-form-label-sm">Chủ đề </label>
-                        <input type="text" name="Subject" placeholder="Chủ đề"
-                               class="form-control form-control-sm bg-transparent">
-                    </div>
-                    <div class="form-group col-md-6 mb-0">
-                        <label for="FinishDate" class="mb-0 col-form-label-sm">Chức danh</label>
-                        <select name="Jobtitles" required data-error-valueMissing="Chọn chức danh phân quyền"
-                                data-none-selected-text="Chọn chức danh"
-                                data-style="bg-transparent border" class="form-control form-control-sm f-validate selectpicker" multiple
-                                data-multiple-separator=" | " id="sl-jobtitle" style="height:31px" data-live-search="true" data-size="8"
-                                data-selected-text-format="count > 3" data-actions-box="true"></select>
-                    </div>
-                </div>
-                <div class="form-row mb-1">
-                    <div class="form-group col-md-4 mb-0">
+                    <div class="form-group col-md-6 mb-0 position-relative">
+                        <div class="modify">Nhấn <i style="color:rgba(255,255,255,1)" class="fas fa-times"></i> ở ID phân công để tắt chỉnh sửa</div>
                         <label for="CalllogType" class="mb-0 col-form-label-sm">Bước </label>
-                        <select id="sl-stepno" name="Step" required data-error-valueMissing="Chọn bước của yêu cầu"
-                                class="form-control form-control-sm f-validate"></select>
-                    </div>
-                    <div class="form-group col-md-2 mb-0 text-md-center">
-                        <label class="mb-0 col-form-label-sm">Phân công</label>
-                        <div class="position-relative form-control border-0 p-0">
-                            <label class="position-relative d-inline-block">
-                                <input type="checkbox" name="Follow" hidden class="custom-checkbox" data-value="true" value="true">
-                                <span class="custom-checkbox-icon form-control form-control-sm"></span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="form-group col-md-6 mb-0">
-                        <label class="mb-0 col-form-label-sm">Loại người dùng </label>
-                        <select class="form-control form-control-sm f-validate" name="PermType"
-                                required data-error-valueMissing="Chọn loại người dùng">
-                            <option value="0">Thông thường</option>
-                            <option value="1">Chỉ định</option>
-                            <option value="2">Chỉ định đặc biệt</option>
+                        <select id="sl-stepno" onchange="assignment.getJobTitle()"
+                                name="StepNo" required data-error-valueMissing="Chọn bước của yêu cầu"
+                                class="form-control form-control-sm  f-validate">
+                            <option value="" disabled selected>Chọn loại yêu cầu</option>
                         </select>
                     </div>
+                    <div class="form-group col-md-6 mb-0">
+                        <label class="mb-0 col-form-label-sm">Vùng miền</label>
+                        <div class="dropdown">
+                            <div class="input-group">
+                                <button onclick="$('.dropdown-region-type').toggleClass('show')"
+                                        class="form-control form-control-sm  text-left"
+                                        type="button" id="btn-region-type" aria-haspopup="true" aria-expanded="false">
+                                    Tất cả vùng miền
+                                    <span class="dropdown-toggle float-right"></span>
+                                </button>
+                                <div class="input-group-append">
+                                    <button onclick="assignment.refeshRegion();"
+                                            id="btn-region-refesh" class="btn btn-sm border " type="button">
+                                        <i style="color:rgba(0,0,0,0.7)" class="fas fa-redo-alt"></i>
+                                    </button>
+                                </div>
+                            </div>
 
-
+                            <div class="dropdown-menu dropdown-region-type w-100 p-2"
+                                 aria-labelledby="btn-calllog-type">
+                            </div>
+                        </div>
+                        <input type="hidden" name="Shop" class="form-control form-control-sm bg-transparent " id="in-region-type">
+                    </div>
                 </div>
+                <div class="form-row mb-1 " style="min-height:62px">
+
+                    <div class="form-group col-md-6 mb-0 position-relative">
+                        <div class="modify"></div>
+                        <label class="mb-0 col-form-label-sm">Chức danh</label>
+                        <select name="JobTitle" onchange="assignment.getEmployee();"
+                                required data-error-valueMissing="Chọn chức danh phân công" title="Chọn bước xử lý"
+                                data-style="bg-transparent border " class="form-control form-control-sm  f-validate selectpicker"
+                                id="sl-jobtitle" style="height:31px" data-live-search="true" data-selected-text-format="count > 3" data-actions-box="true">
+                            <option disabled value="">Chưa có dữ liệu</option>
+                        </select>
+                    </div>
+                    <div class="form-group col-md-6 mb-0">
+                        <label class="mb-0 col-form-label-sm">Hệ thống </label>
+                        <select name="ItemId" class="form-control form-control-sm " id="sl-item">
+                            <option value="0" selected>Tất cả hệ thống</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row mb-1" style="min-height:62px">
+                    <div class="form-group col-md-6 mb-0">
+                        <label class="mb-0 col-form-label-sm">Người xử lý</label>
+                        <select name="Employee"
+                                required data-error-valueMissing="Chọn người xử lý" title="Chọn chức danh"
+                                data-style="bg-transparent border " class="form-control form-control-sm  f-validate selectpicker"
+                                id="sl-empl" style="height:31px" data-live-search="true">
+                            <option value="" disabled>Chưa có dữ liệu</option>
+                        </select>
+                    </div>
+                    <div class="form-group col-md-6 mb-0">
+                        <label class="mb-0 col-form-label-sm">ID Phân công</label>
+                        <div class="input-group">
+                            <input name="Id" value="0" id="assignment-id" type="text" readonly class="form-control form-control-sm " />
+                            <div class="input-group-append">
+                                <button onclick="assignment.cancelModify()" title="Hủy chỉnh sửa"
+                                        id="btn-region-refesh" class="btn btn-sm border " type="button">
+                                    <i style="color:rgba(0,0,0,0.7)" class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
             <div class="text-center mt-1">
                 <button id="btn-search" class="btn border-0 btn-success bg-success-custom box-shadow mr-2" type="button"
-                        onclick="permission.getPermissionByStepAndType();">
+                        onclick="assignment.getAssignmentByTypeStepJob();">
                     <i class="fas fa-search"></i>
                     Tìm kiếm
                 </button>
 
-                <button class="btn border-0 btn-success bg-success-custom box-shadow mr-2" type="button"
-                        onclick="formObj.fncCheckValidity(this.form, false) ? this.form.submit() : ''">
+                <button class="btn border-0 btn-success bg-success-custom box-shadow mr-2" type="button" id="btn-create"
+                        onclick="assignment.updateAssignment();">
                     <i class="far fa-save"></i>
                     Tạo mới
                 </button>
@@ -107,46 +170,55 @@
                     Refesh
                 </button>
                 <button class="btn border-0 btn-success bg-success-custom box-shadow mr-2" type="button"
-                        onclick="permission.exportPermission()">
+                        onclick="assignment.exportAssignments()">
                     <i class="fas fa-file-export"></i>
                     Xuất Excel
                 </button>
                 <button class="btn border-0 btn-success bg-success-custom box-shadow" type="button"
-                        onclick="permission.comfirmDelete();"
+                        onclick="assignment.comfirmDelete();"
                         data-toggle="modal" data-target="#modal-confirm-delete">
                     <i class="far fa-trash-alt"></i>
-                    Xóa phân quyền
+                    Xóa phân công
                 </button>
             </div>
         </form>
-        
-        <table id="table-permission" class="table table-bordered table-sm mt-3 font-weight-normal" style="background:#FFF">
-            <thead>
-                <tr>
-                    <th class="">STT</th>
-                    <th class="">Nhóm y/c</th>
-                    <th class="">Loại y/c</th>
-                    <th class="">Chủ đề</th>
-                    <th class="">Bước</th>
-                    <th class="">Chức danh</th>
-                    <th class="">Theo phân công</th>
-                    <th class="">Loại</th>
-                    <th class="">
-                        <input onchange="$(permission.elDeleteChecked).prop('checked', $(this).prop('checked'))" autocomplete="off" type="checkbox" id="delete-checked-all" />
-                    </th>
-                </tr>
-            </thead>
-            <tbody>
-                
-            </tbody>
-        </table>
+        <div class="table-wrapper">
+            <table id="table-assignment" class="table table-bordered table-sm mt-3 font-weight-normal" style="background:#FFF">
+                <thead>
+                    <tr>
+                        <th class="">#</th>
+                        <th class="">Nhóm y/c</th>
+                        <th class="">Loại y/c</th>
+                        <th class="">Bước</th>
+
+
+                        <th class="">Chức danh</th>
+                        <th class="">Người xử lý</th>
+
+                        <th class="">Phân cấp t/c</th>
+                        <th class="">Số shop</th>
+                        <th class="">Hệ thống</th>
+                        <th class="">Nguồn tiếp nhận</th>
+                        <th class="">
+                            <input onchange="$(assignment.chkDelete).prop('checked', $(this).prop('checked'))" autocomplete="off" type="checkbox" id="delete-checked-all" />
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td></td>
+                        <td colspan="10">Chưa có dữ liệu</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 <div id="modal-confirm-delete" class="modal" tabindex="-1" role="dialog">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Xác nhận xóa phân quyền</h5>
+                <h5 class="modal-title">Xác nhận xóa phân công</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
@@ -155,9 +227,11 @@
                 <p id="modal-body-count"></p>
             </div>
             <div class="modal-footer">
-                <button type="button" onclick="permission.deletePermission();"
-                        id="btn-confirm-delete" class="btn btn-primary">Xác nhận</button>
-                <button type="button"  class="btn btn-secondary" data-dismiss="modal">Đóng</button>
+                <button type="button" onclick="assignment.deleteAssignment();"
+                        id="btn-confirm-delete" class="btn btn-primary">
+                    Xác nhận
+                </button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Đóng</button>
             </div>
         </div>
     </div>
@@ -165,190 +239,444 @@
 
 
 <script>
-    var permission = {
-        elBtnCllType: "#btn-calllog-type",
-        elInCllType:"#in-calllog-type",
-        elDropCllType: ".dropdown-calllog-type",
-        treeCllType: new jsTree(),
-        elBtnOrgType: "#btn-org-type",
-        elInOrgType: "#in-org-type",
-        elDropOrgType: ".dropdown-org-type",
-        treeOrgType: new jsTree(),
-        elSlJobTitle: "#sl-jobtitle",
-        elSlStepNo: "#sl-stepno",
-        elTblPermisssion: "#table-permission",
-        elBtnSearch: "#btn-search",
-        elDeleteCheckedAll: "#delete-checked-all",
-        elDeleteChecked: ".delete-checked",
-        elBtnConfimDel: "#btn-confirm-delete",
-        elModalCountChecked: "#modal-body-count",
-        elFrmPerm:"#frm-permission",
-        numDelete: 0,
-        jsTreeCheckbox: new jsTreeCheckbox(),
+    var assignment = {
+        inAssgnId:"#assignment-id",
+        dropdType: ".dropdown-calllog-type",
+        slStep: "#sl-stepno",
+        btnType: "#btn-calllog-type",
+        inType: "#in-calllog-type",
+        treeType: new jsTree(),
+        dropdOrg: ".dropdown-org-type",
+        btnOrg: "#btn-org-type",
+        inOrg: "#in-org-type",
+        treeOrg: new jsTree(),
+        dropdRegion: ".dropdown-region-type",
+        btnRegion: "#btn-region-type",
+        inRegion: "#in-region-type",
+        treeRegion: new jsTreeCheckbox(),
+        slItem: "#sl-item",
+        slJob: "#sl-jobtitle",
+        slEmpl: "#sl-empl",
+        tblAssgn: "#table-assignment",
+        btnRefeOrg: "#btn-org-refesh",
+        btnRefeRegion: "#btn-region-refesh",
+        chkCheckedAll: "#delete-checked-all",
+        chkDelete: ".delete-checked",
+        btnConfirmDel: "#btn-confirm-delete",
+        modalCountDel: "#modal-body-count",
+        frmAssign: "#frm-assign",
+        btnCreate:"#btn-create",
+        loadJob: true,
+        loadEmp: true,
+        loadAssign: true,
+        numDelete:0,
         init: function () {
-            var cllTypeData = jsData.category.categories().map(t => { return { "ParentId": t.ParentId, "Label": t.Description, "Id": t.Id } });
-            $(permission.elDropCllType).append(permission.treeCllType.treeChosen(cllTypeData, "0", null, "permission.clickCllType"));
-            ajaxObj.jsonPost("@Url.Action("GetOrganization", "Permission")", {}, data => {
+            //#type treeview
+            var types = jsData.category.categories().map(t => { return { "ParentId": t.ParentId, "Label": t.Description, "Id": t.Id } });
+            $(assignment.dropdType).append(assignment.treeType.treeChosen(types, "0", null, "assignment.treeTypeClick"));
+            //#endregion treeview
+
+            //#region GetOrganization
+            ajaxObj.jsonPost("@Url.Action("GetOrganization", "Assignments")", {}, data => {
                 if (data.error == 0) {
-                    $(permission.elDropOrgType).append(permission.treeOrgType.treeChosen(data.html, "0", null, "permission.clickOrgType"));
+                    $(assignment.dropdOrg).append(assignment.treeOrg.treeChosen(data.html, "0", null, "assignment.treeOrgClick"));
                 }
                 else {
                     messObj.fncCreate("Có lỗi xay ra khi lấy danh sách tổ chức", messObj.types.warning);
                 }
             })
+            //#GetOrganization
 
+            //#region GetRegion
+            ajaxObj.jsonPost("@Url.Action("GetRegion", "Assignments")", {}, data => {
+                if (data.error == 0) {
+                    var treeData = "<div class=\"w-100\">";
+                    treeData += "<input type=\"text\" onkeyup=\"assignment.treeRegionSearch(this);\" class=\"form-control form-control-sm mb-1\" placeholder=\"Nhập nội dung tìm kiếm\" />";
+                    treeData += "</div>";
+                    treeData += "<div style=\"overflow:scroll;max-height:400px;\"" + assignment.treeRegion.treeCheckbox(data.html, "0", null) + "</div>";
+                    $(assignment.dropdRegion).append(treeData);
+                    assignment.treeRegion.treeCheckboxChange(assignment.treeRegionChange);
+                }
+                else {
+                    messObj.fncCreate("Có lỗi xay ra khi lấy danh sách vùng miền", messObj.types.warning);
+                }
+            })
+            //#GetRegion
+
+            //#region close dropdown menu
             $(document).click(evt => {
                 var target = $(evt.target);
                 if (target.closest('.dropdown-org-type').length == 0 && target.get(0).id != 'btn-org-type') {
                     $(".dropdown-org-type").removeClass('show');
                 }
-                if(target.closest('.dropdown-calllog-type').length == 0 && target.get(0).id != 'btn-calllog-type') {
+                if (target.closest('.dropdown-calllog-type').length == 0 && target.get(0).id != 'btn-calllog-type') {
                     $(".dropdown-calllog-type").removeClass('show');
                 }
-            });
-
-            permission.getJobTitleByOffice('');
-            @{ 
-                if(!string.IsNullOrEmpty(typeId) && !string.IsNullOrEmpty(step))
-                {
-                    @:permission.getPermissionByStepAndType('@(typeId)','@(step)');
+                if (target.closest('.dropdown-region-type').length == 0 && target.get(0).id != 'btn-region-type') {
+                    $(".dropdown-region-type").removeClass('show');
                 }
-            }
+            });
+            //#endregion close dropdown menu
         },
-        clickCllType: function (el) {
+
+        //#region treeTypeClick
+        treeTypeClick: function (el) {
             var id = $(el).data("id");
-            $(permission.elBtnCllType).text($(el).text());
-            $(permission.elInCllType).val(id);
-            $(permission.elDropCllType).toggleClass('show');
+            $(assignment.btnType).text($(el).text());
+            $(assignment.inType).val(id);
+            $(assignment.dropdType).toggleClass('show');
             var numStep = jsData.category.fncFindCategory(id).StepNo || 0;
-            permission.createStep(numStep);
+            assignment.createStep(numStep);
+            assignment.getItem(id);
         },
+        //#endregion treeTypeClick
+
+        //#region createStep
         createStep: function (numStep) {
             numStep = numStep || 0;
             var html = "";
             if (!isNaN(numStep)) {
                 numStep = parseInt(numStep);
                 var idx;
-                for (idx = 0; idx <= numStep ; idx++) {
-                    html += "<option value=\"" + idx + "\">" + idx + "</option>";
+                var html = "<option value=\"-1\">Hãy chọn bước</option>";;
+                for (idx = 0; idx <= numStep; idx++) {
+                    selected = "";
+                    //if (idx == 0) {
+                    //    selected = "selected"
+                    //}
+                    html += "<option value=\"" + idx + "\" " + selected + ">" + idx + "</option>";
                 }
             }
-            $(permission.elSlStepNo).html(html);
+            $(assignment.slStep).html(html);
         },
-        clickOrgType: function (el) {
-            var id = $(el).data("id") || "";
-            $(permission.elBtnOrgType).text($(el).text());
-            $(permission.elInOrgType).val(id);
-            $(permission.elDropOrgType).toggleClass('show');
-            permission.getJobTitleByOffice(id);
-        },
-        getJobTitleByOffice: function (officeCode) {
-            $(permission.elBtnOrgType).attr("disabled", "disabled");
-            ajaxObj.jsonPost("@Url.Action("GetJobTitleByOffice", "Permission")", { officeCode: officeCode}, data => {
-                if (data.error == 0) {
-                    if (data.html == "") {
-                        data.html = "<option disabled>Không có dữ liệu</option>";
-                    }
-                    $(permission.elSlJobTitle).empty();
-                    var clone = $(permission.elSlJobTitle).clone();
-                    $(permission.elSlJobTitle).selectpicker("destroy");
-                    $(permission.elSlJobTitle).replaceWith(clone);
-                    $(permission.elSlJobTitle).html(data.html);
-                    $(permission.elSlJobTitle).selectpicker("refesh");
-                    $(permission.elBtnOrgType).removeAttr("disabled");
-                }
-                else {
-                    messObj.fncCreate("Có lỗi xay ra khi lấy danh sách chức danh", messObj.types.warning);
-                }
-            })
-        },
-        getPermissionByStepAndType: function (typeId, stepNo) {
-            typeId = typeId || $(permission.elInCllType).val() || "";
-            stepNo = stepNo || $(permission.elSlStepNo).val() || "";
-            if (typeId == "") {
-                messObj.fncCreate("Chọn loại yêu cầu", messObj.types.warning);
+        //#endregion createStep
+
+        //#region getItem
+        getItem: function (type) {
+            type = type || 0;
+            var html = "<option value=\"0\">Tất cả hệ thống</option>";
+            if (!isNaN(type)) {
+                var items = jsData.group.fncGetGroup(type);
+                $.each(items, (idx, obj) => {
+                    html += "<option value=\"" + obj.Id + "\">" + obj.Name + "</option>";
+                });
             }
-            if (stepNo == "") {
-                messObj.fncCreate("Chọn bước của yêu cầu", messObj.types.warning);
-            }
-            if (typeId != "" & stepNo != "") {
-                $(permission.elBtnSearch).attr("disabled", "disabled");
-                $(permission.elBtnConfimDel).removeAttr("disabled");
-                ajaxObj.jsonPost("@Url.Action("GetPermissionByStepAndType", "Permission")", { typeId: typeId, stepNo: stepNo }, data => {
+            $(assignment.slItem).html(html);
+        },
+        //#endregion getItem
+
+        //#region getJobTitle
+        getJobTitle: function () {
+            var stepNo = $(assignment.slStep).val() || "";
+            var typeId = $(assignment.inType).val() || "";
+            if (stepNo != "" && typeId != "") {
+                assignment.loadJob = true;
+                ajaxObj.jsonPost("@Url.Action("GetJobTitleByStepAndType", "Assignments")", { typeId: typeId, stepNo: stepNo }, data => {
                     if (data.error == 0) {
-                        $(permission.elTblPermisssion + " tbody").empty().html(data.html);
+                        if (data.html == "") {
+                            data.html = "<option value=\"\" disabled>Không tìm thấy chức danh</option>";
+                        }
+                        $(assignment.slJob).empty();
+                        var clone = $(assignment.slJob).clone();
+                        $(assignment.slJob).selectpicker('destroy');
+                        $(assignment.slJob).replaceWith(clone);
+                        $(assignment.slJob).html(data.html);
+                        $(assignment.slJob).selectpicker('refesh');
                     }
                     else {
-                        messObj.fncCreate("Có lỗi xay ra khi lấy danh sách phân quyền", messObj.types.warning);
+                        messObj.fncCreate(data.html, messObj.types.warning);
                     }
-                    $(permission.elBtnSearch).removeAttr("disabled");
-                    $(permission.elBtnConfimDel).removeAttr("disabled");
+                    assignment.loadJob = false;
                 })
             }
         },
-        exportPermission: function () {
-            var typeId = $(permission.elInCllType).val() || "0";
-            var stepNo =  $(permission.elSlStepNo).val() || "-1";
-            var url = "@Url.Action("ExportExcel","Permission")"
-            window.open(url + "?typeId=" + typeId + "&stepNo=" + stepNo,"_blank");
+        //#region getJobTitle
+
+        //#region getEmployee
+        getEmployee: function () {
+            var jobTitle = $(assignment.slJob).val() || "";
+            if (jobTitle != "") {
+                assignment.loadEmp = true;
+                ajaxObj.jsonPost("@Url.Action("GetEmployeeByJobtitle", "Assignments")", { jobTitle: jobTitle }, data => {
+                    if (data.error == 0) {
+                        if (data.html == "") {
+                            data.html = "<option value=\"\" disabled>Không tìm thấy nhân viên</option>";
+                        }
+                        $(assignment.slEmpl).empty();
+                        var clone = $(assignment.slEmpl).clone();
+                        $(assignment.slEmpl).selectpicker('destroy');
+                        $(assignment.slEmpl).replaceWith(clone);
+                        $(assignment.slEmpl).html(data.html);
+                        $(assignment.slEmpl).selectpicker('refesh');
+                    }
+                    else {
+                        messObj.fncCreate(data.html, messObj.types.warning);
+                    }
+                    assignment.loadEmp = false;
+                })
+            }
         },
-        comfirmDelete: function () {
-            var checked = $(permission.elDeleteChecked + ":checked").length;
-            if (checked > 0) {
-                $("#modal-confirm-delete").modal('show');
-                $(permission.elBtnConfimDel).removeAttr("disabled");
-                $(permission.elModalCountChecked).html("Xác nhận xóa " + checked + " phân quyền");
+        //#region getEmployee
+
+        //#region GetAssignmentByTypeStepJob
+        getAssignmentByTypeStepJob: function () {
+            var jobTitle = $(assignment.slJob).val() || "";
+            var stepNo = $(assignment.slStep).val() || -1;
+            var typeId = $(assignment.inType).val() || 0;
+            if (typeId != 0) {
+                assignment.loadAssign = true;
+                ajaxObj.jsonPost("@Url.Action("GetAssignmentByTypeStepJob", "Assignments")", { typeId: typeId, stepNo: stepNo, jobTitle: jobTitle }, data => {
+                    if (data.error == 0) {
+                        var html = "";
+                        var idxNum = 1;
+                        $.each(data.html, (idx, obj) => {
+                            html += "<tr>";
+                            html += "<td>" + idxNum + "</td>";
+                            html += "<td>" + obj.Group + "</td>";
+                            html += "<td>" + obj.Type + "</td>";
+                            html += "<td>" + obj.StepNo + "</td>";
+                            html += "<td>" + obj.JobTitleName + "</td>";
+                            html += "<td>" + obj.Employee + "</td>";
+                            html += "<td>" + obj.Organization + "</td>";
+                            html += "<td>" + obj.CountShop + "</td>";
+                            html += "<td>" + obj.ItemName + "</td>";
+                            html += "<td>" + obj.Source + "</td>";
+                            html += "<td>";
+                            html += "<a href=\"javascript:void(0)\" class=\"link-modify\" data-id=\"" + obj.Id + "\"";
+                            html += "onclick=\"assignment.updateView('" + obj.Id + "','" + obj.TypeId + "','" + obj.StepNo + "','" + obj.JobTitle + "','" + obj.Assigner + "','" + obj.Shop + "','" + obj.OrgCode + "','" + obj.ItemId + "')\"";
+                            html += "><i class=\"far fa-edit\"></i>";
+                            html += "</a> | ";
+                            html += "<label><input type=\"checkbox\" class=\"delete-checked\" data-id=\"" + obj.Id + "\"></label>";
+                            html += "</td>";
+                            html += "</tr>";
+                            idxNum++;
+                        });
+                        if (html == "") {
+                            html += "<tr";
+                            html += "<td>";
+                            html += "</td>";
+                            html += "<td colspan=\"10\">Không tìm thấy dữ liệu</td>";
+                            html += "</tr>";
+                        }
+
+                        $(assignment.tblAssgn + " tbody").html(html);
+                    }
+                    else {
+                        messObj.fncCreate("Có lỗi xảy ra khi lấy danh sách phân quyền", messObj.types.warning);
+                    }
+                    assignment.loadJob = false;
+                });
             }
             else {
-                $("#modal-confirm-delete").modal('show');
-                $(permission.elBtnConfimDel).attr("disabled", "disabled");
-                $(permission.elModalCountChecked).html("Bạn chưa chọn phân quyền xần xóa");
+                messObj.fncCreate("Vui lòng chọn loại yêu cầu", messObj.types.warning);
             }
         },
-        deletePermission: function () {
-            var checked = $(permission.elDeleteChecked + ":checked");
+        //#region GetAssignmentByTypeStepJob
+
+        //#region treeOrgClick
+        treeOrgClick: function (el) {
+            var id = $(el).data("id");
+            $(assignment.btnOrg).text($(el).text());
+            $(assignment.inOrg).val(id);
+            $(assignment.dropdOrg).toggleClass('show');
+        },
+        //#endregion treeOrgClick
+
+        //#region treeOrgClick
+        treeRegionChange: function () {
+            var data = assignment.treeRegion.getData();
+            $(assignment.inRegion).val(data);
+            var shop = data.filter(w => w.charAt(0) == 's');
+            $(assignment.btnRegion).text('Bạn đã chọn ' + shop.length + " shop");
+        },
+        //#endregion treeOrgClick
+
+        //#region treeOrgClick
+        treeRegionSearch: function (el) {
+            var text = $(el).val();
+            setTimeout(() => { assignment.treeRegion.search(text); }, 500);
+        },
+        //#endregion treeOrgClick
+
+        //#region updateView
+        updateView: function (id, typeId, stepNo, jobTitle, assigner, shop, orgCode, itemId) {
+            $(".modify").fadeIn(500);
+            $(assignment.btnCreate).html("<i class=\"far fa-save\"></i> Cập nhật");
+
+            orgCode = orgCode || "";
+            itemId = itemId || "";
+            shop = shop || "";
+            assignment.loadJob = true;
+            assignment.loadEmp = true;
+
+            $(assignment.inAssgnId).val(id);
+            $("." + assignment.treeType.clssNote).filter('[data-id="' + typeId + '"]').trigger('click');
+            $(assignment.slStep).val(stepNo).trigger('change');
+
+            var timeJob = setInterval(() => {
+                if (!assignment.loadJob) {
+                    $(assignment.slJob).selectpicker('val', jobTitle);
+                    clearInterval(timeJob);
+                }
+                
+            }, 10);
+            var timeEmp = setInterval(() => {
+                if (!assignment.loadJob && !assignment.loadEmp) {
+                    $(assignment.slEmpl).selectpicker('val', assigner);
+                    clearInterval(timeEmp);
+                }
+            }, 10);
+
+            
+            if (shop != "") {
+                var arrShop = shop.split(',');
+                $.each(arrShop, (idx, obj) => {
+                    var checkbox = $("." + assignment.treeRegion.clssContainer + " .tree-node-checkbox").filter('[data-id="s' + obj + '"]');
+                    checkbox.prop("checked", true).trigger("change");
+                });
+            }
+            else {
+                $(assignment.btnRefeRegion).trigger("click");
+            }
+
+            if (orgCode == "") {
+                $(assignment.btnRefeOrg).trigger("click");
+            }
+            else {
+                $("." + assignment.treeOrg.clssNote).filter('[data-id="' + orgCode + '"]').trigger('click');
+            }
+
+            if (itemId == "0") {
+                console.log(itemId);
+                $(assignment.slItem + " option[value='']").prop('selected', true);
+            }
+            else {
+                $(assignment.slItem).val(itemId).trigger("change");
+            }
+            
+        },
+        //#endregion treeOrgClick
+
+        refeshOrg: function () {
+            $(assignment.btnOrg).text("Tất cả phân cấp");
+            $(assignment.inOrg).val("");
+        },
+
+        refeshRegion: function () {
+            assignment.treeRegion.deselectAll();
+            $(assignment.btnRegion).text("Tất cả vùng miền");
+            $(assignment.inRegion).val("");
+        },
+
+        cancelModify: function () {
+            $(assignment.inAssgnId).val("0");
+            $(assignment.btnCreate).html("<i class=\"far fa-save\"></i> Tạo mới");
+            $(".modify").fadeOut(500);
+        },
+
+        updateAssignment: function () {
+            if (formObj.fncCheckValidity($(assignment.frmAssign).get(0))) {
+                var query = $(assignment.frmAssign).serializeArray();
+                var obj = query.reduce(function (total, current) {
+                    total[current.name] = current.value;
+                    return total;
+                }, {});
+                popOver.show();
+                ajaxObj.jsonPost("@Url.Action("Update","Assignments")", obj, data => {
+                    popOver.hide();
+                    if (data.error == 0) {
+                        messObj.fncCreate(data.html, messObj.types.success);
+                    } else {
+                        messObj.fncCreate(data.html, messObj.types.warning);
+                    }
+                    assignment.getAssignmentByTypeStepJob();
+                    if (isNaN($(assignment.inAssgnId).val()) && parseInt($(assignment.inAssgnId).val()) > 0) {
+                        var timeAssign = setInterval(() => {
+                            if (!assignment.loadAssign) {
+                                $(".link-modify").filter("[data-id=\"" + $(assignment.inAssgnId).val() + "\"]").trigger("click");
+                                clearInterval(timeAssign);
+                            }
+                        }, 10);
+                    }
+                }, (jqXHR, textStatus, errorThrown) => {
+                    if (jqXHR.status == 401) {
+                        messObj.fncCreate("Phiên đăng nhập của bạn đã hết hạn vui lòng tải lại trang", messObj.types.error);
+                    } else if (jqXHR.status == 403) {
+                        messObj.fncCreate("Bạn không có quyền thực hiện hành động này", messObj.types.error);
+                    }  else {
+                        messObj.fncCreate("Có lỗi xảy ra khi cập nhật phân công", messObj.types.warning);
+                    }
+                    popOver.hide();
+                    assignment.getAssignmentByTypeStepJob();
+                });
+            }
+        },
+
+        comfirmDelete: function () {
+            $(assignment.inAssgnId).val(0);
+            var checked = $(assignment.chkDelete + ":checked").length;
+            if (checked > 0) {
+                $(assignment.btnConfirmDel).removeAttr("disabled");
+                $(assignment.modalCountDel).html("Xác nhận xóa " + checked + " phân công");
+                $("#modal-confirm-delete").modal('show');
+            }
+            else {
+                $(assignment.btnConfirmDel).attr("disabled", "disabled");
+                $(assignment.modalCountDel).html("Bạn chưa chọn phân công xần xóa");
+                $("#modal-confirm-delete").modal('show');
+            }
+        },
+        deleteAssignment: function () {
+            var checked = $(assignment.chkDelete + ":checked");
             if (checked.length > 0) {
-                permission.numDelete = checked.length;
-                $(permission.elBtnConfimDel).attr("disabled", "disabled");
-                $(permission.elBtnSearch).attr("disabled", "disabled");
+                popOver.show();
+                assignment.numDelete = checked.length;
                 $.each(checked, (idx, obj) => {
                     var id = $(obj).data("id");
-                    ajaxObj.jsonPost("@Url.Action("Delete", "Permission")", { Id: id }, data => {
-                        permission.numDelete--;
+                    ajaxObj.jsonPost("@Url.Action("Delete", "Assignments")", { Id: id }, data => {
+                        assignment.numDelete--;
                         if (data.error == 0) {
                             messObj.fncCreate(data.html, messObj.types.success);
-                            $(".tr-delete-" + id).remove();
                         }
                         else {
                             messObj.fncCreate(data.html, messObj.types.warning);
                         }
-                        if (permission.numDelete == 0) {
-                            $(permission.elBtnConfimDel).removeAttr("disabled");
-                            $(permission.elBtnSearch).removeAttr("disabled");
+                        if (assignment.numDelete == 0) {
                             $("#modal-confirm-delete").modal('hide');
+                            popOver.hide();
+                            assignment.getAssignmentByTypeStepJob();
                         }
                     }, (jqXHR, textStatus, errorThrown) => {
-                        permission.numDelete--;
+                        assignment.numDelete--;
                         if (jqXHR.status == 401) {
                             messObj.fncCreate("Phiên đăng nhập của bạn đã hết hạn vui lòng tải lại trang", messObj.types.error);
                         } else if (jqXHR.status == 403) {
                             messObj.fncCreate("Bạn không có quyền thực hiện hành động này", messObj.types.error);
                         } else {
-                            messObj.fncCreate("Có lỗi xảy ra khi xóa phân quyền", messObj.types.warning);
+                            messObj.fncCreate("Có lỗi xảy ra khi xóa phân công", messObj.types.warning);
                         }
-                        if (permission.numDelete == 0) {
-                            $(permission.elBtnConfimDel).removeAttr("disabled");
-                            $(permission.elBtnSearch).removeAttr("disabled");
+                        if (assignment.numDelete == 0) {
                             $("#modal-confirm-delete").modal('hide');
+                            popOver.hide();
+                            assignment.getAssignmentByTypeStepJob();
                         }
                     });
                 });                      
             }
             else {
-                messObj.fncCreate("Chọn phân quyền cần xóa", messObj.types.warning);
+                messObj.fncCreate("Chọn phân công cần xóa", messObj.types.warning);
             }
-        }
+        },
+        exportAssignments: function () {
+            var typeId = $(assignment.inType).val() || "0";
+            var stepNo = $(assignment.slStep).val() || "-1";
+            var jobTitle = $(assignment.slJob).val() || "-1";
+            jobTitle = jobTitle == "-1" ? "" : jobTitle;
+            var url = "@Url.Action("ExportExcel", "Assignments")"
+            window.open(url + "?typeId=" + typeId + "&stepNo=" + stepNo + "&jobTitle=" + jobTitle, "_blank");
+        },
+
     }
-    objLayout.push(permission);
+    objLayout.push(assignment);
 </script>
 

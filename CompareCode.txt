@@ -1,362 +1,354 @@
-﻿SET QUOTED_IDENTIFIER ON;
-SET ANSI_NULLS ON;
-GO
-ALTER PROC sp_CALLLOGPHAR_WEB_ChangeStep_15 ( @Data NVARCHAR(MAX) = '' )
-AS
-BEGIN
-    DECLARE @StoreName NVARCHAR(50) = OBJECT_NAME(@@PROCID);
-    DECLARE @log NVARCHAR(MAX) = CONCAT(@StoreName, ' @Data=''', @Data, '''');
-    INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
-    VALUES (
-               @StoreName -- Title - nvarchar(300)
-             , @log -- Error - nvarchar(max)
-             , 0 -- Status - tinyint
-             , GETDATE() -- TimeCreate - datetime
-           );
-    DECLARE
-        @ResultID          INT           = 0
-      , @Message           NVARCHAR(MAX) = N''
-      , @RequestID         INT           = 0
-      , @Data_Notification NVARCHAR(MAX) = N'';
-    BEGIN TRY
-        DECLARE @Xml XML = @Data;
-        ---tao bien chua thong tin request------------------------------------------------------------------------------------
-        DECLARE
-            @StepNo     INT
-          , @UserCode   NVARCHAR(100)
-          , @TimeCreate DATETIME
-          , @sender     VARCHAR(50)
-          , @TypeId     INT = 15;
-        IF @Xml IS NOT NULL
-           AND @Xml.exist('*') <> 0
-        BEGIN
-            ---lay du lieu tu xml-----------------------------------------------------------------------------
-            SELECT
-                T.C.value('(UserName/text())[1]', 'nvarchar(100)') AS Username
-              , T.C.value('(RequestId/text())[1]', 'int') AS RequestId
-              , T.C.value('(Type/text())[1]', 'int') AS Type
-            INTO
-                #tmp_Request_15
-            FROM
-                @Xml.nodes('(Data)') T(C);
-
-            SELECT TOP 1
-                   @RequestID = R.RequestId
-                 , @UserCode = R.Username
-            FROM
-                #tmp_Request_15 R;
-            ---Neu co du lieu request-----------------------------------------------------------------------------------------------
-            IF EXISTS (
-                          SELECT TOP 1
-                                 1
-                          FROM
-                              dbo.Requests ( NOLOCK )
-                          WHERE
-                              Id = @RequestID
-                              AND TypeId = @TypeId
-                              AND Status < 4
-                      )
-            BEGIN
-
-                SELECT TOP 1
-                       @StepNo = R.StepNo
-                     , @TimeCreate = R.TimeCreate
-                     , @sender = R.Sender
-                FROM
-                    dbo.Requests R ( NOLOCK )
-                WHERE
-                    Id = @RequestID;
-
-                ---CC----------------------------------------------------------------------------------------
-                SELECT
-                    T.C.value('(text())[1]', 'varchar(20)') AS Cc
-                INTO
-                    #tmp_CC
-                FROM
-                    @Xml.nodes('(Data/Cc/row)') T(C);
-
-                DELETE FROM #tmp_CC WHERE ISNULL(Cc, '') = '';
-
-                DELETE
-                #tmp_CC
-                FROM
-                    #tmp_CC a
-                    LEFT JOIN dbo.F03_Employees b ( NOLOCK ) ON a.Cc = b.EmployeeCode
-                                                                AND b.Status = 'A'
-                WHERE
-                    b.EmployeeCode IS NULL;
-
-                DELETE
-                #tmp_CC
-                FROM
-                    #tmp_CC AS C
-                    INNER JOIN dbo.Assigners AS A ON A.EmployeeCode = C.Cc
-                WHERE
-                    A.RequestId = @RequestID
-                    AND A.StepNo = @StepNo
-                    AND A.Status = 1;
-
-                ---Files------------------------------------------------------------------------------------
-                SELECT
-                    T.C.value('(text())[1]', 'nvarchar(1000)') AS FileName
-                INTO
-                    #tmp_Files
-                FROM
-                    @Xml.nodes('(Data/FileNames/FileName)') T(C);
-
-                ---Insert thanh cong - insert thong tin lien quan ------------------------------------------------------------------------------------
-                IF EXISTS ( SELECT TOP 1 1 FROM #tmp_Request_15 )
-                BEGIN
-                    ---Detail------------------------------------------------------------------------------------
-                    SELECT
-                        Tbl.Col.value('Id[1]', 'BIGINT') AS Id
-                      , Tbl.Col.value('HuongXuLy_Code[1]', 'nvarchar(50)') AS HuongXuLy_Code
-                      , Tbl.Col.value('SOEcom_new[1]', 'nvarchar(50)') AS SOEcom_New
-                      , Tbl.Col.value('SOPos_new[1]', 'nvarchar(50)') AS SOPos_new
-                    INTO
-                        #tmp_details
-                    FROM
-                        @Xml.nodes('Data/DetailsData/row') Tbl(Col);
+﻿
+@{
+    ViewBag.Title = "Index";
+    string typeId = TempData.GetData<string>("TypeId");
+    string step = TempData.GetData<string>("Step");
+}
 
 
-                    IF EXISTS ( SELECT TOP 1 1 FROM #tmp_details )
-                    BEGIN
-                        UPDATE
-                            R
-                        SET
-                            R.Property4 = D.HuongXuLy_Code
-                          , R.Property5 = D.SOEcom_New
-                          , R.Property6 = D.SOPos_new
-                        FROM
-                            #tmp_details AS D
-                            INNER JOIN dbo.RequestDetails R ( NOLOCK ) ON R.Id = D.Id
-                        WHERE
-                            R.RequestId = @RequestID;
-                    END;
+<div class="row">
+    <div class="col-md-12">
+        <form action="@Url.Action("Create","Permission")" method="post" autocomplete="off" id="frm-permission">
+            <div class="p-2 mb-3 border position-relative box-shadow-bottom" style="background:#FFF">
+                <h5>Phân quyền</h5>
+                <hr class="mt-2 mb-0" />
+                <div class="form-row mb-1">
+                    <div class="form-group col-md-6 mb-0">
+                        <label for="CalllogType" class="mb-0 col-form-label-sm">Loại yêu cầu </label>
+                        <div class="dropdown">
+                            <button onclick="$('.dropdown-calllog-type').toggleClass('show')"
+                                    class="form-control form-control-sm text-left"
+                                    type="button" id="btn-calllog-type" aria-haspopup="true" aria-expanded="false">
+                                Chọn loại yêu cầu
+                                <span class="dropdown-toggle float-right"></span>
+                            </button>
+                            <div class="dropdown-menu dropdown-calllog-type w-100 p-2" style="overflow:scroll;max-height:400px;" aria-labelledby="btn-calllog-type">
 
-                    ---tao file đính kèm neu co -------------------------------------------------------------------
-                    IF EXISTS ( SELECT TOP 1 1 FROM #tmp_Files )
-                    BEGIN
+                            </div>
+                        </div>
+                        <input type="text" hidden id="in-calllog-type" required data-error-valueMissing="Chọn loại yêu cầu" name="TypeId"
+                               class="form-control form-control-sm bg-transparent f-validate" value="">
+                    </div>
+                    <div class="form-group col-md-6 mb-0">
+                        <label class="mb-0 col-form-label-sm">Phân cấp tổ chức</label>
+                        <div class="dropdown">
+                            <button onclick="$('.dropdown-org-type').toggleClass('show')"
+                                    class="form-control form-control-sm text-left"
+                                    type="button" id="btn-org-type" aria-haspopup="true" aria-expanded="false">
+                                Tất cả phân cấp
+                                <span class="dropdown-toggle float-right"></span>
+                            </button>
+                            <div class="dropdown-menu dropdown-org-type w-100 p-2" style="overflow:scroll;max-height:400px;" aria-labelledby="btn-calllog-type">
 
-                        INSERT INTO dbo.FileAttachs
-                        (
-                            RequestId
-                          , RequestDetailId
-                          , StepNo
-                          , Uri
-                          , TimeCreate
-                          , CreateBy
-                          , Status
-                          , ApproveStatus
-                          , Domain
-                        )
-                        SELECT
-                            @RequestID
-                          , NULL
-                          , @StepNo
-                          , a.FileName
-                          , GETDATE()
-                          , @UserCode
-                          , 1
-                          , 0
-                          , NULL
-                        FROM
-                            #tmp_Files a;
+                            </div>
+                        </div>
+                        <input type="hidden" class="form-control form-control-sm bg-transparent rounded-0" id="in-org-type">
+                    </div>
+                </div>
+                <div class="form-row mb-1">
+                    <div class="form-group col-md-6 mb-0">
+                        <label class="mb-0 col-form-label-sm">Chủ đề </label>
+                        <input type="text" name="Subject" placeholder="Chủ đề"
+                               class="form-control form-control-sm bg-transparent">
+                    </div>
+                    <div class="form-group col-md-6 mb-0">
+                        <label for="FinishDate" class="mb-0 col-form-label-sm">Chức danh</label>
+                        <select name="Jobtitles" required data-error-valueMissing="Chọn chức danh phân quyền"
+                                data-none-selected-text="Chọn chức danh"
+                                data-style="bg-transparent border" class="form-control form-control-sm f-validate selectpicker" multiple
+                                data-multiple-separator=" | " id="sl-jobtitle" style="height:31px" data-live-search="true" data-size="8"
+                                data-selected-text-format="count > 3" data-actions-box="true"></select>
+                    </div>
+                </div>
+                <div class="form-row mb-1">
+                    <div class="form-group col-md-4 mb-0">
+                        <label for="CalllogType" class="mb-0 col-form-label-sm">Bước </label>
+                        <select id="sl-stepno" name="Step" required data-error-valueMissing="Chọn bước của yêu cầu"
+                                class="form-control form-control-sm f-validate"></select>
+                    </div>
+                    <div class="form-group col-md-2 mb-0 text-md-center">
+                        <label class="mb-0 col-form-label-sm">Phân công</label>
+                        <div class="position-relative form-control border-0 p-0">
+                            <label class="position-relative d-inline-block">
+                                <input type="checkbox" name="Follow" hidden class="custom-checkbox" data-value="true" value="true">
+                                <span class="custom-checkbox-icon form-control form-control-sm"></span>
+                            </label>
+                        </div>
+                    </div>
 
-                    END;
-
-                    ---CC ------------------------------------------------------------------------------------------------
-                    IF EXISTS ( SELECT TOP 1 1 FROM #tmp_CC )
-                    BEGIN
-                        INSERT INTO dbo.Assigners
-                        (
-                            RequestId
-                          , EmployeeCode
-                          , StepNo
-                          , Type
-                          , Status
-                          , TimeCreate
-                          , GroupMail
-                          , IsRead
-                          , Requests_ARCH_Id
-                          , TypeId
-                        )
-                        SELECT DISTINCT
-                               @RequestID
-                             , a.Cc
-                             , 1
-                             , 2
-                             --1 nguoi xu ly , 2 cc
-                             , 1
-                             -- cho xu ly
-                             , GETDATE()
-                             , NULL
-                             , 0
-                             , NULL
-                             , 1
-                        FROM
-                            #tmp_CC a;
-                    END;
-
-                    -- update Calllog------------------------------------------------------------------
-
-                    DECLARE @NextStep INT = @StepNo + 1;
-
-                    UPDATE
-                        dbo.Requests
-                    SET
-                        StepNo = @NextStep
-                      , StepStatus = 2
-                      , Status = 2
-                    WHERE
-                        Id = @RequestID;
+                    <div class="form-group col-md-6 mb-0">
+                        <label class="mb-0 col-form-label-sm">Loại người dùng </label>
+                        <select class="form-control form-control-sm f-validate" name="PermType"
+                                required data-error-valueMissing="Chọn loại người dùng">
+                            <option value="0">Thông thường</option>
+                            <option value="1">Chỉ định</option>
+                            <option value="2">Chỉ định đặc biệt</option>
+                        </select>
+                    </div>
 
 
-                    --SELECT @NextStep
-                    EXEC dbo.Assigners_InsertForRequest
-                        @RequestId = @RequestID
-                      -- bigint
-                      , @StepNo = @NextStep
-                      -- int
-                      , @Is_NotView = 1; -- bit
+                </div>
+            </div>
+            <div class="text-center mt-1">
+                <button id="btn-search" class="btn border-0 btn-success bg-success-custom box-shadow mr-2" type="button"
+                        onclick="permission.getPermissionByStepAndType();">
+                    <i class="fas fa-search"></i>
+                    Tìm kiếm
+                </button>
 
-                    EXEC dbo.RequestStep_Insert
-                        @RequestId = @RequestID -- bigint
-                      , @StepNo = @StepNo -- int
-                      , @User = @UserCode; -- varchar(50)
+                <button class="btn border-0 btn-success bg-success-custom box-shadow mr-2" type="button"
+                        onclick="formObj.fncCheckValidity(this.form, false) ? this.form.submit() : ''">
+                    <i class="far fa-save"></i>
+                    Tạo mới
+                </button>
+                <button class="btn border-0 btn-success bg-success-custom box-shadow mr-2" type="button"
+                        onclick="window.location.reload()">
+                    <i class="fas fa-sync"></i>
+                    Refesh
+                </button>
+                <button class="btn border-0 btn-success bg-success-custom box-shadow mr-2" type="button"
+                        onclick="permission.exportPermission()">
+                    <i class="fas fa-file-export"></i>
+                    Xuất Excel
+                </button>
+                <button class="btn border-0 btn-success bg-success-custom box-shadow" type="button"
+                        onclick="permission.comfirmDelete();"
+                        data-toggle="modal" data-target="#modal-confirm-delete">
+                    <i class="far fa-trash-alt"></i>
+                    Xóa phân quyền
+                </button>
+            </div>
+        </form>
+        
+        <table id="table-permission" class="table table-bordered table-sm mt-3 font-weight-normal" style="background:#FFF">
+            <thead>
+                <tr>
+                    <th class="">STT</th>
+                    <th class="">Nhóm y/c</th>
+                    <th class="">Loại y/c</th>
+                    <th class="">Chủ đề</th>
+                    <th class="">Bước</th>
+                    <th class="">Chức danh</th>
+                    <th class="">Theo phân công</th>
+                    <th class="">Loại</th>
+                    <th class="">
+                        <input onchange="$(permission.elDeleteChecked).prop('checked', $(this).prop('checked'))" autocomplete="off" type="checkbox" id="delete-checked-all" />
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                
+            </tbody>
+        </table>
+    </div>
+</div>
+<div id="modal-confirm-delete" class="modal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Xác nhận xóa phân quyền</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p id="modal-body-count"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" onclick="permission.deletePermission();"
+                        id="btn-confirm-delete" class="btn btn-primary">Xác nhận</button>
+                <button type="button"  class="btn btn-secondary" data-dismiss="modal">Đóng</button>
+            </div>
+        </div>
+    </div>
+</div>
 
-                    EXEC dbo.RequestStep_Insert
-                        @RequestId = @RequestID -- bigint
-                      , @StepNo = @NextStep -- int
-                      , @User = NULL; -- varchar(50)
 
-                    ---insert bang gui mail---------------------------------------------------------------------------------
-                    EXEC dbo.Email_MakeByProcess
-                        @RequestId = @RequestID -- bigint
-                      , @Title = N'' -- nvarchar(300)
-                      , @TypeProcess = 5; -- int
+<script>
+    var permission = {
+        elBtnCllType: "#btn-calllog-type",
+        elInCllType:"#in-calllog-type",
+        elDropCllType: ".dropdown-calllog-type",
+        treeCllType: new jsTree(),
+        elBtnOrgType: "#btn-org-type",
+        elInOrgType: "#in-org-type",
+        elDropOrgType: ".dropdown-org-type",
+        treeOrgType: new jsTree(),
+        elSlJobTitle: "#sl-jobtitle",
+        elSlStepNo: "#sl-stepno",
+        elTblPermisssion: "#table-permission",
+        elBtnSearch: "#btn-search",
+        elDeleteCheckedAll: "#delete-checked-all",
+        elDeleteChecked: ".delete-checked",
+        elBtnConfimDel: "#btn-confirm-delete",
+        elModalCountChecked: "#modal-body-count",
+        elFrmPerm:"#frm-permission",
+        numDelete: 0,
+        jsTreeCheckbox: new jsTreeCheckbox(),
+        init: function () {
+            var cllTypeData = jsData.category.categories().map(t => { return { "ParentId": t.ParentId, "Label": t.Description, "Id": t.Id } });
+            $(permission.elDropCllType).append(permission.treeCllType.treeChosen(cllTypeData, "0", null, "permission.clickCllType"));
+            ajaxObj.jsonPost("@Url.Action("GetOrganization", "Permission")", {}, data => {
+                if (data.error == 0) {
+                    $(permission.elDropOrgType).append(permission.treeOrgType.treeChosen(data.html, "0", null, "permission.clickOrgType"));
+                }
+                else {
+                    messObj.fncCreate("Có lỗi xay ra khi lấy danh sách tổ chức", messObj.types.warning);
+                }
+            })
 
-                    ---tra ve thong bao
-                    SET @Message = N'Chuyển bước Calllog ' + CONVERT(VARCHAR(20), @RequestID) + N' thành công! <br/>';
+            $(document).click(evt => {
+                var target = $(evt.target);
+                if (target.closest('.dropdown-org-type').length == 0 && target.get(0).id != 'btn-org-type') {
+                    $(".dropdown-org-type").removeClass('show');
+                }
+                if(target.closest('.dropdown-calllog-type').length == 0 && target.get(0).id != 'btn-calllog-type') {
+                    $(".dropdown-calllog-type").removeClass('show');
+                }
+            });
 
-                    -- Gửi Notification + SMS
-                    BEGIN
-                        DECLARE
-                            @json_sms         NVARCHAR(MAX)  = N''
-                          , @SDTKH            VARCHAR(50)    = ''
-                          , @SO_Ecom          VARCHAR(50)    = ''
-                          , @SoTienCanPhaiTra NUMERIC(19, 0) = 0
-                          , @Title            NVARCHAR(500)  = N''
-                          , @Body             NVARCHAR(500)  = N'';
-
-                        SELECT TOP 1
-                               @SDTKH = RD.Property7
-                             , @SO_Ecom = RD.Property1
-                             , @SoTienCanPhaiTra = RD.Money3
-                        FROM
-                            dbo.RequestDetails AS RD ( NOLOCK )
-                        WHERE
-                            RD.RequestId = @RequestID;
-
-                        SET @Title = CONCAT(N'Bạn vừa Hủy/Trả đơn hàng ', @SO_Ecom);
-                        SET @Body = CONCAT(N'Nhà thuốc FPT Long Châu đã xử lý hoàn tiền cho Quý khách số tiền ', FORMAT(@SoTienCanPhaiTra, 'N0'), N'đ. Vui lòng kiểm tra số dư tài khoản với thẻ ATM từ 5-7 ngày, thẻ tín dụng vào kỳ sao kê gần nhất hoặc tối đa 45 ngày theo quy định ngân hàng.');
-
-                        SELECT
-                            @Data_Notification = N'{  "usercode": "{user}",
-  "fromSys": "Calllog",
-  "to": [
-    "{cusphone}"
-  ],
-  "sendTime": "",
-  "notification": {
-    "title": "{title}",
-    "body": "{body}",
-    "url": "",
-    "icon": "ORDER_RETURN",
-    "sound": "default",
-    "type": "ORDER"
-  },
-  "data": {
-    "title": "",
-    "body": "",
-    "type": "DETAIL_ORDER",
-    "typeOrder": "RETURN",
-    "idEvent": "{ecomnum}",
-    "flagButton": false,
-    "buttonName": ""
-  }
-}'                      ;
-                        --SET @SDTKH = '0352483751';
-                        --SET @Title = N'test DB';
-                        --SET @Body = N'testDB';
-
-                        SET @Data_Notification = REPLACE(@Data_Notification, '{user}', @UserCode);
-                        SET @Data_Notification = REPLACE(@Data_Notification, '{cusphone}', @SDTKH);
-                        SET @Data_Notification = REPLACE(@Data_Notification, '{title}', @Title);
-                        SET @Data_Notification = REPLACE(@Data_Notification, '{body}', @Body);
-                        SET @Data_Notification = REPLACE(@Data_Notification, '{ecomnum}', @SO_Ecom);
-
-                        INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
-                        VALUES (
-                                   @StoreName -- Title - nvarchar(300)
-                                 , CONCAT(N'--Push notification: body', @Data_Notification) -- Error - nvarchar(max)
-                                 , 0 -- Status - tinyint
-                                 , GETDATE() -- TimeCreate - datetime
-                               );
-
-                        SET @json_sms = CONCAT(N'{"docNum": 0,"system":"CallLog","userID":"', @UserCode, '","cardCode":"","cardName":"", "sendTime":"","address": "', @SDTKH, '","templateId": "111","values": {"MA_DH": "', @SO_Ecom, '","SO_TIEN": "', FORMAT(@SoTienCanPhaiTra, 'N0'), '"}}');
-                        INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
-                        VALUES (
-                                   @StoreName -- Title - nvarchar(300)
-                                 , CONCAT(N'--Push sms: EXEC MPOS.dbo.push_notification_service @json_input=', @json_sms) -- Error - nvarchar(max)
-                                 , 0 -- Status - tinyint
-                                 , GETDATE() -- TimeCreate - datetime
-                               );
-
-                        EXEC MPOS.dbo.push_notification_service @json_input = @json_sms; -- nvarchar(max)
-                    END;
-
-                    SET @ResultID = 1;
-
-                    DROP TABLE #tmp_details;
-                END;
-                ---Xoa bang------------------------------------------------------------------------------------
-                DROP TABLE
-                    #tmp_CC
-                  , #tmp_Files;
-            END;
-            ELSE
-            BEGIN
-                SET @Message = N'Chuyển bước tất bại<br/> Không tìm thấy thông tin calllog';
-            END;
-
-            ---Xoa bang------------------------------------------------------------------------------------
-            DROP TABLE #tmp_Request_15;
-
-        END;
-        ELSE
-        BEGIN
-            SET @Message = N'Chuyển bước thất bại<br/> Không lấy trích được thông tin calllog';
-        END;
-    END TRY
-    BEGIN CATCH
-        SET @ResultID = 0;
-        SET @Message = N'Lỗi catch !';
-        DECLARE @log_catch NVARCHAR(MAX) = CONCAT(@log, '- ,ERROR_MESSAGE: ', ERROR_MESSAGE(), ' ,ERROR_LINE: ', ERROR_LINE());
-        INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
-        VALUES (
-                   @StoreName -- Title - nvarchar(300)
-                 , @log_catch -- Error - nvarchar(max)
-                 , 1 -- Status - tinyint
-                 , GETDATE() -- TimeCreate - datetime
-               );
-    END CATCH;
-
-    SELECT
-        @ResultID AS ResultID
-      , @Message AS Message
-      , @RequestID AS ID
-      , @Data_Notification AS Data_Notification;
-END;
-GO
+            permission.getJobTitleByOffice('');
+            @{ 
+                if(!string.IsNullOrEmpty(typeId) && !string.IsNullOrEmpty(step))
+                {
+                    @:permission.getPermissionByStepAndType('@(typeId)','@(step)');
+                }
+            }
+        },
+        clickCllType: function (el) {
+            var id = $(el).data("id");
+            $(permission.elBtnCllType).text($(el).text());
+            $(permission.elInCllType).val(id);
+            $(permission.elDropCllType).toggleClass('show');
+            var numStep = jsData.category.fncFindCategory(id).StepNo || 0;
+            permission.createStep(numStep);
+        },
+        createStep: function (numStep) {
+            numStep = numStep || 0;
+            var html = "";
+            if (!isNaN(numStep)) {
+                numStep = parseInt(numStep);
+                var idx;
+                for (idx = 0; idx <= numStep ; idx++) {
+                    html += "<option value=\"" + idx + "\">" + idx + "</option>";
+                }
+            }
+            $(permission.elSlStepNo).html(html);
+        },
+        clickOrgType: function (el) {
+            var id = $(el).data("id") || "";
+            $(permission.elBtnOrgType).text($(el).text());
+            $(permission.elInOrgType).val(id);
+            $(permission.elDropOrgType).toggleClass('show');
+            permission.getJobTitleByOffice(id);
+        },
+        getJobTitleByOffice: function (officeCode) {
+            $(permission.elBtnOrgType).attr("disabled", "disabled");
+            ajaxObj.jsonPost("@Url.Action("GetJobTitleByOffice", "Permission")", { officeCode: officeCode}, data => {
+                if (data.error == 0) {
+                    if (data.html == "") {
+                        data.html = "<option disabled>Không có dữ liệu</option>";
+                    }
+                    $(permission.elSlJobTitle).empty();
+                    var clone = $(permission.elSlJobTitle).clone();
+                    $(permission.elSlJobTitle).selectpicker("destroy");
+                    $(permission.elSlJobTitle).replaceWith(clone);
+                    $(permission.elSlJobTitle).html(data.html);
+                    $(permission.elSlJobTitle).selectpicker("refesh");
+                    $(permission.elBtnOrgType).removeAttr("disabled");
+                }
+                else {
+                    messObj.fncCreate("Có lỗi xay ra khi lấy danh sách chức danh", messObj.types.warning);
+                }
+            })
+        },
+        getPermissionByStepAndType: function (typeId, stepNo) {
+            typeId = typeId || $(permission.elInCllType).val() || "";
+            stepNo = stepNo || $(permission.elSlStepNo).val() || "";
+            if (typeId == "") {
+                messObj.fncCreate("Chọn loại yêu cầu", messObj.types.warning);
+            }
+            if (stepNo == "") {
+                messObj.fncCreate("Chọn bước của yêu cầu", messObj.types.warning);
+            }
+            if (typeId != "" & stepNo != "") {
+                $(permission.elBtnSearch).attr("disabled", "disabled");
+                $(permission.elBtnConfimDel).removeAttr("disabled");
+                ajaxObj.jsonPost("@Url.Action("GetPermissionByStepAndType", "Permission")", { typeId: typeId, stepNo: stepNo }, data => {
+                    if (data.error == 0) {
+                        $(permission.elTblPermisssion + " tbody").empty().html(data.html);
+                    }
+                    else {
+                        messObj.fncCreate("Có lỗi xay ra khi lấy danh sách phân quyền", messObj.types.warning);
+                    }
+                    $(permission.elBtnSearch).removeAttr("disabled");
+                    $(permission.elBtnConfimDel).removeAttr("disabled");
+                })
+            }
+        },
+        exportPermission: function () {
+            var typeId = $(permission.elInCllType).val() || "0";
+            var stepNo =  $(permission.elSlStepNo).val() || "-1";
+            var url = "@Url.Action("ExportExcel","Permission")"
+            window.open(url + "?typeId=" + typeId + "&stepNo=" + stepNo,"_blank");
+        },
+        comfirmDelete: function () {
+            var checked = $(permission.elDeleteChecked + ":checked").length;
+            if (checked > 0) {
+                $("#modal-confirm-delete").modal('show');
+                $(permission.elBtnConfimDel).removeAttr("disabled");
+                $(permission.elModalCountChecked).html("Xác nhận xóa " + checked + " phân quyền");
+            }
+            else {
+                $("#modal-confirm-delete").modal('show');
+                $(permission.elBtnConfimDel).attr("disabled", "disabled");
+                $(permission.elModalCountChecked).html("Bạn chưa chọn phân quyền xần xóa");
+            }
+        },
+        deletePermission: function () {
+            var checked = $(permission.elDeleteChecked + ":checked");
+            if (checked.length > 0) {
+                permission.numDelete = checked.length;
+                $(permission.elBtnConfimDel).attr("disabled", "disabled");
+                $(permission.elBtnSearch).attr("disabled", "disabled");
+                $.each(checked, (idx, obj) => {
+                    var id = $(obj).data("id");
+                    ajaxObj.jsonPost("@Url.Action("Delete", "Permission")", { Id: id }, data => {
+                        permission.numDelete--;
+                        if (data.error == 0) {
+                            messObj.fncCreate(data.html, messObj.types.success);
+                            $(".tr-delete-" + id).remove();
+                        }
+                        else {
+                            messObj.fncCreate(data.html, messObj.types.warning);
+                        }
+                        if (permission.numDelete == 0) {
+                            $(permission.elBtnConfimDel).removeAttr("disabled");
+                            $(permission.elBtnSearch).removeAttr("disabled");
+                            $("#modal-confirm-delete").modal('hide');
+                        }
+                    }, (jqXHR, textStatus, errorThrown) => {
+                        permission.numDelete--;
+                        if (jqXHR.status == 401) {
+                            messObj.fncCreate("Phiên đăng nhập của bạn đã hết hạn vui lòng tải lại trang", messObj.types.error);
+                        } else if (jqXHR.status == 403) {
+                            messObj.fncCreate("Bạn không có quyền thực hiện hành động này", messObj.types.error);
+                        } else {
+                            messObj.fncCreate("Có lỗi xảy ra khi xóa phân quyền", messObj.types.warning);
+                        }
+                        if (permission.numDelete == 0) {
+                            $(permission.elBtnConfimDel).removeAttr("disabled");
+                            $(permission.elBtnSearch).removeAttr("disabled");
+                            $("#modal-confirm-delete").modal('hide');
+                        }
+                    });
+                });                      
+            }
+            else {
+                messObj.fncCreate("Chọn phân quyền cần xóa", messObj.types.warning);
+            }
+        }
+    }
+    objLayout.push(permission);
+</script>
 

@@ -1,349 +1,272 @@
 ﻿SET QUOTED_IDENTIFIER ON;
 SET ANSI_NULLS ON;
 GO
--- =============================================
--- Author:		<Author,,Name>
--- Create date: <Create Date,,>
--- Description:	<Description,,>
--- =============================================
-ALTER PROC dbo.sp_MdelPhar_Grab_Cancel_Delivery
-    @TransactionCode VARCHAR(100) = ''
-  , @Reason NVARCHAR(500) = ''
-  , @GrabStatus NVARCHAR(50) = ''
+ALTER PROC dbo.sp_CALLLOGPHAR_WEB_CreateCallLog_15 ( @Xmldata NVARCHAR(MAX) = '' )
 AS
 BEGIN
-    /*
-		Những case xử lý trong store:
-		1. Cancel
-		2. Indelivery
-		3. Complete
-	*/
-    -- Cancel, Indelivery, Complete
-    SET NOCOUNT ON;
-    INSERT INTO dbo.Logs ( Store, Message, CreateBy, CreateDate, IsSendMail )
+    DECLARE
+        @StoreName    VARCHAR(50)   = OBJECT_NAME(@@PROCID)
+      , @ErrorMessage NVARCHAR(MAX) = N'';
+    SET @ErrorMessage = CONCAT(@StoreName, ' @Xmldata=N''', @Xmldata, '''');
+    INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
     VALUES (
-               N'sp_MdelPhar_Grab_Cancel_Delivery' -- Store - nvarchar(max)
-             , CONCAT(N'@TransactionCode = ', @TransactionCode, ', @Reason = ', @Reason, ', @GrabStatus = ', @GrabStatus) -- Message - nvarchar(max)
-             , '' -- CreateBy - varchar(50)
-             , GETDATE() -- CreateDate - datetime
-             , NULL -- IsSendMail - bit
+               @StoreName -- Title - nvarchar(300)
+             , @ErrorMessage -- Error - nvarchar(max)
+             , 0 -- Status - tinyint
+             , GETDATE() -- TimeCreate - datetime
            );
+    DECLARE
+        @Out_Result    INT           = 0
+      , @Out_Msg       NVARCHAR(500) = N'Thất bại'
+      , @Out_RequestId BIGINT        = 0;
     BEGIN TRY
-        DECLARE @TransportStatus_New INT = 0;
 
-        DECLARE
-            @IDORDR          BIGINT     = 0
-          , @PosNum          INT
-          , @EcomNum         VARCHAR(50)
-          , @TransportStatus INT        = 0;
+        DECLARE @Xml_Data XML = @Xmldata;
 
         SELECT
-            @IDORDR = ID
-          , @PosNum = PosNum
-          , @EcomNum = EcomNum
-          , @TransportStatus = TransportStatus
+            Tbl.Col.value('SOEcom[1]', 'nvarchar(max)') AS SOEcom
+          , Tbl.Col.value('SOPOS[1]', 'nvarchar(max)') AS SOPOS
+          , Tbl.Col.value('GiaTriDonHang[1]', 'nvarchar(max)') AS GiaTriDonHang
+          , Tbl.Col.value('GiaTriThanhToanQuaCongAlepay[1]', 'nvarchar(max)') AS GiaTriThanhToanQuaCongAlepay
+          , Tbl.Col.value('LyDoHuy[1]', 'nvarchar(max)') AS LyDoHuy
+          , Tbl.Col.value('SoTienCanPhaiTra[1]', 'nvarchar(max)') AS SoTienCanPhaiTra
+          , Tbl.Col.value('SDTKH[1]', 'nvarchar(max)') AS SDTKH
+        INTO
+            #tmp_Details
         FROM
-            dbo.PE_ORDR ( NOLOCK )
-        WHERE
-            Transaction_Code_Grab = @TransactionCode;
-        --IF ( @IDORDR <> 0 )--AND @TransportStatus > 3 )
-        --BEGIN
-        --    SELECT
-        --        0 AS ResultID
-        --      , N'Không thể cập nhật hủy Grab sau trạng thái hoàn tất POS!' AS Message;
-        --    RETURN;
-        --END;
-        --ELSE 
-        IF ( @IDORDR <> 0 )
+            @Xml_Data.nodes('/CreatePharmacy_15_Req/Data/row') Tbl(Col);
+        IF EXISTS ( SELECT TOP 1 1 FROM #tmp_Details AS TD ( NOLOCK ))
         BEGIN
-            IF ( @TransportStatus = 0 )
-            BEGIN
-                SELECT 0 AS ResultID, N'Trạng thái Grab chưa được định nghĩa!' AS Message;
 
-                RETURN;
-            END;
-            IF NOT EXISTS (
-                              SELECT TOP 1
-                                     1
-                              FROM
-                                  dbo.DeliveryTransportInfo AS I ( NOLOCK )
-                              WHERE
-                                  I.IDORDR = @IDORDR
-                          )
-            BEGIN
-                INSERT INTO dbo.DeliveryTransportInfo ( IDORDR, PosNum, EcomNum, Status, CreateDateTime )
-                VALUES (
-                           @IDORDR -- IDORDR - bigint
-                         , @PosNum -- PosNum - bigint
-                         , @EcomNum -- EcomNum - varchar(50)
-                         , 1 -- Status - int
-                         , GETDATE() -- CreateDateTime - datetime
-                       );
-            END;
+            SELECT
+                Tbl.Col.value('NguoiTao[1]', 'varchar(50)') AS NguoiTao
+              , Tbl.Col.value('NoiTao[1]', 'nvarchar(50)') AS NoiTao
+              , Tbl.Col.value('TieuDe[1]', 'nvarchar(500)') AS TieuDe
+              , Tbl.Col.value('MaShopB1[1]', 'varchar(50)') AS MaShopB1
+              , Tbl.Col.value('Type[1]', 'int') AS Type -- 1: hủy đơn hàng, 2: trả hàng
+              , Tbl.Col.value('System[1]', 'varchar(50)') AS System
+            INTO
+                #Tmp_Info
+            FROM
+                @Xml_Data.nodes('/CreatePharmacy_15_Req') Tbl(Col);
 
             DECLARE
-                @Sql_Update_DeliveryTransportInfo NVARCHAR(MAX) = N''
-              , @ColumnUpdate                     NVARCHAR(50)  = N'';
-            SET @Sql_Update_DeliveryTransportInfo = CONCAT('UPDATE dbo.DeliveryTransportInfo SET {column} = GETDATE() WHERE IDORDR = ', @IDORDR);
-            SET @ColumnUpdate = CASE
-                                    WHEN @GrabStatus = 'QUEUEING' THEN 'QUEUEING'
-                                    WHEN @GrabStatus = 'ALLOCATING' THEN 'ALLOCATING' --4
-                                    WHEN @GrabStatus = 'PICKING_UP' THEN 'PICKING_UP'
-                                    WHEN @GrabStatus = 'IN_DELIVERY' THEN 'IN_DELIVERY'
-                                    WHEN @GrabStatus = 'COMPLETED' THEN 'COMPLETED'
-                                    WHEN @GrabStatus = 'CANCELED' THEN 'CANCELED'
-                                    WHEN @GrabStatus = 'IN_RETURN' THEN 'IN_RETURN'
-                                    WHEN @GrabStatus = 'RETURNED' THEN 'RETURNED'
-                                    WHEN @GrabStatus = 'FAILED' THEN 'FAILED'
-                                    ELSE ''
-                                END;
-            IF ( ISNULL(@ColumnUpdate, '') <> '' )
-            BEGIN
-                SET @Sql_Update_DeliveryTransportInfo = REPLACE(@Sql_Update_DeliveryTransportInfo, '{column}', @ColumnUpdate);
-            END;
-            PRINT @Sql_Update_DeliveryTransportInfo;
-            EXEC sys.sp_executesql @Sql_Update_DeliveryTransportInfo;
+                @NguoiTao VARCHAR(50)   = ''
+              , @NoiTao   VARCHAR(50)   = ''
+              , @MaShopB1 VARCHAR(50)   = ''
+              , @TieuDe   NVARCHAR(500) = N''
+              , @Type     INT           = 0
+              , @System   VARCHAR(50)   = '';
 
-            SET @TransportStatus_New = CASE
-                                           WHEN @GrabStatus = 'QUEUEING' THEN 3
-                                           WHEN @GrabStatus = 'ALLOCATING' THEN 3 --4
-                                           WHEN @GrabStatus = 'PICKING_UP' THEN 3
-                                           WHEN @GrabStatus = 'IN_DELIVERY' THEN 5
-                                           WHEN @GrabStatus = 'COMPLETED' THEN 6
-                                           WHEN @GrabStatus = 'CANCELED' THEN 4
-                                           WHEN @GrabStatus = 'IN_RETURN' THEN 4
-                                           WHEN @GrabStatus = 'RETURNED' THEN 9
-                                           WHEN @GrabStatus = 'FAILED' THEN 13
-                                           ELSE 0
-                                       END;
-            /*	Grab Status
-ALLOCATING : dang  tìm TX	
-PICKING_UP: tai xe da xac nhan
-IN_DELIVERY : tai xe dang chay giao
-COMPLETED : giao hang hoan tat
-CANCELED : do frt ra lenh cancel
-FAILED : khong tim duoc tai xe
-RETURNED: TX grab tra hang
-IN_RETURN: TX đang trả hàng
-*/
+            SELECT TOP 1
+                   @NguoiTao = NguoiTao
+                 , @NoiTao = NoiTao
+                 , @MaShopB1 = MaShopB1
+                 , @TieuDe = TieuDe
+                 , @Type = Type
+                 , @System = System
+            FROM
+                #Tmp_Info;
 
-            IF ( @GrabStatus IN ('FAILED'))
+            DROP TABLE #Tmp_Info;
+            DECLARE @typeId INT = 15; --Type Categories
+
+            DECLARE @Ids AS TABLE ( Id BIGINT );
+
+            INSERT INTO dbo.Requests
+            (
+                Sender
+              , StepNo
+              , Title
+              , StepStatus
+              , TimeCreate
+              , TimeAppear
+              , isHighlight
+              , isParent
+              , Status
+              , CreateBy
+              , TimeLastUpdate
+              , UpdateBy
+              , FromShop
+              , FromOffice
+              , ToShop
+              , ToOffice
+              , GroupId
+              , Remark
+              , Assigner
+              , TypeId
+              , TimeFutureFinish
+              , FromSystem
+            )
+            OUTPUT
+                Inserted.Id
+            INTO @Ids
+            SELECT
+                @NguoiTao
+              , 0 AS StepNo
+              , @TieuDe
+              , 1 AS StepStatus --cho xu ly
+              , GETDATE() AS TimeCreate
+              , GETDATE() AS TimeAppear
+              , 0 AS isHighlight
+              , 0 AS isParent
+              , 0 AS Status --UnAvaliable
+              , @NguoiTao AS CreateBy
+              , GETDATE() AS TimeLastUpdate
+              , @NguoiTao AS UpdateBy
+              , NULL
+              , NULL
+              , @MaShopB1
+              , NULL
+              , 0
+              , N'Có lỗi xảy ra - tạo yêu cầu thất bại'
+              , NULL
+              , @typeId
+              , NULL
+              , @System;
+
+            DECLARE @RequestId BIGINT = 0;
+            SELECT TOP 1 @RequestId = Id FROM @Ids;
+
+            IF ( @RequestId > 0 )
             BEGIN
+                INSERT INTO dbo.RequestDetails
+                (
+                    RequestId
+                  , Status
+                  , Property1
+                  , Property2
+                  , Property3
+                  , Property4
+                  , Property7
+                  , Money1
+                  , Money2
+                  , Money3
+                  , ItemId
+                )
+                SELECT
+                    @RequestId
+                  , 1
+                  , D.SOEcom
+                  , D.SOPOS
+                  , D.LyDoHuy
+                  , CASE WHEN @Type = 2 THEN 'HXL_1' ELSE NULL END
+                  , D.SDTKH
+                  , D.GiaTriDonHang
+                  , D.GiaTriThanhToanQuaCongAlepay
+                  , D.SoTienCanPhaiTra
+                  , @Type
+                FROM
+                    #tmp_Details AS D;
+
+                DECLARE @StepNo INT = CASE WHEN @Type = 2 THEN 2 ELSE 1 END;
+
+                UPDATE
+                    dbo.Requests
+                SET
+                    StepNo = @StepNo
+                  , Status = 1
+                  , Remark = CONCAT(N'-(', FORMAT(GETDATE(), 'dd/MM/yyyy hh:mm:ss'), '): ', @StoreName)
+                WHERE
+                    Id = @RequestId;
+
+                EXEC dbo.Assigners_InsertForRequest
+                    @RequestId = @RequestId -- bigint
+                  , @StepNo = @StepNo -- int
+                  , @Is_NotView = 1; -- bit
 
                 SELECT
-                    s.EmployeeCode AS UserID
-                  , a.Token
-                  , a.DeviceType
-                  , s.PosNum
-                  , s.EcomNum AS EcomNum
-                  , N'Đơn hàng giao hàng Grab ' + s.EcomNum + N' tìm tài xế thất bại hoặc bị tài xế hủy. Vui lòng chọn NV Shop tự giao' AS Mess
-                  , CASE WHEN a.UserID IS NULL THEN 'E' ELSE 'P' END AS NotifyStatus
-                INTO
-                    #tmp_Notify
-                FROM
-                    dbo.Assign_ORDR ( NOLOCK ) s
-                    INNER JOIN dbo.UserToken a ( NOLOCK ) ON s.EmployeeCode = a.UserID
-                WHERE
-                    s.IDORDR = @IDORDR;
+                    @Out_Result = 1 -- result - int
+                  , @Out_Msg = CONCAT(N'Tạo thành công yêu cầu số ', @RequestId) -- msg - nvarchar(500)
+                  , @Out_RequestId = @RequestId; -- requestId - bigint
 
-                CREATE TABLE #Tmp_PushNotiAPI
-                (
-                    Row INT IDENTITY(1, 1)
-                  , ID BIGINT
-                  , Messages NVARCHAR(1000)
-                  , Token NVARCHAR(1000)
-                );
+                EXEC dbo.Email_MakeByProcess
+                    @RequestId = @RequestId -- bigint
+                  , @Title = N'' -- nvarchar(300)
+                  , @TypeProcess = 1; -- int
 
-                INSERT INTO dbo.MDELPHAR_PUSHNOTIFY
-                (
-                    PosNum
-                  , EcomNum
-                  , UserCode
-                  , Title
-                  , Messages
-                  , Updatetdate
-                  , createdate
-                  , Status
-                  , Token
-                  , Dervicetype
-                  , comment
-                  , TThai
-                  , Typeapp
-                  , Sound
-                )
-                OUTPUT
-                    Inserted.ID
-                  , Inserted.Messages
-                  , Inserted.Token
-                INTO #Tmp_PushNotiAPI ( ID, Messages, Token )
-                SELECT DISTINCT
-                       a.PosNum AS PosNum
-                     , a.EcomNum AS EcomNum
-                     , a.UserID AS UserCode
-                     , N'MDel Thuốc' AS Title
-                     , a.Mess AS Messages
-                     , NULL AS UpdateDate
-                     , GETDATE() AS CreateDate
-                     , a.NotifyStatus AS STATUS
-                     , a.Token
-                     , a.DeviceType
-                     , NULL AS Commend
-                     , NULL AS TThai
-                     , 1 AS Typeapp
-                     , ''
-                FROM
-                    #tmp_Notify a
-                WHERE
-                    ISNULL(a.Token, '') <> '';
-
-                DECLARE
-                    @IndexN      INT = 1
-                  , @TotalIndexN INT = ( SELECT COUNT(1)FROM #Tmp_PushNotiAPI );
-
-                WHILE ( @IndexN <= @TotalIndexN )
+                IF @StepNo = 2
                 BEGIN
-                    DECLARE
-                        @strRes       NVARCHAR(3000)
-                      , @MessagesNoti NVARCHAR(2000)
-                      , @TokenNoti    NVARCHAR(1000)
-                      , @IDNoti       BIGINT;
-                    SELECT
-                        @IDNoti = ID
-                      , @MessagesNoti = Messages
-                      , @TokenNoti = Token
-                    FROM
-                        #Tmp_PushNotiAPI
-                    WHERE
-                        Row = @IndexN;
+                    INSERT INTO dbo.RequestSteps ( RequestId, StepNo, TimeStart, TimeEnd, Assigner, TimeCreate, Status )
+                    VALUES (
+                               @RequestId -- RequestId - bigint
+                             , 1 -- StepNo - int
+                             , GETDATE() -- TimeStart - datetime
+                             , GETDATE() -- TimeEnd - datetime
+                             , '-1' -- Assigner - varchar(40)
+                             , GETDATE() -- TimeCreate - datetime
+                             , 1 -- Status - tinyint
+                           );
 
-                    EXEC LOCAL.master.dbo.sp_MdelPhar_Send_Notification_Firebase
-                        @Title = N'MDel Thuốc' -- nvarchar(500)
-                      , @Messages = @MessagesNoti -- nvarchar(2000)
-                      , @Token = @TokenNoti -- nvarchar(1000)
-                      , @Sound = 'default.wav' -- varchar(200)
-                      , @TypeOrder = 'GrabCancel'
-                      , @strRes = @strRes OUTPUT; -- nvarchar(max)
-
-                    UPDATE
-                        dbo.MDELPHAR_PUSHNOTIFY
-                    SET
-                        Response = @strRes
-                      , Status = 'C'
-                      , Updatetdate = GETDATE()
-                    WHERE
-                        ID = @IDNoti;
-
-                    SET @IndexN += 1;
-                END;
-
-                DROP TABLE
-                    #Tmp_PushNotiAPI
-                  , #tmp_Notify;
-
-                -- update transportstatus
-                UPDATE
-                    dbo.PE_ORDR
-                SET
-                    TransportStatus = @TransportStatus_New
-                  , IsCancelGrab = 1
-                  , ReasonCancelGrab = @Reason
-                  -- TuanNA89 - 20/07/2021 - Thêm rule Grab hủy
-                  , TransportBy = NULL
-                WHERE
-                    Transaction_Code_Grab = @TransactionCode;
-            END;
-            ELSE
-            BEGIN
-                IF @GrabStatus = 'COMPLETED'
-                BEGIN
-                    DECLARE
-                        @DocType         VARCHAR(10)    = ''
-                      , @PaymentByGraber INT            = 0
-                      , @Money           NUMERIC(19, 0) = 0;
-
-                    SELECT TOP 1
-                           @DocType = O.DocType
-                    FROM
-                        [10.96.254.35].FRT_PHARMACY_BETA.dbo.Transporters_SO AS O ( NOLOCK )
-                    WHERE
-                        O.DocEntry_Ecom = @EcomNum
-                    ORDER BY
-                        O.ID DESC;
-
-                    SELECT TOP 1
-                           @Money = PO.TotalAmount
-                    FROM
-                        dbo.PE_ORDR AS PO ( NOLOCK )
-                    WHERE
-                        PO.EcomNum = @EcomNum
-                    ORDER BY
-                        PO.ID DESC;
-
-                    IF (( @DocType = '01' AND @Money > 2000000 ) OR @DocType = '05' )
+                    -- Gửi Notification + SMS
                     BEGIN
-                        SET @TransportStatus_New = 10;
+                        --DECLARE
+                        --    @Out_Result1 INT
+                        --  , @Out_Msg1    NVARCHAR(MAX);
+                        --EXEC master.dbo.sp_FRTCallLogPharmacy_CALLLOGPHAR_WEB_SendNotification_15
+                        --    @RequestId = @RequestId -- int
+                        --  , @User = '-1' -- varchar(50)
+                        --  , @Out_Result = @Out_Result1 OUTPUT -- int
+                        --  , @Out_Msg = @Out_Msg1 OUTPUT; -- nvarchar(max)
+                        --INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+                        --VALUES (
+                        --           @StoreName -- Title - nvarchar(300)
+                        --         , CONCAT(N'--Push notification: EXEC master.dbo.sp_FRTCallLogPharmacy_CALLLOGPHAR_WEB_SendNotification_15 @RequestID=', @RequestId, ',@UserCode=-1 --> Result: ', @Out_Result1, '-', @Out_Msg1) -- Error - nvarchar(max)
+                        --         , 0 -- Status - tinyint
+                        --         , GETDATE() -- TimeCreate - datetime
+                        --       );
+                        DECLARE
+                            @result           INT
+                          , @messages         NVARCHAR(500)
+                          , @id_log           BIGINT
+                          , @json_sms         NVARCHAR(MAX)  = N''
+                          , @SDTKH            VARCHAR(50)    = ''
+                          , @SO_Ecom          VARCHAR(50)    = ''
+                          , @SoTienCanPhaiTra NUMERIC(19, 0) = 0;
+
+                        SELECT TOP 1
+                               @SDTKH = RD.Property7
+                             , @SO_Ecom = RD.Property1
+                             , @SoTienCanPhaiTra = RD.Money3
+                        FROM
+                            dbo.RequestDetails AS RD ( NOLOCK )
+                        WHERE
+                            RD.RequestId = @RequestId;
+
+                        SET @json_sms = CONCAT(N'{"docNum": 0,"system":"CallLog","userID":"","cardCode":"","cardName":"", "sendTime":"","address": "', @SDTKH, '","templateId": "111","values": {"MA_DH": "', @SO_Ecom, '","SO_TIEN": "', FORMAT(@SoTienCanPhaiTra, 'N0'), '"}}');
+
+                        EXEC SV_THUC_MPOS.MPOS.dbo.push_notification_service
+                            @json_input = @json_sms; -- nvarchar(max)
+
+                        INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+                        VALUES (
+                                   @StoreName -- Title - nvarchar(300)
+                                 , CONCAT(N'--Push sms: EXEC master.dbo.push_notification_service @json_input=', @json_sms, '--> Result: ', @result, '-', @messages, '-', @id_log) -- Error - nvarchar(max)
+                                 , 0 -- Status - tinyint
+                                 , GETDATE() -- TimeCreate - datetime
+                               );
                     END;
                 END;
-
-                UPDATE
-                    dbo.PE_ORDR
-                SET
-                    TransportStatus = @TransportStatus_New
-                WHERE
-                    Transaction_Code_Grab = @TransactionCode;
             END;
-
-            INSERT INTO dbo.TransportStatus_Log
-            (
-                IDORDR
-              , PosNum
-              , EcomNum
-              , TransportStatus
-              , CreateBy
-              , CreateDate
-              , IsPull
-              , PullDate
-              , DeviceType
-              , VersionApp
-              , GrabStatus
-            )
-            SELECT
-                O.ID
-              , O.PosNum
-              , O.EcomNum
-              , @TransportStatus_New
-              , '-1'
-              , GETDATE()
-              , 0
-              , NULL
-              , NULL
-              , NULL
-              , @GrabStatus
-            FROM
-                dbo.PE_ORDR AS O ( NOLOCK )
-            WHERE
-                O.Transaction_Code_Grab = @TransactionCode;
-
-            SELECT 1 AS ResultID, N'Success' AS Message;
-            RETURN;
         END;
-        ELSE
-        BEGIN
-            SELECT 0 AS ResultID, N'Không tìm thấy đơn hàng!' AS Message;
-            RETURN;
-        END;
+
+        DROP TABLE #tmp_Details;
     END TRY
     BEGIN CATCH
-        INSERT INTO dbo.Logs ( Store, Message, CreateBy, CreateDate, IsSendMail )
+        INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
         VALUES (
-                   N'sp_MdelPhar_Grab_Cancel_Delivery' -- Store - nvarchar(max)
-                 , CONCAT(N'@TransactionCode = ', @TransactionCode, ', @Reason = ', @Reason, ', @GrabStatus = ', @GrabStatus, ' - error: ', ERROR_MESSAGE()) -- Message - nvarchar(max)
-                 , '' -- CreateBy - varchar(50)
-                 , GETDATE() -- CreateDate - datetime
-                 , NULL -- IsSendMail - bit
+                   @StoreName -- Title - nvarchar(300)
+                 , CONCAT(@ErrorMessage, ' - ', ERROR_MESSAGE()) -- Error - nvarchar(max)
+                 , 1 -- Status - tinyint
+                 , GETDATE() -- TimeCreate - datetime
                );
     END CATCH;
+    SELECT @Out_Result AS result, @Out_Msg AS msg, @Out_RequestId AS requestId;
 
 END;
+
+
+
+
 GO
 

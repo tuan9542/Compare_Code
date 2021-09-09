@@ -16,9 +16,12 @@ BEGIN
              , GETDATE() -- TimeCreate - datetime
            );
     DECLARE
-        @Out_Result    INT           = 0
-      , @Out_Msg       NVARCHAR(500) = N'Thất bại'
-      , @Out_RequestId BIGINT        = 0;
+        @Out_Result        INT           = 0
+      , @Out_Msg           NVARCHAR(500) = N'Thất bại'
+      , @Out_RequestId     BIGINT        = 0
+      , @Data_Notification NVARCHAR(MAX) = N'';
+
+
     BEGIN TRY
 
         DECLARE @Xml_Data XML = @Xmldata;
@@ -198,31 +201,16 @@ BEGIN
                              , 1 -- Status - tinyint
                            );
 
+                    DECLARE @UserCode VARCHAR(50) = '-1';
                     -- Gửi Notification + SMS
                     BEGIN
-                        --DECLARE
-                        --    @Out_Result1 INT
-                        --  , @Out_Msg1    NVARCHAR(MAX);
-                        --EXEC master.dbo.sp_FRTCallLogPharmacy_CALLLOGPHAR_WEB_SendNotification_15
-                        --    @RequestId = @RequestId -- int
-                        --  , @User = '-1' -- varchar(50)
-                        --  , @Out_Result = @Out_Result1 OUTPUT -- int
-                        --  , @Out_Msg = @Out_Msg1 OUTPUT; -- nvarchar(max)
-                        --INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
-                        --VALUES (
-                        --           @StoreName -- Title - nvarchar(300)
-                        --         , CONCAT(N'--Push notification: EXEC master.dbo.sp_FRTCallLogPharmacy_CALLLOGPHAR_WEB_SendNotification_15 @RequestID=', @RequestId, ',@UserCode=-1 --> Result: ', @Out_Result1, '-', @Out_Msg1) -- Error - nvarchar(max)
-                        --         , 0 -- Status - tinyint
-                        --         , GETDATE() -- TimeCreate - datetime
-                        --       );
                         DECLARE
-                            @result           INT
-                          , @messages         NVARCHAR(500)
-                          , @id_log           BIGINT
-                          , @json_sms         NVARCHAR(MAX)  = N''
+                            @json_sms         NVARCHAR(MAX)  = N''
                           , @SDTKH            VARCHAR(50)    = ''
                           , @SO_Ecom          VARCHAR(50)    = ''
-                          , @SoTienCanPhaiTra NUMERIC(19, 0) = 0;
+                          , @SoTienCanPhaiTra NUMERIC(19, 0) = 0
+                          , @Title            NVARCHAR(500)  = N''
+                          , @Body             NVARCHAR(500)  = N'';
 
                         SELECT TOP 1
                                @SDTKH = RD.Property7
@@ -233,18 +221,58 @@ BEGIN
                         WHERE
                             RD.RequestId = @RequestId;
 
-                        SET @json_sms = CONCAT(N'{"docNum": 0,"system":"CallLog","userID":"","cardCode":"","cardName":"", "sendTime":"","address": "', @SDTKH, '","templateId": "111","values": {"MA_DH": "', @SO_Ecom, '","SO_TIEN": "', FORMAT(@SoTienCanPhaiTra, 'N0'), '"}}');
+                        SET @Title = CONCAT(N'Bạn vừa Hủy/Trả đơn hàng ', @SO_Ecom);
+                        SET @Body = CONCAT(N'Nhà thuốc FPT Long Châu đã xử lý hoàn tiền cho Quý khách số tiền ', FORMAT(@SoTienCanPhaiTra, 'N0'), N'đ. Vui lòng kiểm tra số dư tài khoản với thẻ ATM từ 5-7 ngày, thẻ tín dụng vào kỳ sao kê gần nhất hoặc tối đa 45 ngày theo quy định ngân hàng.');
 
-                        EXEC SV_THUC_MPOS.MPOS.dbo.push_notification_service
-                            @json_input = @json_sms; -- nvarchar(max)
+                        SELECT
+                            @Data_Notification = N'{  "usercode": "{user}",
+  "fromSys": "Calllog",
+  "to": [
+    "{cusphone}"
+  ],
+  "sendTime": "",
+  "notification": {
+    "title": "{title}",
+    "body": "{body}",
+    "url": "",
+    "icon": "ORDER_RETURN",
+    "sound": "default",
+    "type": "ORDER"
+  },
+  "data": {
+    "title": "",
+    "body": "",
+    "type": "DETAIL_ORDER",
+    "typeOrder": "RETURN",
+    "idEvent": "{ecomnum}",
+    "flagButton": false,
+    "buttonName": ""
+  }
+}'                      ;
+                        SET @Data_Notification = REPLACE(@Data_Notification, '{user}', @UserCode);
+                        SET @Data_Notification = REPLACE(@Data_Notification, '{cusphone}', @SDTKH);
+                        SET @Data_Notification = REPLACE(@Data_Notification, '{title}', @Title);
+                        SET @Data_Notification = REPLACE(@Data_Notification, '{body}', @Body);
+                        SET @Data_Notification = REPLACE(@Data_Notification, '{ecomnum}', @SO_Ecom);
 
                         INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
                         VALUES (
                                    @StoreName -- Title - nvarchar(300)
-                                 , CONCAT(N'--Push sms: EXEC master.dbo.push_notification_service @json_input=', @json_sms, '--> Result: ', @result, '-', @messages, '-', @id_log) -- Error - nvarchar(max)
+                                 , CONCAT(N'--Push notification: body', @Data_Notification) -- Error - nvarchar(max)
                                  , 0 -- Status - tinyint
                                  , GETDATE() -- TimeCreate - datetime
                                );
+
+                        SET @json_sms = CONCAT(N'{"docNum": 0,"system":"CallLog","userID":"', @UserCode, '","cardCode":"","cardName":"", "sendTime":"","address": "', @SDTKH, '","templateId": "111","values": {"MA_DH": "', @SO_Ecom, '","SO_TIEN": "', FORMAT(@SoTienCanPhaiTra, 'N0'), '"}}');
+                        INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
+                        VALUES (
+                                   @StoreName -- Title - nvarchar(300)
+                                 , CONCAT(N'--Push sms: EXEC MPOS.dbo.push_notification_service @json_input=', @json_sms) -- Error - nvarchar(max)
+                                 , 0 -- Status - tinyint
+                                 , GETDATE() -- TimeCreate - datetime
+                               );
+
+                        EXEC MPOS.dbo.push_notification_service @json_input = @json_sms; -- nvarchar(max)
                     END;
                 END;
             END;
@@ -261,11 +289,13 @@ BEGIN
                  , GETDATE() -- TimeCreate - datetime
                );
     END CATCH;
-    SELECT @Out_Result AS result, @Out_Msg AS msg, @Out_RequestId AS requestId;
+    SELECT
+        @Out_Result AS result
+      , @Out_Msg AS msg
+      , @Out_RequestId AS requestId
+      , @Data_Notification AS Data_Notification;
 
 END;
-
-
 
 
 GO

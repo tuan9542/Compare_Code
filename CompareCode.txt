@@ -1,207 +1,244 @@
 ﻿SET QUOTED_IDENTIFIER ON;
 SET ANSI_NULLS ON;
 GO
-ALTER PROC dbo.sp_CALLLOGPHAR_WEB_CreateCallLog_15 ( @Xmldata NVARCHAR(MAX) = '' )
+ALTER PROC sp_CALLLOGPHAR_WEB_ChangeStep_15 ( @Data NVARCHAR(MAX) = '' )
 AS
 BEGIN
-    DECLARE
-        @StoreName    VARCHAR(50)   = OBJECT_NAME(@@PROCID)
-      , @ErrorMessage NVARCHAR(MAX) = N'';
-    SET @ErrorMessage = CONCAT(@StoreName, ' @Xmldata=N''', @Xmldata, '''');
+    DECLARE @StoreName NVARCHAR(50) = OBJECT_NAME(@@PROCID);
+    DECLARE @log NVARCHAR(MAX) = CONCAT(@StoreName, ' @Data=''', @Data, '''');
     INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
     VALUES (
                @StoreName -- Title - nvarchar(300)
-             , @ErrorMessage -- Error - nvarchar(max)
+             , @log -- Error - nvarchar(max)
              , 0 -- Status - tinyint
              , GETDATE() -- TimeCreate - datetime
            );
     DECLARE
-        @Out_Result        INT           = 0
-      , @Out_Msg           NVARCHAR(500) = N'Thất bại'
-      , @Out_RequestId     BIGINT        = 0
+        @ResultID          INT           = 0
+      , @Message           NVARCHAR(MAX) = N''
+      , @RequestID         INT           = 0
       , @Data_Notification NVARCHAR(MAX) = N'';
-
-
     BEGIN TRY
-
-        DECLARE @Xml_Data XML = @Xmldata;
-
-        SELECT
-            Tbl.Col.value('SOEcom[1]', 'nvarchar(max)') AS SOEcom
-          , Tbl.Col.value('SOPOS[1]', 'nvarchar(max)') AS SOPOS
-          , Tbl.Col.value('GiaTriDonHang[1]', 'nvarchar(max)') AS GiaTriDonHang
-          , Tbl.Col.value('GiaTriThanhToanQuaCongAlepay[1]', 'nvarchar(max)') AS GiaTriThanhToanQuaCongAlepay
-          , Tbl.Col.value('LyDoHuy[1]', 'nvarchar(max)') AS LyDoHuy
-          , Tbl.Col.value('SoTienCanPhaiTra[1]', 'nvarchar(max)') AS SoTienCanPhaiTra
-          , Tbl.Col.value('SDTKH[1]', 'nvarchar(max)') AS SDTKH
-        INTO
-            #tmp_Details
-        FROM
-            @Xml_Data.nodes('/CreatePharmacy_15_Req/Data/row') Tbl(Col);
-        IF EXISTS ( SELECT TOP 1 1 FROM #tmp_Details AS TD ( NOLOCK ))
+        DECLARE @Xml XML = @Data;
+        ---tao bien chua thong tin request------------------------------------------------------------------------------------
+        DECLARE
+            @StepNo     INT
+          , @UserCode   NVARCHAR(100)
+          , @TimeCreate DATETIME
+          , @sender     VARCHAR(50)
+          , @TypeId     INT = 15;
+        IF @Xml IS NOT NULL
+           AND @Xml.exist('*') <> 0
         BEGIN
-
+            ---lay du lieu tu xml-----------------------------------------------------------------------------
             SELECT
-                Tbl.Col.value('NguoiTao[1]', 'varchar(50)') AS NguoiTao
-              , Tbl.Col.value('NoiTao[1]', 'nvarchar(50)') AS NoiTao
-              , Tbl.Col.value('TieuDe[1]', 'nvarchar(500)') AS TieuDe
-              , Tbl.Col.value('MaShopB1[1]', 'varchar(50)') AS MaShopB1
-              , Tbl.Col.value('Type[1]', 'int') AS Type -- 1: hủy đơn hàng, 2: trả hàng
-              , Tbl.Col.value('System[1]', 'varchar(50)') AS System
+                T.C.value('(UserName/text())[1]', 'nvarchar(100)') AS Username
+              , T.C.value('(RequestId/text())[1]', 'int') AS RequestId
+              , T.C.value('(Type/text())[1]', 'int') AS Type
             INTO
-                #Tmp_Info
+                #tmp_Request_15
             FROM
-                @Xml_Data.nodes('/CreatePharmacy_15_Req') Tbl(Col);
-
-            DECLARE
-                @NguoiTao VARCHAR(50)   = ''
-              , @NoiTao   VARCHAR(50)   = ''
-              , @MaShopB1 VARCHAR(50)   = ''
-              , @TieuDe   NVARCHAR(500) = N''
-              , @Type     INT           = 0
-              , @System   VARCHAR(50)   = '';
+                @Xml.nodes('(Data)') T(C);
 
             SELECT TOP 1
-                   @NguoiTao = NguoiTao
-                 , @NoiTao = NoiTao
-                 , @MaShopB1 = MaShopB1
-                 , @TieuDe = TieuDe
-                 , @Type = Type
-                 , @System = System
+                   @RequestID = R.RequestId
+                 , @UserCode = R.Username
             FROM
-                #Tmp_Info;
-
-            DROP TABLE #Tmp_Info;
-            DECLARE @typeId INT = 15; --Type Categories
-
-            DECLARE @Ids AS TABLE ( Id BIGINT );
-
-            INSERT INTO dbo.Requests
-            (
-                Sender
-              , StepNo
-              , Title
-              , StepStatus
-              , TimeCreate
-              , TimeAppear
-              , isHighlight
-              , isParent
-              , Status
-              , CreateBy
-              , TimeLastUpdate
-              , UpdateBy
-              , FromShop
-              , FromOffice
-              , ToShop
-              , ToOffice
-              , GroupId
-              , Remark
-              , Assigner
-              , TypeId
-              , TimeFutureFinish
-              , FromSystem
-            )
-            OUTPUT
-                Inserted.Id
-            INTO @Ids
-            SELECT
-                @NguoiTao
-              , 0 AS StepNo
-              , @TieuDe
-              , 1 AS StepStatus --cho xu ly
-              , GETDATE() AS TimeCreate
-              , GETDATE() AS TimeAppear
-              , 0 AS isHighlight
-              , 0 AS isParent
-              , 0 AS Status --UnAvaliable
-              , @NguoiTao AS CreateBy
-              , GETDATE() AS TimeLastUpdate
-              , @NguoiTao AS UpdateBy
-              , NULL
-              , NULL
-              , @MaShopB1
-              , NULL
-              , 0
-              , N'Có lỗi xảy ra - tạo yêu cầu thất bại'
-              , NULL
-              , @typeId
-              , NULL
-              , @System;
-
-            DECLARE @RequestId BIGINT = 0;
-            SELECT TOP 1 @RequestId = Id FROM @Ids;
-
-            IF ( @RequestId > 0 )
+                #tmp_Request_15 R;
+            ---Neu co du lieu request-----------------------------------------------------------------------------------------------
+            IF EXISTS (
+                          SELECT TOP 1
+                                 1
+                          FROM
+                              dbo.Requests ( NOLOCK )
+                          WHERE
+                              Id = @RequestID
+                              AND TypeId = @TypeId
+                              AND Status < 4
+                      )
             BEGIN
-                INSERT INTO dbo.RequestDetails
-                (
-                    RequestId
-                  , Status
-                  , Property1
-                  , Property2
-                  , Property3
-                  , Property4
-                  , Property7
-                  , Money1
-                  , Money2
-                  , Money3
-                  , ItemId
-                )
-                SELECT
-                    @RequestId
-                  , 1
-                  , D.SOEcom
-                  , D.SOPOS
-                  , D.LyDoHuy
-                  , CASE WHEN @Type = 2 THEN 'HXL_1' ELSE NULL END
-                  , D.SDTKH
-                  , D.GiaTriDonHang
-                  , D.GiaTriThanhToanQuaCongAlepay
-                  , D.SoTienCanPhaiTra
-                  , @Type
+
+                SELECT TOP 1
+                       @StepNo = R.StepNo
+                     , @TimeCreate = R.TimeCreate
+                     , @sender = R.Sender
                 FROM
-                    #tmp_Details AS D;
-
-                DECLARE @StepNo INT = CASE WHEN @Type = 2 THEN 2 ELSE 1 END;
-
-                UPDATE
-                    dbo.Requests
-                SET
-                    StepNo = @StepNo
-                  , Status = 1
-                  , Remark = CONCAT(N'-(', FORMAT(GETDATE(), 'dd/MM/yyyy hh:mm:ss'), '): ', @StoreName)
+                    dbo.Requests R ( NOLOCK )
                 WHERE
-                    Id = @RequestId;
+                    Id = @RequestID;
 
-                EXEC dbo.Assigners_InsertForRequest
-                    @RequestId = @RequestId -- bigint
-                  , @StepNo = @StepNo -- int
-                  , @Is_NotView = 1; -- bit
-
+                ---CC----------------------------------------------------------------------------------------
                 SELECT
-                    @Out_Result = 1 -- result - int
-                  , @Out_Msg = CONCAT(N'Tạo thành công yêu cầu số ', @RequestId) -- msg - nvarchar(500)
-                  , @Out_RequestId = @RequestId; -- requestId - bigint
+                    T.C.value('(text())[1]', 'varchar(20)') AS Cc
+                INTO
+                    #tmp_CC
+                FROM
+                    @Xml.nodes('(Data/Cc/row)') T(C);
 
-                EXEC dbo.Email_MakeByProcess
-                    @RequestId = @RequestId -- bigint
-                  , @Title = N'' -- nvarchar(300)
-                  , @TypeProcess = 1; -- int
+                DELETE FROM #tmp_CC WHERE ISNULL(Cc, '') = '';
 
-                IF @StepNo = 2
+                DELETE
+                #tmp_CC
+                FROM
+                    #tmp_CC a
+                    LEFT JOIN dbo.F03_Employees b ( NOLOCK ) ON a.Cc = b.EmployeeCode
+                                                                AND b.Status = 'A'
+                WHERE
+                    b.EmployeeCode IS NULL;
+
+                DELETE
+                #tmp_CC
+                FROM
+                    #tmp_CC AS C
+                    INNER JOIN dbo.Assigners AS A ON A.EmployeeCode = C.Cc
+                WHERE
+                    A.RequestId = @RequestID
+                    AND A.StepNo = @StepNo
+                    AND A.Status = 1;
+
+                ---Files------------------------------------------------------------------------------------
+                SELECT
+                    T.C.value('(text())[1]', 'nvarchar(1000)') AS FileName
+                INTO
+                    #tmp_Files
+                FROM
+                    @Xml.nodes('(Data/FileNames/FileName)') T(C);
+
+                ---Insert thanh cong - insert thong tin lien quan ------------------------------------------------------------------------------------
+                IF EXISTS ( SELECT TOP 1 1 FROM #tmp_Request_15 )
                 BEGIN
-                    INSERT INTO dbo.RequestSteps ( RequestId, StepNo, TimeStart, TimeEnd, Assigner, TimeCreate, Status )
-                    VALUES (
-                               @RequestId -- RequestId - bigint
-                             , 1 -- StepNo - int
-                             , GETDATE() -- TimeStart - datetime
-                             , GETDATE() -- TimeEnd - datetime
-                             , '-1' -- Assigner - varchar(40)
-                             , GETDATE() -- TimeCreate - datetime
-                             , 1 -- Status - tinyint
-                           );
+                    ---Detail------------------------------------------------------------------------------------
+                    SELECT
+                        Tbl.Col.value('Id[1]', 'BIGINT') AS Id
+                      , Tbl.Col.value('HuongXuLy_Code[1]', 'nvarchar(50)') AS HuongXuLy_Code
+                      , Tbl.Col.value('SOEcom_new[1]', 'nvarchar(50)') AS SOEcom_New
+                      , Tbl.Col.value('SOPos_new[1]', 'nvarchar(50)') AS SOPos_new
+                    INTO
+                        #tmp_details
+                    FROM
+                        @Xml.nodes('Data/DetailsData/row') Tbl(Col);
 
-                    DECLARE @UserCode VARCHAR(50) = '-1';
+
+                    IF EXISTS ( SELECT TOP 1 1 FROM #tmp_details )
+                    BEGIN
+                        UPDATE
+                            R
+                        SET
+                            R.Property4 = D.HuongXuLy_Code
+                          , R.Property5 = D.SOEcom_New
+                          , R.Property6 = D.SOPos_new
+                        FROM
+                            #tmp_details AS D
+                            INNER JOIN dbo.RequestDetails R ( NOLOCK ) ON R.Id = D.Id
+                        WHERE
+                            R.RequestId = @RequestID;
+                    END;
+
+                    ---tao file đính kèm neu co -------------------------------------------------------------------
+                    IF EXISTS ( SELECT TOP 1 1 FROM #tmp_Files )
+                    BEGIN
+
+                        INSERT INTO dbo.FileAttachs
+                        (
+                            RequestId
+                          , RequestDetailId
+                          , StepNo
+                          , Uri
+                          , TimeCreate
+                          , CreateBy
+                          , Status
+                          , ApproveStatus
+                          , Domain
+                        )
+                        SELECT
+                            @RequestID
+                          , NULL
+                          , @StepNo
+                          , a.FileName
+                          , GETDATE()
+                          , @UserCode
+                          , 1
+                          , 0
+                          , NULL
+                        FROM
+                            #tmp_Files a;
+
+                    END;
+
+                    ---CC ------------------------------------------------------------------------------------------------
+                    IF EXISTS ( SELECT TOP 1 1 FROM #tmp_CC )
+                    BEGIN
+                        INSERT INTO dbo.Assigners
+                        (
+                            RequestId
+                          , EmployeeCode
+                          , StepNo
+                          , Type
+                          , Status
+                          , TimeCreate
+                          , GroupMail
+                          , IsRead
+                          , Requests_ARCH_Id
+                          , TypeId
+                        )
+                        SELECT DISTINCT
+                               @RequestID
+                             , a.Cc
+                             , 1
+                             , 2
+                             --1 nguoi xu ly , 2 cc
+                             , 1
+                             -- cho xu ly
+                             , GETDATE()
+                             , NULL
+                             , 0
+                             , NULL
+                             , 1
+                        FROM
+                            #tmp_CC a;
+                    END;
+
+                    -- update Calllog------------------------------------------------------------------
+
+                    DECLARE @NextStep INT = @StepNo + 1;
+
+                    UPDATE
+                        dbo.Requests
+                    SET
+                        StepNo = @NextStep
+                      , StepStatus = 2
+                      , Status = 2
+                    WHERE
+                        Id = @RequestID;
+
+
+                    --SELECT @NextStep
+                    EXEC dbo.Assigners_InsertForRequest
+                        @RequestId = @RequestID
+                      -- bigint
+                      , @StepNo = @NextStep
+                      -- int
+                      , @Is_NotView = 1; -- bit
+
+                    EXEC dbo.RequestStep_Insert
+                        @RequestId = @RequestID -- bigint
+                      , @StepNo = @StepNo -- int
+                      , @User = @UserCode; -- varchar(50)
+
+                    EXEC dbo.RequestStep_Insert
+                        @RequestId = @RequestID -- bigint
+                      , @StepNo = @NextStep -- int
+                      , @User = NULL; -- varchar(50)
+
+                    ---insert bang gui mail---------------------------------------------------------------------------------
+                    EXEC dbo.Email_MakeByProcess
+                        @RequestId = @RequestID -- bigint
+                      , @Title = N'' -- nvarchar(300)
+                      , @TypeProcess = 5; -- int
+
+                    ---tra ve thong bao
+                    SET @Message = N'Chuyển bước Calllog ' + CONVERT(VARCHAR(20), @RequestID) + N' thành công! <br/>';
+
                     -- Gửi Notification + SMS
                     BEGIN
                         DECLARE
@@ -219,7 +256,7 @@ BEGIN
                         FROM
                             dbo.RequestDetails AS RD ( NOLOCK )
                         WHERE
-                            RD.RequestId = @RequestId;
+                            RD.RequestId = @RequestID;
 
                         SET @Title = CONCAT(N'Bạn vừa Hủy/Trả đơn hàng ', @SO_Ecom);
                         SET @Body = CONCAT(N'Nhà thuốc FPT Long Châu đã xử lý hoàn tiền cho Quý khách số tiền ', FORMAT(@SoTienCanPhaiTra, 'N0'), N'đ. Vui lòng kiểm tra số dư tài khoản với thẻ ATM từ 5-7 ngày, thẻ tín dụng vào kỳ sao kê gần nhất hoặc tối đa 45 ngày theo quy định ngân hàng.');
@@ -249,6 +286,10 @@ BEGIN
     "buttonName": ""
   }
 }'                      ;
+                        --SET @SDTKH = '0352483751';
+                        --SET @Title = N'test DB';
+                        --SET @Body = N'testDB';
+
                         SET @Data_Notification = REPLACE(@Data_Notification, '{user}', @UserCode);
                         SET @Data_Notification = REPLACE(@Data_Notification, '{cusphone}', @SDTKH);
                         SET @Data_Notification = REPLACE(@Data_Notification, '{title}', @Title);
@@ -274,29 +315,48 @@ BEGIN
 
                         EXEC MPOS.dbo.push_notification_service @json_input = @json_sms; -- nvarchar(max)
                     END;
-                END;
-            END;
-        END;
 
-        DROP TABLE #tmp_Details;
+                    SET @ResultID = 1;
+
+                    DROP TABLE #tmp_details;
+                END;
+                ---Xoa bang------------------------------------------------------------------------------------
+                DROP TABLE
+                    #tmp_CC
+                  , #tmp_Files;
+            END;
+            ELSE
+            BEGIN
+                SET @Message = N'Chuyển bước tất bại<br/> Không tìm thấy thông tin calllog';
+            END;
+
+            ---Xoa bang------------------------------------------------------------------------------------
+            DROP TABLE #tmp_Request_15;
+
+        END;
+        ELSE
+        BEGIN
+            SET @Message = N'Chuyển bước thất bại<br/> Không lấy trích được thông tin calllog';
+        END;
     END TRY
     BEGIN CATCH
+        SET @ResultID = 0;
+        SET @Message = N'Lỗi catch !';
+        DECLARE @log_catch NVARCHAR(MAX) = CONCAT(@log, '- ,ERROR_MESSAGE: ', ERROR_MESSAGE(), ' ,ERROR_LINE: ', ERROR_LINE());
         INSERT INTO dbo.Logs ( Title, Error, Status, TimeCreate )
         VALUES (
                    @StoreName -- Title - nvarchar(300)
-                 , CONCAT(@ErrorMessage, ' - ', ERROR_MESSAGE()) -- Error - nvarchar(max)
+                 , @log_catch -- Error - nvarchar(max)
                  , 1 -- Status - tinyint
                  , GETDATE() -- TimeCreate - datetime
                );
     END CATCH;
+
     SELECT
-        @Out_Result AS result
-      , @Out_Msg AS msg
-      , @Out_RequestId AS requestId
+        @ResultID AS ResultID
+      , @Message AS Message
+      , @RequestID AS ID
       , @Data_Notification AS Data_Notification;
-
 END;
-
-
 GO
 

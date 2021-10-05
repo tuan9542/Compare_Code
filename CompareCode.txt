@@ -1,682 +1,841 @@
-﻿
-@{
-    ViewBag.Title = "Index";
-    string typeId = TempData.GetData<string>("TypeId");
-    string step = TempData.GetData<string>("Step");
-}
-<style>
-    select:required:invalid {
-       box-shadow:none;
-    }
-    .modify{
-        position:absolute;
-        top:0;
-        right:0;
-        bottom:0;
-        left:0;
-        background:#000;
-        opacity:0.5;
-        text-align:center;
-        z-index:100;
-        display:none;
-        color:#FFF;
-    }
-</style>
+﻿SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;
+GO
+ALTER PROC [dbo].[sp_MDELPHAR_POS_ORDR_Shipping_Notify]
+(
+    @ShopCode VARCHAR(10)
+  , @SOPos BIGINT
+  , @CustomerName NVARCHAR(100)
+  , @Type TINYINT
+  , @UpdateBy VARCHAR(40)
+  , @OriginFrom TINYINT = 0 --0 Ecom , 1 : POS
+  , @Deposit NUMERIC(19, 6) = 0 -- tien dat coc
+  , @Result INT OUTPUT
+  , @Msg NVARCHAR(1000) OUTPUT
+)
+AS
+BEGIN
+    --ANHTVH - 20180521 - POS hoan tat DH -> MDel ke0 lai detail tu pos + cap nhat trang thai 2->3 (tai nha ) , 2->10 (tai shop) + push notify + send sms
+    --ANTVHH - 20180710 - add Nguon DH tu POS
+    --//////////////////////////////////////////////////////
+    --ANHTVH - add 20180711 -- Them Chuc Danh phan quyen
+    --00619	NV Thủ Quỹ
+    --00653	Thủ Quỹ_BK
 
-<div class="row">
-    <div class="col-md-12">
-        <form action="#" method="post" autocomplete="off" id="frm-assign">
-            <div class="p-2 mb-3 border position-relative box-shadow-bottom" style="background:#FFF">
-                <h5>Phân công</h5>
-                <hr class="mt-2 mb-0" />
-                <div class="form-row mb-1">
-                    <div class="form-group col-md-6 mb-0 position-relative">
-                        <div class="modify"></div>
-                        <label for="CalllogType" class="mb-0 col-form-label-sm">Loại yêu cầu </label>
-                        <div class="dropdown">
-                            <button onclick="$('.dropdown-calllog-type').toggleClass('show')"
-                                    class="form-control form-control-sm  text-left"
-                                    type="button" id="btn-calllog-type" aria-haspopup="true" aria-expanded="false">
-                                Chọn loại yêu cầu
-                                <span class="dropdown-toggle float-right"></span>
-                            </button>
+    DECLARE @step NVARCHAR(100) = N'Begin';
+    DECLARE @store NVARCHAR(MAX) = N'sp_MDELPHAR_POS_ORDR_Shipping_Notify @ShopCode=' + ISNULL(@ShopCode, '') + N',@SOPos=' + ISNULL(CONVERT(VARCHAR(20), @SOPos), '') + N',@CustomerName=' + ISNULL(@CustomerName, '') + N',@Type=' + ISNULL(CONVERT(VARCHAR(20), @Type), '') + N',@UpdateBy=' + ISNULL(@UpdateBy, '') + N',@OriginFrom=' + ISNULL(CONVERT(VARCHAR(20), @OriginFrom), '') + N'' + N',@Deposit=' + ISNULL(CONVERT(VARCHAR(20), @Deposit), '') + N'';
 
-                            <div class="dropdown-menu dropdown-calllog-type w-100 p-2"
-                                 style="overflow:scroll;max-height:400px;" aria-labelledby="btn-calllog-type">
-                            </div>
-                        </div>
-                        <input type="text" hidden id="in-calllog-type" required data-error-valueMissing="Chọn loại yêu cầu" name="TypeId"
-                               class="form-control form-control-sm bg-transparent  f-validate" value="">
-                    </div>
-                    <div class="form-group col-md-6 mb-0">
-                        <label class="mb-0 col-form-label-sm">Phân cấp tổ chức</label>
-                        <div class="dropdown">
-                            <div class="input-group">
-                                <button onclick="$('.dropdown-org-type').toggleClass('show')"
-                                        class="form-control form-control-sm  text-left"
-                                        type="button" id="btn-org-type" aria-haspopup="true" aria-expanded="false">
-                                    Tất cả phân cấp
-                                    <span class="dropdown-toggle float-right"></span>
-                                </button>
-                                <div class="input-group-append">
-                                    <button onclick="assignment.refeshOrg();"
-                                            id="btn-org-refesh" class="btn btn-sm border " type="button">
-                                        <i style="color:rgba(0,0,0,0.7)" class="fas fa-redo-alt"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="dropdown-menu dropdown-org-type w-100 p-2"
-                                 style="overflow:scroll;max-height:400px;" aria-labelledby="btn-calllog-type">
-                            </div>
-                        </div>
-                        <input type="hidden" name="OrgCode" class="form-control form-control-sm bg-transparent " id="in-org-type">
-                    </div>
-                </div>
-                <div class="form-row mb-1">
-                    <div class="form-group col-md-6 mb-0 position-relative">
-                        <div class="modify">Nhấn <i style="color:rgba(255,255,255,1)" class="fas fa-times"></i> ở ID phân công để tắt chỉnh sửa</div>
-                        <label for="CalllogType" class="mb-0 col-form-label-sm">Bước </label>
-                        <select id="sl-stepno" onchange="assignment.getJobTitle()"
-                                name="StepNo" required data-error-valueMissing="Chọn bước của yêu cầu"
-                                class="form-control form-control-sm  f-validate">
-                            <option value="" disabled selected>Chọn loại yêu cầu</option>
-                        </select>
-                    </div>
-                    <div class="form-group col-md-6 mb-0">
-                        <label class="mb-0 col-form-label-sm">Vùng miền</label>
-                        <div class="dropdown">
-                            <div class="input-group">
-                                <button onclick="$('.dropdown-region-type').toggleClass('show')"
-                                        class="form-control form-control-sm  text-left"
-                                        type="button" id="btn-region-type" aria-haspopup="true" aria-expanded="false">
-                                    Tất cả vùng miền
-                                    <span class="dropdown-toggle float-right"></span>
-                                </button>
-                                <div class="input-group-append">
-                                    <button onclick="assignment.refeshRegion();"
-                                            id="btn-region-refesh" class="btn btn-sm border " type="button">
-                                        <i style="color:rgba(0,0,0,0.7)" class="fas fa-redo-alt"></i>
-                                    </button>
-                                </div>
-                            </div>
+    INSERT INTO dbo.Logs ( Store, Message, CreateBy, CreateDate, IsSendMail )
+    VALUES (
+               @store -- Store - nvarchar(max)
+             , N'Log' -- Message - nvarchar(max)
+             , '13689' -- CreateBy - varchar(50)
+             , GETDATE() -- CreateDate - datetime
+             , NULL -- IsSendMail - bit
+           );
 
-                            <div class="dropdown-menu dropdown-region-type w-100 p-2"
-                                 aria-labelledby="btn-calllog-type">
-                            </div>
-                        </div>
-                        <input type="hidden" name="Shop" class="form-control form-control-sm bg-transparent " id="in-region-type">
-                    </div>
-                </div>
-                <div class="form-row mb-1 " style="min-height:62px">
+    SET @Result = 0;
+    SET @Msg = '';
+    BEGIN TRY
+        DECLARE
+            @IDORDR        INT
+          , @EcomNum       VARCHAR(50)
+          , @TransportType VARCHAR(1)
+          , @CustPhone     VARCHAR(20);
 
-                    <div class="form-group col-md-6 mb-0 position-relative">
-                        <div class="modify"></div>
-                        <label class="mb-0 col-form-label-sm">Chức danh</label>
-                        <select name="JobTitle" onchange="assignment.getEmployee();"
-                                required data-error-valueMissing="Chọn chức danh phân công" title="Chọn bước xử lý"
-                                data-style="bg-transparent border " class="form-control form-control-sm  f-validate selectpicker"
-                                id="sl-jobtitle" style="height:31px" data-live-search="true" data-selected-text-format="count > 3" data-actions-box="true">
-                            <option disabled value="">Chưa có dữ liệu</option>
-                        </select>
-                    </div>
-                    <div class="form-group col-md-6 mb-0">
-                        <label class="mb-0 col-form-label-sm">Hệ thống </label>
-                        <select name="ItemId" class="form-control form-control-sm " id="sl-item">
-                            <option value="0" selected>Tất cả hệ thống</option>
-                        </select>
-                    </div>
-                </div>
+        IF ISNULL(@OriginFrom, 0) = 0
+        BEGIN
+            SELECT TOP 1
+                   @IDORDR = ID
+                 , @EcomNum = EcomNum
+                 , @TransportType = TransportType
+                 , @CustPhone = CustPhone
+            FROM
+                dbo.PE_ORDR a ( NOLOCK )
+            WHERE
+                a.PosNum = @SOPos
+                AND TransportStatus = 2;
+        END;
+        ELSE IF ISNULL(@OriginFrom, 0) = 1
+        BEGIN
+            SELECT TOP 1
+                   @IDORDR = ID
+                 , @EcomNum = EcomNum
+                 , @TransportType = TransportType
+                 , @CustPhone = CustPhone
+            FROM
+                dbo.PE_ORDR a ( NOLOCK )
+            WHERE
+                a.PosNum = @SOPos;
+        END;
+        PRINT CONCAT('ID =', @IDORDR, '-', @SOPos);
+        IF ( ISNULL(@OriginFrom, 0) = 0 AND ISNULL(@IDORDR, 0) <> 0 ) --TU ECOM 
+           OR ( ISNULL(@OriginFrom, 0) = 1 AND ISNULL(@IDORDR, 0) = 0 ) --TU POS 20180704
+        BEGIN
+            SELECT TOP 0
+                   CONVERT(INT, NULL) AS SoDonHangPOS
+                 , CONVERT(DECIMAL(19, 6), NULL) AS TongTien
+                 , CONVERT(INT, NULL) AS LineNum
+                 , CONVERT(VARCHAR(30), NULL) AS ItemCode
+                 , CONVERT(NVARCHAR(250), NULL) AS ItemName
+                 , CONVERT(INT, NULL) AS SoLuong
+                 , CONVERT(INT, NULL) AS MaDonViTinh
+                 , CONVERT(NVARCHAR(250), NULL) AS TenDonViTinh
+                 , CONVERT(VARCHAR(30), NULL) AS Kho
+                 , CONVERT(DECIMAL(19, 6), NULL) AS GiamGia
+                 , CONVERT(DECIMAL(19, 6), NULL) AS KhuyenMai
+                 , CONVERT(DECIMAL(19, 6), NULL) AS DonGia
+                 , CONVERT(DECIMAL(19, 6), NULL) AS ThanhTien
+                 , CONVERT(VARCHAR(1), NULL) AS LoaiSanPham
+                 , CONVERT(NVARCHAR(100), NULL) AS TenKhachHang
+                 , CONVERT(VARCHAR(11), NULL) AS SoDienThoaiKH
+                 , CONVERT(NVARCHAR(200), NULL) AS DiaChiKhachHang
+                 , CONVERT(VARCHAR(40), NULL) AS NhanVienBanHang
+                 , CONVERT(VARCHAR(20), NULL) AS MaShop
+                 , CONVERT(DATETIME, NULL) AS NgayTaoDH
+                 , CONVERT(NVARCHAR(500), NULL) AS GhiChu
+                 , CONVERT(DATETIME, NULL) AS ThoiGianGiaoHang
+                 , CONVERT(VARCHAR(20), NULL) AS NguoiGiaoHang
+                 , CONVERT(VARCHAR(100), NULL) AS HoaDonGiaoHang
+            INTO
+                #tmp_POSRDR1;
 
-                <div class="form-row mb-1" style="min-height:62px">
-                    <div class="form-group col-md-6 mb-0">
-                        <label class="mb-0 col-form-label-sm">Người xử lý</label>
-                        <select name="Employee"
-                                required data-error-valueMissing="Chọn người xử lý" title="Chọn chức danh"
-                                data-style="bg-transparent border " class="form-control form-control-sm  f-validate selectpicker"
-                                id="sl-empl" style="height:31px" data-live-search="true">
-                            <option value="" disabled>Chưa có dữ liệu</option>
-                        </select>
-                    </div>
-                    <div class="form-group col-md-6 mb-0">
-                        <label class="mb-0 col-form-label-sm">ID Phân công</label>
-                        <div class="input-group">
-                            <input name="Id" value="0" id="assignment-id" type="text" readonly class="form-control form-control-sm " />
-                            <div class="input-group-append">
-                                <button onclick="assignment.cancelModify()" title="Hủy chỉnh sửa"
-                                        id="btn-region-refesh" class="btn btn-sm border " type="button">
-                                    <i style="color:rgba(0,0,0,0.7)" class="fas fa-times"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            IF ISNULL(@OriginFrom, 0) = 0
+               AND ISNULL(@IDORDR, 0) <> 0 --TU ECOM
+            BEGIN
+                INSERT INTO #tmp_POSRDR1
+                EXEC FRT_PHARMACY_ECOM.dbo.sp_Get_Info_Finished_SO
+                    @NumEcom = @EcomNum -- varchar(20)      
+                  , @SOPos = ''; -- varchar(50)				    
+            END;
+            ELSE IF ISNULL(@OriginFrom, 0) = 1
+                    AND ISNULL(@IDORDR, 0) = 0 --TU POS
+            BEGIN
+                INSERT INTO #tmp_POSRDR1
+                EXEC FRT_PHARMACY_ECOM.dbo.sp_Get_Info_Finished_SO
+                    @NumEcom = '' -- varchar(20)
+                  , @SOPos = @SOPos; -- varchar(50)
+            END;
 
-            </div>
-            <div class="text-center mt-1">
-                <button id="btn-search" class="btn border-0 btn-success bg-success-custom box-shadow mr-2" type="button"
-                        onclick="assignment.getAssignmentByTypeStepJob();">
-                    <i class="fas fa-search"></i>
-                    Tìm kiếm
-                </button>
+            IF EXISTS ( SELECT TOP 1 1 FROM #tmp_POSRDR1 a WHERE a.SoDonHangPOS = @SOPos )
+            BEGIN
+                SET @step = N'Check Exist';
+                DECLARE @OrderAmount DECIMAL(19, 6) = ( SELECT TOP 1 a.TongTien FROM #tmp_POSRDR1 a ); --- POS day ve phi giao hang theo dang line sp -- tong tien da co phi giao hang  
+                DECLARE @PromotAmount DECIMAL(19, 6) = (
+                                                           SELECT TOP 1
+                                                                  SUM(ISNULL(a.GiamGia, 0) + ISNULL(a.KhuyenMai, 0)) AS PromotAmount
+                                                           FROM
+                                                               #tmp_POSRDR1 a
+                                                       );
+                DECLARE @TransportFee DECIMAL(19, 6) = (
+                                                           SELECT TOP 1
+                                                                  SUM(ISNULL(a.DonGia, 0) * ISNULL(a.SoLuong, 0)) AS TransportFee
+                                                           FROM
+                                                               #tmp_POSRDR1 a
+                                                           WHERE
+                                                               a.ItemCode = '00015952'
+                                                       );
 
-                <button class="btn border-0 btn-success bg-success-custom box-shadow mr-2" type="button" id="btn-create"
-                        onclick="assignment.updateAssignment();">
-                    <i class="far fa-save"></i>
-                    Tạo mới
-                </button>
-                <button class="btn border-0 btn-success bg-success-custom box-shadow mr-2" type="button"
-                        onclick="window.location.reload()">
-                    <i class="fas fa-sync"></i>
-                    Refesh
-                </button>
-                <button class="btn border-0 btn-success bg-success-custom box-shadow mr-2" type="button"
-                        onclick="assignment.exportAssignments()">
-                    <i class="fas fa-file-export"></i>
-                    Xuất Excel
-                </button>
-                <button class="btn border-0 btn-success bg-success-custom box-shadow" type="button"
-                        onclick="assignment.comfirmDelete();"
-                        data-toggle="modal" data-target="#modal-confirm-delete">
-                    <i class="far fa-trash-alt"></i>
-                    Xóa phân công
-                </button>
-            </div>
-        </form>
-        <div class="table-wrapper">
-            <table id="table-assignment" class="table table-bordered table-sm mt-3 font-weight-normal" style="background:#FFF">
-                <thead>
-                    <tr>
-                        <th class="">#</th>
-                        <th class="">Nhóm y/c</th>
-                        <th class="">Loại y/c</th>
-                        <th class="">Bước</th>
+                --Tu Ecom
+                IF ISNULL(@OriginFrom, 0) = 0
+                   AND ISNULL(@IDORDR, 0) <> 0
+                BEGIN
+                    ---TranportType : 1-Tại nhà 2-Tại shop
+                    UPDATE
+                        dbo.PE_ORDR
+                    SET
+                        TransportStatus = CASE
+                                              WHEN TransportType = '1' THEN 3
+                                              WHEN TransportType = '2' THEN 10
+                                              ELSE TransportStatus
+                                          END
+                      , UpdateBy = @UpdateBy
+                      , UpdateDate = GETDATE()
+                      , CompleteDate = CASE WHEN TransportType = '2' THEN GETDATE()ELSE CompleteDate END
+                      , PosCompleteDate = GETDATE()
+                      , PosCompleteBy = @UpdateBy
+                      , OrderAmount = @OrderAmount + @PromotAmount - ISNULL(@TransportFee, 0)
+                      , PromotAmount = @PromotAmount
+                      , TotalAmount = @OrderAmount
+                      , TransportFee = ISNULL(@TransportFee, 0)
+                    WHERE
+                        ID = @IDORDR
+                        AND TransportStatus = 2;
+                    --- update tu pos
+                    UPDATE
+                        dbo.PE_ORDR
+                    SET
+                        PaymentByGraber_POS = S.PaymentByGraber
+                    FROM
+                        dbo.PE_ORDR AS R
+                        INNER JOIN FRT_PHARMACY.dbo.Transporters_SO AS S ON R.EcomNum = S.DocEntry_Ecom
+                    WHERE
+                        R.ID = @IDORDR;
+                    PRINT 1;
+                    UPDATE
+                        dbo.PE_ORDR
+                    SET
+                        U_StatusPOS = O.U_Status
+                      , DocType_POS = O.DocType
+                    FROM
+                        dbo.PE_ORDR AS R
+                        INNER JOIN FRT_PHARMACY.dbo.ORDR AS O ON O.NumEcom = TRY_CAST(R.EcomNum AS BIGINT)
+                    WHERE
+                        R.ID = @IDORDR;
 
 
-                        <th class="">Chức danh</th>
-                        <th class="">Người xử lý</th>
-
-                        <th class="">Phân cấp t/c</th>
-                        <th class="">Số shop</th>
-                        <th class="">Hệ thống</th>
-                        <th class="">Nguồn tiếp nhận</th>
-                        <th class="">
-                            <input onchange="$(assignment.chkDelete).prop('checked', $(this).prop('checked'))" autocomplete="off" type="checkbox" id="delete-checked-all" />
-                        </th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td></td>
-                        <td colspan="10">Chưa có dữ liệu</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-<div id="modal-confirm-delete" class="modal" tabindex="-1" role="dialog">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Xác nhận xóa phân công</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <p id="modal-body-count"></p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" onclick="assignment.deleteAssignment();"
-                        id="btn-confirm-delete" class="btn btn-primary">
-                    Xác nhận
-                </button>
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Đóng</button>
-            </div>
-        </div>
-    </div>
-</div>
+                    IF @ShopCode = '80039'
+                       AND EXISTS (
+                                      SELECT
+                                          1
+                                      FROM
+                                          dbo.PE_ORDR ( NOLOCK )
+                                      WHERE
+                                          ID = @IDORDR
+                                          AND TransportType = '1'
+                                  )
+                    BEGIN
 
 
-<script>
-    var assignment = {
-        inAssgnId:"#assignment-id",
-        dropdType: ".dropdown-calllog-type",
-        slStep: "#sl-stepno",
-        btnType: "#btn-calllog-type",
-        inType: "#in-calllog-type",
-        treeType: new jsTree(),
-        dropdOrg: ".dropdown-org-type",
-        btnOrg: "#btn-org-type",
-        inOrg: "#in-org-type",
-        treeOrg: new jsTree(),
-        dropdRegion: ".dropdown-region-type",
-        btnRegion: "#btn-region-type",
-        inRegion: "#in-region-type",
-        treeRegion: new jsTreeCheckbox(),
-        slItem: "#sl-item",
-        slJob: "#sl-jobtitle",
-        slEmpl: "#sl-empl",
-        tblAssgn: "#table-assignment",
-        btnRefeOrg: "#btn-org-refesh",
-        btnRefeRegion: "#btn-region-refesh",
-        chkCheckedAll: "#delete-checked-all",
-        chkDelete: ".delete-checked",
-        btnConfirmDel: "#btn-confirm-delete",
-        modalCountDel: "#modal-body-count",
-        frmAssign: "#frm-assign",
-        btnCreate:"#btn-create",
-        loadJob: true,
-        loadEmp: true,
-        loadAssign: true,
-        numDelete:0,
-        init: function () {
-            //#type treeview
-            var types = jsData.category.categories().map(t => { return { "ParentId": t.ParentId, "Label": t.Description, "Id": t.Id } });
-            $(assignment.dropdType).append(assignment.treeType.treeChosen(types, "0", null, "assignment.treeTypeClick"));
-            //#endregion treeview
+                        INSERT INTO dbo.Assign_ORDR
+                        (
+                            IDORDR
+                          , PosNum
+                          , EcomNum
+                          , EmployeeCode
+                          , EmployeeName
+                          , EmployeeType
+                          , IsDelete
+                          , Note
+                          , CreateDate
+                          , CreateBy
+                        )
+                        SELECT DISTINCT
+                               @IDORDR
+                             , @SOPos
+                             , @EcomNum
+                             , c.EmployeeCode
+                             , b.EmployeeName
+                             , 1
+                             , 0
+                             , 'add sm/psm lc3,lc4 xu ly dh lc39'
+                             , GETDATE()
+                             , '-1'
+                        FROM
+                            dbo.F03_Employees b ( NOLOCK )
+                            INNER JOIN dbo.F03_EmployeeJobTitles c ( NOLOCK ) ON c.EmployeeCode = b.EmployeeCode
+                                                                                 AND c.Status = 'A'
+                                                                                 AND c.JobTitleCode IN ('00620', '00621', '00737', '00790', '00791')
+                        WHERE
+                            b.WarehouseCode IN ('80303', '80304')
+                            AND b.Status = 'A';
 
-            //#region GetOrganization
-            ajaxObj.jsonPost("@Url.Action("GetOrganization", "Assignments")", {}, data => {
-                if (data.error == 0) {
-                    $(assignment.dropdOrg).append(assignment.treeOrg.treeChosen(data.html, "0", null, "assignment.treeOrgClick"));
-                }
-                else {
-                    messObj.fncCreate("Có lỗi xay ra khi lấy danh sách tổ chức", messObj.types.warning);
-                }
-            })
-            //#GetOrganization
+                    END;
 
-            //#region GetRegion
-            ajaxObj.jsonPost("@Url.Action("GetRegion", "Assignments")", {}, data => {
-                if (data.error == 0) {
-                    var treeData = "<div class=\"w-100\">";
-                    treeData += "<input type=\"text\" onkeyup=\"assignment.treeRegionSearch(this);\" class=\"form-control form-control-sm mb-1\" placeholder=\"Nhập nội dung tìm kiếm\" />";
-                    treeData += "</div>";
-                    treeData += "<div style=\"overflow:scroll;max-height:400px;\"" + assignment.treeRegion.treeCheckbox(data.html, "0", null) + "</div>";
-                    $(assignment.dropdRegion).append(treeData);
-                    assignment.treeRegion.treeCheckboxChange(assignment.treeRegionChange);
-                }
-                else {
-                    messObj.fncCreate("Có lỗi xay ra khi lấy danh sách vùng miền", messObj.types.warning);
-                }
-            })
-            //#GetRegion
+                    SET @step = N'Update ORDR';
 
-            //#region close dropdown menu
-            $(document).click(evt => {
-                var target = $(evt.target);
-                if (target.closest('.dropdown-org-type').length == 0 && target.get(0).id != 'btn-org-type') {
-                    $(".dropdown-org-type").removeClass('show');
-                }
-                if (target.closest('.dropdown-calllog-type').length == 0 && target.get(0).id != 'btn-calllog-type') {
-                    $(".dropdown-calllog-type").removeClass('show');
-                }
-                if (target.closest('.dropdown-region-type').length == 0 && target.get(0).id != 'btn-region-type') {
-                    $(".dropdown-region-type").removeClass('show');
-                }
-            });
-            //#endregion close dropdown menu
-        },
+                    DELETE FROM dbo.PE_RDR1 WHERE IDHeader = @IDORDR;
+                    SET @step = N'Delete RDR1';
 
-        //#region treeTypeClick
-        treeTypeClick: function (el) {
-            var id = $(el).data("id");
-            $(assignment.btnType).text($(el).text());
-            $(assignment.inType).val(id);
-            $(assignment.dropdType).toggleClass('show');
-            var numStep = jsData.category.fncFindCategory(id).StepNo || 0;
-            assignment.createStep(numStep);
-            assignment.getItem(id);
-        },
-        //#endregion treeTypeClick
+                    INSERT INTO dbo.PE_RDR1
+                    (
+                        IDHeader
+                      , PosNum
+                      , EcomNum
+                      , ItemCode
+                      , ItemName
+                      , Quantity
+                      , Unit
+                      , UnitName
+                      , Price
+                      , WhsCode
+                      , LineNum
+                      , Discount
+                      , Discount_Promotion
+                      , IsPromot
+                      , CreateDate
+                      , IsPos
+                    )
+                    SELECT
+                        @IDORDR AS IDHeader
+                      , a.SoDonHangPOS AS PosNum
+                      , @EcomNum AS EcomNum
+                      , a.ItemCode
+                      , a.ItemName
+                      , a.SoLuong
+                      , a.MaDonViTinh
+                      , a.TenDonViTinh
+                      , a.DonGia
+                      , a.Kho
+                      , a.LineNum
+                      , a.GiamGia
+                      , a.KhuyenMai
+                      , a.LoaiSanPham
+                      , GETDATE()
+                      , 1 AS IsPos
+                    FROM
+                        #tmp_POSRDR1 a;
 
-        //#region createStep
-        createStep: function (numStep) {
-            numStep = numStep || 0;
-            var html = "";
-            if (!isNaN(numStep)) {
-                numStep = parseInt(numStep);
-                var idx;
-                var html = "<option value=\"-1\">Hãy chọn bước</option>";;
-                for (idx = 0; idx <= numStep; idx++) {
-                    selected = "";
-                    //if (idx == 0) {
-                    //    selected = "selected"
-                    //}
-                    html += "<option value=\"" + idx + "\" " + selected + ">" + idx + "</option>";
-                }
-            }
-            $(assignment.slStep).html(html);
-        },
-        //#endregion createStep
+                    SET @step = N'Insert RDR1';
 
-        //#region getItem
-        getItem: function (type) {
-            type = type || 0;
-            var html = "<option value=\"0\">Tất cả hệ thống</option>";
-            if (!isNaN(type)) {
-                var items = jsData.group.fncGetGroup(type);
-                $.each(items, (idx, obj) => {
-                    html += "<option value=\"" + obj.Id + "\">" + obj.Name + "</option>";
-                });
-            }
-            $(assignment.slItem).html(html);
-        },
-        //#endregion getItem
+                    INSERT INTO dbo.TransportStatus_Log ( IDORDR, PosNum, EcomNum, TransportStatus, CreateBy, CreateDate )
+                    VALUES (
+                               @IDORDR -- IDORDR - int
+                             , @SOPos -- PosNum - int
+                             , @EcomNum -- EcomNum - varchar(50)
+                             , 3 -- TransportStatus - int
+                             , @UpdateBy -- CreateBy - varchar(40)
+                             , GETDATE() -- CreateDate - datetime
+                           );
 
-        //#region getJobTitle
-        getJobTitle: function () {
-            var stepNo = $(assignment.slStep).val() || "";
-            var typeId = $(assignment.inType).val() || "";
-            if (stepNo != "" && typeId != "") {
-                assignment.loadJob = true;
-                ajaxObj.jsonPost("@Url.Action("GetJobTitleByStepAndType", "Assignments")", { typeId: typeId, stepNo: stepNo }, data => {
-                    if (data.error == 0) {
-                        if (data.html == "") {
-                            data.html = "<option value=\"\" disabled>Không tìm thấy chức danh</option>";
-                        }
-                        $(assignment.slJob).empty();
-                        var clone = $(assignment.slJob).clone();
-                        $(assignment.slJob).selectpicker('destroy');
-                        $(assignment.slJob).replaceWith(clone);
-                        $(assignment.slJob).html(data.html);
-                        $(assignment.slJob).selectpicker('refesh');
-                    }
-                    else {
-                        messObj.fncCreate(data.html, messObj.types.warning);
-                    }
-                    assignment.loadJob = false;
-                })
-            }
-        },
-        //#region getJobTitle
+                    IF @TransportType = '2'
+                    BEGIN
+                        INSERT INTO dbo.TransportStatus_Log ( IDORDR, PosNum, EcomNum, TransportStatus, CreateBy, CreateDate )
+                        VALUES (
+                                   @IDORDR -- IDORDR - int
+                                 , @SOPos -- PosNum - int
+                                 , @EcomNum -- EcomNum - varchar(50)
+                                 , 10 -- TransportStatus - int
+                                 , @UpdateBy -- CreateBy - varchar(40)
+                                 , GETDATE() -- CreateDate - datetime
+                               );
+                    END;
 
-        //#region getEmployee
-        getEmployee: function () {
-            var jobTitle = $(assignment.slJob).val() || "";
-            if (jobTitle != "") {
-                assignment.loadEmp = true;
-                ajaxObj.jsonPost("@Url.Action("GetEmployeeByJobtitle", "Assignments")", { jobTitle: jobTitle }, data => {
-                    if (data.error == 0) {
-                        if (data.html == "") {
-                            data.html = "<option value=\"\" disabled>Không tìm thấy nhân viên</option>";
-                        }
-                        $(assignment.slEmpl).empty();
-                        var clone = $(assignment.slEmpl).clone();
-                        $(assignment.slEmpl).selectpicker('destroy');
-                        $(assignment.slEmpl).replaceWith(clone);
-                        $(assignment.slEmpl).html(data.html);
-                        $(assignment.slEmpl).selectpicker('refesh');
-                    }
-                    else {
-                        messObj.fncCreate(data.html, messObj.types.warning);
-                    }
-                    assignment.loadEmp = false;
-                })
-            }
-        },
-        //#region getEmployee
+                    SET @step = N'Insert TranportStatus';
+                END;
+                ELSE IF ISNULL(@OriginFrom, 0) = 1
+                        AND ISNULL(@IDORDR, 0) = 0 --Tu POS
+                BEGIN
+                    DECLARE @TenKhachHang NVARCHAR(100);
+                    DECLARE @SoDienThoaiKH VARCHAR(11);
+                    DECLARE @DiaChiKhachHang NVARCHAR(200);
+                    DECLARE @NhanVienBanHang VARCHAR(40);
+                    DECLARE @MaShop VARCHAR(20);
+                    DECLARE @NgayTaoDH DATETIME;
+                    DECLARE @GhiChu NVARCHAR(500);
+                    DECLARE @ThoiGianGiaoHang DATETIME;
+                    DECLARE @NguoiGiaoHang VARCHAR(20);
+                    DECLARE @HoaDonGiaoHang VARCHAR(100);
+                    DECLARE @ShopManager NVARCHAR(300);
+                    DECLARE @SaleMan NVARCHAR(300);
+                    DECLARE @TransportByName NVARCHAR(300);
 
-        //#region GetAssignmentByTypeStepJob
-        getAssignmentByTypeStepJob: function () {
-            var jobTitle = $(assignment.slJob).val() || "";
-            var stepNo = $(assignment.slStep).val() || -1;
-            var typeId = $(assignment.inType).val() || 0;
-            if (typeId != 0) {
-                assignment.loadAssign = true;
-                ajaxObj.jsonPost("@Url.Action("GetAssignmentByTypeStepJob", "Assignments")", { typeId: typeId, stepNo: stepNo, jobTitle: jobTitle }, data => {
-                    if (data.error == 0) {
-                        var html = "";
-                        var idxNum = 1;
-                        $.each(data.html, (idx, obj) => {
-                            html += "<tr>";
-                            html += "<td>" + idxNum + "</td>";
-                            html += "<td>" + obj.Group + "</td>";
-                            html += "<td>" + obj.Type + "</td>";
-                            html += "<td>" + obj.StepNo + "</td>";
-                            html += "<td>" + obj.JobTitleName + "</td>";
-                            html += "<td>" + obj.Employee + "</td>";
-                            html += "<td>" + obj.Organization + "</td>";
-                            html += "<td>" + obj.CountShop + "</td>";
-                            html += "<td>" + obj.ItemName + "</td>";
-                            html += "<td>" + obj.Source + "</td>";
-                            html += "<td>";
-                            html += "<a href=\"javascript:void(0)\" class=\"link-modify\" data-id=\"" + obj.Id + "\"";
-                            html += "onclick=\"assignment.updateView('" + obj.Id + "','" + obj.TypeId + "','" + obj.StepNo + "','" + obj.JobTitle + "','" + obj.Assigner + "','" + obj.Shop + "','" + obj.OrgCode + "','" + obj.ItemId + "')\"";
-                            html += "><i class=\"far fa-edit\"></i>";
-                            html += "</a> | ";
-                            html += "<label><input type=\"checkbox\" class=\"delete-checked\" data-id=\"" + obj.Id + "\"></label>";
-                            html += "</td>";
-                            html += "</tr>";
-                            idxNum++;
-                        });
-                        if (html == "") {
-                            html += "<tr";
-                            html += "<td>";
-                            html += "</td>";
-                            html += "<td colspan=\"10\">Không tìm thấy dữ liệu</td>";
-                            html += "</tr>";
-                        }
+                    SELECT TOP 1
+                           @TenKhachHang = a.TenKhachHang
+                         , @SoDienThoaiKH = a.SoDienThoaiKH
+                         , @DiaChiKhachHang = a.DiaChiKhachHang
+                         , @NhanVienBanHang = a.NhanVienBanHang
+                         , @MaShop = a.MaShop
+                         , @NgayTaoDH = a.NgayTaoDH
+                         , @GhiChu = a.GhiChu
+                         , @ThoiGianGiaoHang = a.ThoiGianGiaoHang
+                         , @NguoiGiaoHang = a.NguoiGiaoHang
+                         , @HoaDonGiaoHang = a.HoaDonGiaoHang
+                    FROM
+                        #tmp_POSRDR1 a;
 
-                        $(assignment.tblAssgn + " tbody").html(html);
-                    }
-                    else {
-                        messObj.fncCreate("Có lỗi xảy ra khi lấy danh sách phân quyền", messObj.types.warning);
-                    }
-                    assignment.loadJob = false;
-                });
-            }
-            else {
-                messObj.fncCreate("Vui lòng chọn loại yêu cầu", messObj.types.warning);
-            }
-        },
-        //#region GetAssignmentByTypeStepJob
+                    IF EXISTS ( SELECT TOP 1 1 FROM #tmp_POSRDR1 WHERE ISNULL(DiaChiKhachHang, '') = '' )
+                    BEGIN
+                        INSERT INTO dbo.Logs ( Store, Message, CreateBy, CreateDate, IsSendMail )
+                        VALUES (
+                                   N'FRT_PHARMACY_ECOM.dbo.sp_Get_Info_Finished_SO @NumEcom = '''', @SOPOS = ' + CONVERT(VARCHAR(20), @SOPos) -- Store - nvarchar(max)
+                                 , N'K co dia chi' -- Message - nvarchar(max)
+                                 , 'ANHTVH-10616' -- CreateBy - varchar(50)
+                                 , GETDATE() -- CreateDate - datetime
+                                 , 0 -- IsSendMail - bit
+                               );
+                    END;
 
-        //#region treeOrgClick
-        treeOrgClick: function (el) {
-            var id = $(el).data("id");
-            $(assignment.btnOrg).text($(el).text());
-            $(assignment.inOrg).val(id);
-            $(assignment.dropdOrg).toggleClass('show');
-        },
-        //#endregion treeOrgClick
+                    SELECT
+                        b.EmployeeCode
+                      , b.EmployeeName
+                      , b.JobTitle
+                      , @SOPos AS SoPOs
+                    INTO
+                        #tmp_Assign
+                    FROM
+                        dbo.F03_Employees b ( NOLOCK )
+                        INNER JOIN dbo.F03_JobTitles c ( NOLOCK ) ON b.JobTitle = c.JobTitleCode
+                                                                     AND c.JobTitleCode IN ('00620', '00621', '00612', '00653', '00619', '00615', '00667', '00613', '00736', '00737', '00723', '00740', '00640', '00614', '00764', '00769', '00772', '00790', '00791', '00773')
+                                                                     AND b.Status = 'A'
+                    WHERE
+                        b.WarehouseCode = @MaShop;
 
-        //#region treeOrgClick
-        treeRegionChange: function () {
-            var data = assignment.treeRegion.getData();
-            $(assignment.inRegion).val(data);
-            var shop = data.filter(w => w.charAt(0) == 's');
-            $(assignment.btnRegion).text('Bạn đã chọn ' + shop.length + " shop");
-        },
-        //#endregion treeOrgClick
 
-        //#region treeOrgClick
-        treeRegionSearch: function (el) {
-            var text = $(el).val();
-            setTimeout(() => { assignment.treeRegion.search(text); }, 500);
-        },
-        //#endregion treeOrgClick
 
-        //#region updateView
-        updateView: function (id, typeId, stepNo, jobTitle, assigner, shop, orgCode, itemId) {
-            $(".modify").fadeIn(500);
-            $(assignment.btnCreate).html("<i class=\"far fa-save\"></i> Cập nhật");
 
-            orgCode = orgCode || "";
-            itemId = itemId || "";
-            shop = shop || "";
-            assignment.loadJob = true;
-            assignment.loadEmp = true;
+                    --Lay Ma - Ten QL
+                    SET @ShopManager = (
+                                           SELECT TOP 1
+                                                  ISNULL(a.EmployeeCode, '') + ' - ' + ISNULL(a.EmployeeName, '') AS ShopManager
+                                           FROM
+                                               #tmp_Assign a
+                                           WHERE
+                                               a.JobTitle = '00621'
+                                       );
 
-            $(assignment.inAssgnId).val(id);
-            $("." + assignment.treeType.clssNote).filter('[data-id="' + typeId + '"]').trigger('click');
-            $(assignment.slStep).val(stepNo).trigger('change');
+                    --Lay Ma - Ten NVBH
+                    IF ISNULL(@NhanVienBanHang, '') <> ''
+                    BEGIN
+                        SET @SaleMan = (
+                                           SELECT TOP 1
+                                                  ISNULL(a.EmployeeCode, '') + ' - ' + ISNULL(a.EmployeeName, '') AS SaleMan
+                                           FROM
+                                               dbo.Inside_F03_Employees a ( NOLOCK )
+                                           WHERE
+                                               a.EmployeeCode = @NhanVienBanHang
+                                       );
+                    END;
 
-            var timeJob = setInterval(() => {
-                if (!assignment.loadJob) {
-                    $(assignment.slJob).selectpicker('val', jobTitle);
-                    clearInterval(timeJob);
-                }
-                
-            }, 10);
-            var timeEmp = setInterval(() => {
-                if (!assignment.loadJob && !assignment.loadEmp) {
-                    $(assignment.slEmpl).selectpicker('val', assigner);
-                    clearInterval(timeEmp);
-                }
-            }, 10);
+                    --Lay Ten NVGH
+                    IF ISNULL(@NguoiGiaoHang, '') <> ''
+                    BEGIN
+                        SET @TransportByName = (
+                                                   SELECT TOP 1
+                                                          ISNULL(a.EmployeeName, '') AS TransportByName
+                                                   FROM
+                                                       dbo.F03_Employees a ( NOLOCK )
+                                                   WHERE
+                                                       a.EmployeeCode = @NguoiGiaoHang
+                                               );
+                    END;
 
-            
-            if (shop != "") {
-                var arrShop = shop.split(',');
-                $.each(arrShop, (idx, obj) => {
-                    var checkbox = $("." + assignment.treeRegion.clssContainer + " .tree-node-checkbox").filter('[data-id="s' + obj + '"]');
-                    checkbox.prop("checked", true).trigger("change");
-                });
-            }
-            else {
-                $(assignment.btnRefeRegion).trigger("click");
-            }
+                    SELECT TOP 0
+                           CONVERT(INT, NULL) AS IDHeader
+                         , CONVERT(NVARCHAR(50), NULL) AS EcomNum
+                         , CONVERT(INT, NULL) AS PosNum
+                    INTO
+                        #tmp_ID;
 
-            if (orgCode == "") {
-                $(assignment.btnRefeOrg).trigger("click");
-            }
-            else {
-                $("." + assignment.treeOrg.clssNote).filter('[data-id="' + orgCode + '"]').trigger('click');
-            }
+                    --insert ordr
+                    INSERT INTO dbo.PE_ORDR
+                    (
+                        PosNum
+                      , EcomNum
+                      , CustName
+                      , CustPhone
+                      , SaleMan
+                      , ShopCode
+                      , OrderDate
+                      , TransportFee
+                      , CustAddress
+                      , TransportType
+                      , Note
+                      , PromotCode
+                      , PromotAmount
+                      , OrderStatus
+                      , CreateDate
+                      , ShopManager
+                      , TransportBy
+                      , TransportDate
+                      , TransportStatus
+                      , TransportImage1
+                      , TransportImage2
+                      , TransportImage3
+                      , RejectType
+                      , RejectReason
+                      , CompleteTransport
+                      , UpdateBy
+                      , UpdateDate
+                      , CancelReason
+                      , OrderAmount
+                      , TotalAmount
+                      , DownPayment
+                      , ModifyType
+                      , EcomTrsprtDate
+                      , OriginFrom
+                      , TransportBill
+                      , PosCompleteBy
+                      , PosCompleteDate
+                      , UpdateBy1
+                      , UpdateDate1
+                      , Deposit
+                    )
+                    OUTPUT
+                        INSERTED.ID
+                      , INSERTED.EcomNum
+                      , INSERTED.PosNum
+                    INTO #tmp_ID ( IDHeader, EcomNum, PosNum )
+                    SELECT
+                        @SOPos AS PosNum
+                      , 'POS1_' + CONVERT(VARCHAR(20), @SOPos) AS EcomNum
+                      , @TenKhachHang AS CustName
+                      , @SoDienThoaiKH AS CustPhone
+                      , @SaleMan AS SaleMan
+                      , @MaShop AS ShopCode
+                      , @NgayTaoDH AS Order_CreateDate
+                      , ISNULL(@TransportFee, 0) AS TransportFee
+                      , @DiaChiKhachHang AS CustAddress
+                      , '1' AS TransportType --Giao tai nha
+                      , @GhiChu AS Note
+                      , '' AS PromotCode
+                      , @PromotAmount AS PromotAmount
+                      , N'POS Hoàn tất' AS OrderStatus
+                      , GETDATE() AS CreateDate
+                      , @ShopManager AS ShopManager
+                      , ISNULL(@NguoiGiaoHang, '') + ' - ' + @TransportByName AS TransportBy
+                      , @ThoiGianGiaoHang AS TransportDate
+                      , CASE
+                            WHEN @NguoiGiaoHang IN ('00590', '00617', '01588', '04879') THEN 13 --GNH or ViettelPOST or VNCPOST
+                            WHEN ISNULL(@NguoiGiaoHang, '') <> ''
+                                 AND @NguoiGiaoHang NOT IN ('00590', '00617', '01588', '04879') THEN 4
+                            ELSE 3
+                        END AS TransportStatus
+                      , '' AS TransportImage1
+                      , '' AS TransportImage2
+                      , '' AS TransportImage3
+                      , 0 AS RejectType
+                      , '' AS RejectReason
+                      , NULL AS CompleteTransport
+                      , @UpdateBy AS UpdateBy
+                      , GETDATE() AS UpdateDate
+                      , '' AS CancelReason
+                      , @OrderAmount + ISNULL(@PromotAmount, 0) - ISNULL(@TransportFee, 0) + ISNULL(@Deposit, 0) AS OrderAmount
+                      , @OrderAmount AS TotalAmount
+                      , 0 AS DownPayment
+                      , 0 AS ModifyType
+                      , @ThoiGianGiaoHang AS EcomTrsprtDate
+                      , 1 AS OriginFrom --Ecom : 0 , POS : 1
+                      , @HoaDonGiaoHang AS TransportBill
+                      , @UpdateBy AS PosCompleteBy
+                      , GETDATE() AS PosCompleteDate
+                      , @UpdateBy AS UpdateBy1
+                      , GETDATE() AS UpdateDate1
+                      , @Deposit AS Deposit;
 
-            if (itemId == "0") {
-                console.log(itemId);
-                $(assignment.slItem + " option[value='']").prop('selected', true);
-            }
-            else {
-                $(assignment.slItem).val(itemId).trigger("change");
-            }
-            
-        },
-        //#endregion treeOrgClick
+                    SET @IDORDR = ( SELECT TOP 1 IDHeader FROM #tmp_ID );
+                    SET @EcomNum = ( SELECT TOP 1 EcomNum FROM #tmp_ID );
+                    SET @step = N'Insert ORDR';
 
-        refeshOrg: function () {
-            $(assignment.btnOrg).text("Tất cả phân cấp");
-            $(assignment.inOrg).val("");
-        },
+                    --insert rdr1
+                    INSERT INTO dbo.PE_RDR1
+                    (
+                        IDHeader
+                      , PosNum
+                      , EcomNum
+                      , ItemCode
+                      , ItemName
+                      , Quantity
+                      , Unit
+                      , UnitName
+                      , Price
+                      , WhsCode
+                      , LineNum
+                      , Discount
+                      , Discount_Promotion
+                      , IsPromot
+                      , CreateDate
+                      , IsPos
+                    )
+                    SELECT
+                        @IDORDR AS IDHeader
+                      , a.SoDonHangPOS AS PosNum
+                      , @EcomNum AS EcomNum
+                      , a.ItemCode
+                      , a.ItemName
+                      , a.SoLuong
+                      , a.MaDonViTinh
+                      , a.TenDonViTinh
+                      , a.DonGia
+                      , a.Kho
+                      , a.LineNum
+                      , a.GiamGia
+                      , a.KhuyenMai
+                      , a.LoaiSanPham
+                      , GETDATE()
+                      , 1 AS IsPos
+                    FROM
+                        #tmp_POSRDR1 a;
+                    SET @step = N'Insert RDR1';
 
-        refeshRegion: function () {
-            assignment.treeRegion.deselectAll();
-            $(assignment.btnRegion).text("Tất cả vùng miền");
-            $(assignment.inRegion).val("");
-        },
+                    --insert assign
+                    INSERT INTO dbo.Assign_ORDR
+                    (
+                        IDORDR
+                      , PosNum
+                      , EcomNum
+                      , EmployeeCode
+                      , EmployeeName
+                      , EmployeeType
+                      , IsDelete
+                      , Note
+                      , CreateDate
+                      , CreateBy
+                      , UpdateBy
+                      , UpdateDate
+                    )
+                    SELECT DISTINCT
+                           b.IDHeader
+                         , b.PosNum AS PosNum
+                         , b.EcomNum
+                         , a.EmployeeCode
+                         , a.EmployeeName
+                         , CASE
+                               WHEN a.JobTitle IN ('00621', '00615', '00667', '00613', '00736', '00737', '00640', '00790', '00791') THEN 1
+                               WHEN a.JobTitle = '00620' THEN 2
+                               WHEN a.JobTitle IN ('00612', '00723', '00764', '00769', '00772', '00773') THEN 4
+                               WHEN a.JobTitle = '00619' THEN 5
+                               WHEN a.JobTitle IN ('00653', '00740', '00614') THEN 6
+                               ELSE 0
+                           END AS EmployeeType -- 1 Truong quan ly p.thuoc | 2 Pho quan ly phong thuoc | 4 Nhan Vien Ban chinh | 5	NV Thủ Quỹ | 6	Thủ Quỹ_BK
+                         , 0 AS IsDelete
+                         , '' AS Note
+                         , GETDATE() AS CreateDate
+                         , '' AS CreateBy
+                         , '' AS UpdateBy
+                         , NULL AS UpdateDate
+                    FROM
+                        #tmp_Assign a
+                        INNER JOIN #tmp_ID b ( NOLOCK ) ON a.SoPOs = b.PosNum
+                    UNION ALL
+                    SELECT DISTINCT
+                           @IDORDR AS IDHeader
+                         , @SOPos AS PosNum
+                         , @EcomNum
+                         , ISNULL(@NguoiGiaoHang, '') AS EmployeeCode
+                         , @TransportByName AS EmployeeName
+                         , 3 AS EmployeeType -- 3 Nhan vien GH
+                         , 0 AS IsDelete
+                         , '' AS Note
+                         , GETDATE() AS CreateDate
+                         , '' AS CreateBy
+                         , '' AS UpdateBy
+                         , NULL AS UpdateDate
+                    WHERE
+                        ISNULL(@NguoiGiaoHang, '') <> '';
 
-        cancelModify: function () {
-            $(assignment.inAssgnId).val("0");
-            $(assignment.btnCreate).html("<i class=\"far fa-save\"></i> Tạo mới");
-            $(".modify").fadeOut(500);
-        },
+                    IF @MaShop = '80039'
+                    BEGIN
+                        INSERT INTO dbo.Assign_ORDR
+                        (
+                            IDORDR
+                          , PosNum
+                          , EcomNum
+                          , EmployeeCode
+                          , EmployeeName
+                          , EmployeeType
+                          , IsDelete
+                          , Note
+                          , CreateDate
+                          , CreateBy
+                        )
+                        SELECT DISTINCT
+                               @IDORDR
+                             , @SOPos
+                             , @EcomNum
+                             , c.EmployeeCode
+                             , b.EmployeeName
+                             , 1
+                             , 0
+                             , 'add sm/psm lc3,lc4 xu ly dh lc39'
+                             , GETDATE()
+                             , '-1'
+                        FROM
+                            dbo.F03_Employees b ( NOLOCK )
+                            INNER JOIN dbo.F03_EmployeeJobTitles c ( NOLOCK ) ON c.EmployeeCode = b.EmployeeCode
+                                                                                 AND c.Status = 'A'
+                                                                                 AND c.JobTitleCode IN ('00620', '00621', '00737')
+                        WHERE
+                            b.WarehouseCode IN ('80303', '80304')
+                            AND b.Status = 'A';
 
-        updateAssignment: function () {
-            if (formObj.fncCheckValidity($(assignment.frmAssign).get(0))) {
-                var query = $(assignment.frmAssign).serializeArray();
-                var obj = query.reduce(function (total, current) {
-                    total[current.name] = current.value;
-                    return total;
-                }, {});
-                popOver.show();
-                ajaxObj.jsonPost("@Url.Action("Update","Assignments")", obj, data => {
-                    popOver.hide();
-                    if (data.error == 0) {
-                        messObj.fncCreate(data.html, messObj.types.success);
-                    } else {
-                        messObj.fncCreate(data.html, messObj.types.warning);
-                    }
-                    assignment.getAssignmentByTypeStepJob();
-                    if (isNaN($(assignment.inAssgnId).val()) && parseInt($(assignment.inAssgnId).val()) > 0) {
-                        var timeAssign = setInterval(() => {
-                            if (!assignment.loadAssign) {
-                                $(".link-modify").filter("[data-id=\"" + $(assignment.inAssgnId).val() + "\"]").trigger("click");
-                                clearInterval(timeAssign);
-                            }
-                        }, 10);
-                    }
-                }, (jqXHR, textStatus, errorThrown) => {
-                    if (jqXHR.status == 401) {
-                        messObj.fncCreate("Phiên đăng nhập của bạn đã hết hạn vui lòng tải lại trang", messObj.types.error);
-                    } else if (jqXHR.status == 403) {
-                        messObj.fncCreate("Bạn không có quyền thực hiện hành động này", messObj.types.error);
-                    }  else {
-                        messObj.fncCreate("Có lỗi xảy ra khi cập nhật phân công", messObj.types.warning);
-                    }
-                    popOver.hide();
-                    assignment.getAssignmentByTypeStepJob();
-                });
-            }
-        },
+                    END;
 
-        comfirmDelete: function () {
-            $(assignment.inAssgnId).val(0);
-            var checked = $(assignment.chkDelete + ":checked").length;
-            if (checked > 0) {
-                $(assignment.btnConfirmDel).removeAttr("disabled");
-                $(assignment.modalCountDel).html("Xác nhận xóa " + checked + " phân công");
-                $("#modal-confirm-delete").modal('show');
-            }
-            else {
-                $(assignment.btnConfirmDel).attr("disabled", "disabled");
-                $(assignment.modalCountDel).html("Bạn chưa chọn phân công xần xóa");
-                $("#modal-confirm-delete").modal('show');
-            }
-        },
-        deleteAssignment: function () {
-            var checked = $(assignment.chkDelete + ":checked");
-            if (checked.length > 0) {
-                popOver.show();
-                assignment.numDelete = checked.length;
-                $.each(checked, (idx, obj) => {
-                    var id = $(obj).data("id");
-                    ajaxObj.jsonPost("@Url.Action("Delete", "Assignments")", { Id: id }, data => {
-                        assignment.numDelete--;
-                        if (data.error == 0) {
-                            messObj.fncCreate(data.html, messObj.types.success);
-                        }
-                        else {
-                            messObj.fncCreate(data.html, messObj.types.warning);
-                        }
-                        if (assignment.numDelete == 0) {
-                            $("#modal-confirm-delete").modal('hide');
-                            popOver.hide();
-                            assignment.getAssignmentByTypeStepJob();
-                        }
-                    }, (jqXHR, textStatus, errorThrown) => {
-                        assignment.numDelete--;
-                        if (jqXHR.status == 401) {
-                            messObj.fncCreate("Phiên đăng nhập của bạn đã hết hạn vui lòng tải lại trang", messObj.types.error);
-                        } else if (jqXHR.status == 403) {
-                            messObj.fncCreate("Bạn không có quyền thực hiện hành động này", messObj.types.error);
-                        } else {
-                            messObj.fncCreate("Có lỗi xảy ra khi xóa phân công", messObj.types.warning);
-                        }
-                        if (assignment.numDelete == 0) {
-                            $("#modal-confirm-delete").modal('hide');
-                            popOver.hide();
-                            assignment.getAssignmentByTypeStepJob();
-                        }
-                    });
-                });                      
-            }
-            else {
-                messObj.fncCreate("Chọn phân công cần xóa", messObj.types.warning);
-            }
-        },
-        exportAssignments: function () {
-            var typeId = $(assignment.inType).val() || "0";
-            var stepNo = $(assignment.slStep).val() || "-1";
-            var jobTitle = $(assignment.slJob).val() || "-1";
-            jobTitle = jobTitle == "-1" ? "" : jobTitle;
-            var url = "@Url.Action("ExportExcel", "Assignments")"
-            window.open(url + "?typeId=" + typeId + "&stepNo=" + stepNo + "&jobTitle=" + jobTitle, "_blank");
-        },
+                    SET @step = N'Insert assign';
 
-    }
-    objLayout.push(assignment);
-</script>
+                    --insert log
+                    INSERT INTO dbo.TransportStatus_Log ( IDORDR, PosNum, EcomNum, TransportStatus, CreateBy, CreateDate )
+                    VALUES (
+                               @IDORDR -- IDORDR - int
+                             , @SOPos -- PosNum - int
+                             , @EcomNum -- EcomNum - varchar(50)
+                             , 3 -- TransportStatus - int
+                             , @UpdateBy -- CreateBy - varchar(40)
+                             , GETDATE() -- CreateDate - datetime
+                           );
+
+                    IF ISNULL(@NguoiGiaoHang, '') <> ''
+                    BEGIN
+                        INSERT INTO dbo.TransportStatus_Log ( IDORDR, PosNum, EcomNum, TransportStatus, CreateBy, CreateDate )
+                        VALUES (
+                                   @IDORDR -- IDORDR - int
+                                 , @SOPos -- PosNum - int
+                                 , @EcomNum -- EcomNum - varchar(50)
+                                 , 4 -- TransportStatus - int
+                                 , @UpdateBy -- CreateBy - varchar(40)
+                                 , GETDATE() -- CreateDate - datetime
+                               );
+                    END;
+
+                    IF @NguoiGiaoHang IN ('00590', '00617', '01588', '04879')
+                    BEGIN
+                        INSERT INTO dbo.TransportStatus_Log ( IDORDR, PosNum, EcomNum, TransportStatus, CreateBy, CreateDate )
+                        VALUES (
+                                   @IDORDR -- IDORDR - int
+                                 , @SOPos -- PosNum - int
+                                 , @EcomNum -- EcomNum - varchar(50)
+                                 , 13 -- TransportStatus - int
+                                 , @UpdateBy -- CreateBy - varchar(40)
+                                 , GETDATE() -- CreateDate - datetime
+                               );
+                    END;
+
+                    SET @step = N'Insert TranportStatus';
+
+                    DROP TABLE
+                        #tmp_Assign
+                      , #tmp_ID;
+
+                END;
+
+                ---Notification
+                DECLARE @ShipType NVARCHAR(100) = CASE
+                                                      WHEN @Type = 1 THEN N' giao tại nhà'
+                                                      WHEN @Type = 2 THEN N' giao tại shop'
+                                                      ELSE N' không rõ hình thức giao'
+                                                  END;
+                DECLARE @Mess NVARCHAR(MAX) = N'POS hoàn tất đơn hàng ' + ISNULL(CONVERT(VARCHAR(20), @SOPos), '') + @ShipType + N' khách hàng ' + N'' + ISNULL(@CustomerName, '');
+
+                SELECT
+                    s.EmployeeCode AS UserID
+                  , a.Token
+                  , a.DeviceType
+                  , @SOPos AS PosNum
+                  , @Mess AS Mess
+                  , CASE WHEN a.UserID IS NULL THEN 'E' ELSE 'N' END AS NotifyStatus
+                INTO
+                    #tmp_Notify
+                FROM
+                    dbo.Assign_ORDR s ( NOLOCK )
+                    LEFT JOIN dbo.UserToken a ( NOLOCK ) ON s.EmployeeCode = a.UserID
+                WHERE
+                    s.IDORDR = @IDORDR
+                    AND ISNULL(s.IsDelete, 0) = 0;
+
+                INSERT INTO dbo.MDELPHAR_PUSHNOTIFY
+                (
+                    PosNum
+                  , EcomNum
+                  , UserCode
+                  , Title
+                  , Messages
+                  , Updatetdate
+                  , createdate
+                  , Status
+                  , Token
+                  , Dervicetype
+                  , comment
+                  , TThai
+                  , Typeapp
+                )
+                SELECT DISTINCT
+                       a.PosNum
+                     , @EcomNum AS EcomNum
+                     , a.UserID AS UserCode
+                     , N'MDel Thuốc' AS Title
+                     , a.Mess AS Messages
+                     , NULL AS UpdateDate
+                     , GETDATE() AS CreateDate
+                     , a.NotifyStatus AS STATUS
+                     , a.Token
+                     , a.DeviceType
+                     , NULL AS Commend
+                     , NULL AS TThai
+                     , 1 AS Typeapp
+                FROM
+                    #tmp_Notify a;
+
+                DROP TABLE #tmp_Notify;
+
+                SET @step = N'Insert Notify';
+
+                DECLARE @ItemName NVARCHAR(MAX) = (
+                                                      SELECT TOP 1
+                                                             a.ItemName
+                                                      FROM
+                                                          #tmp_POSRDR1 a
+                                                      WHERE
+                                                          ISNULL(a.LoaiSanPham, 'N') = 'N'
+                                                      ORDER BY
+                                                          a.DonGia DESC
+                                                  );
+                DECLARE @MessSMS NVARCHAR(MAX) = N'Cam on Quy khach da mua thanh cong san pham ' + ISNULL(@ItemName, '') + N' tai FPTShop. Neu Quy khach co gop y hoac can tro giup vui long lien he hotline mien phi 18006616.Xin cam on.';
+
+                INSERT INTO dbo.MDELPHAR_SMS
+                (
+                    IDORDR
+                  , PosNum
+                  , EcomNum
+                  , CustPhone
+                  , Mess
+                  , SendStatus
+                  , CreateDate
+                  , UpdateDate
+                )
+                VALUES (
+                           @IDORDR -- IDORDR - int
+                         , @SOPos -- PosNum - int
+                         , @EcomNum -- EcomNum - varchar(50)
+                         , @CustPhone -- CustPhone - varchar(50)
+                         , @MessSMS -- Mess - nvarchar(500)
+                         , 1 -- SendStatus - int 1 : Insert | 2 : GetData | 3 : Complete
+                         , GETDATE() -- CreateDate - datetime
+                         , NULL -- UpdateDate - datetime
+                       );
+                SET @Result = 1;
+                SET @Msg = N'Success';
+            --SELECT 1 AS resultCode, N'Success' AS [message]
+            END;
+            ELSE
+            BEGIN
+                INSERT INTO dbo.Logs ( Store, Message, CreateBy, CreateDate, IsSendMail )
+                VALUES (
+                           @store -- Store - nvarchar(max)
+                         , N'Không lấy được thông tin detail RDR1 từ POS Hoàn tất' -- Message - nvarchar(max)
+                         , '10616-ANHTVH' -- CreateBy - varchar(50)
+                         , GETDATE() -- CreateDate - datetime
+                         , 1
+                       );
+                SET @Result = 0;
+                SET @Msg = N'Không lấy được thông tin detail RDR1 từ POS Hoàn tất';
+            --SELECT 0 AS resultCode, N'Không lấy được thông tin detail RDR1 từ POS Hoàn tất' AS [message]
+            END;
+
+            DROP TABLE #tmp_POSRDR1;
+        END;
+        ELSE
+        BEGIN
+            INSERT INTO dbo.Logs ( Store, Message, CreateBy, CreateDate, IsSendMail )
+            VALUES (
+                       @store -- Store - nvarchar(max)
+                     , N'Không tìm thấy đơn hàng MdelPhar khi POS hoàn tất' -- Message - nvarchar(max)
+                     , '10616-ANHTVH' -- CreateBy - varchar(50)
+                     , GETDATE() -- CreateDate - datetime
+                     , 1
+                   );
+            SET @Result = 0;
+            SET @Msg = N'Không tìm thấy đơn hàng MdelPhar khi POS hoàn tất';
+        --SELECT 0 AS resultCode, N'Không tìm thấy đơn hàng MdelPhar khi POS hoàn tất' AS [message]
+        END;
+
+
+    END TRY
+    BEGIN CATCH
+        INSERT INTO dbo.Logs ( Store, Message, CreateBy, CreateDate, IsSendMail )
+        VALUES (
+                   @store -- Store - nvarchar(max)
+                 , @step + ' - ' + ERROR_MESSAGE() -- Message - nvarchar(max)
+                 , '10616-ANHTVH' -- CreateBy - varchar(50)
+                 , GETDATE() -- CreateDate - datetime
+                 , 1
+               );
+        SET @Result = 0;
+        SET @Msg = N'Loi: ' + ERROR_MESSAGE();
+    --SELECT 0 AS resultCode, N'Loi: ' + ERROR_MESSAGE() AS [message]
+    END CATCH;
+END;
+
+
+
+GO
 

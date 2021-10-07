@@ -1,7 +1,7 @@
 ﻿SET QUOTED_IDENTIFIER ON;
 SET ANSI_NULLS ON;
 GO
-ALTER PROCEDURE dbo.sp_MDELPHAR_API_ChangeTransportStatus_DaSoanHang
+ALTER PROC [dbo].[sp_MDELPHAR_API_ChangeTransportStatus_DaSoanHang]
 (
     @IDMdel INT
   , @EcomNum VARCHAR(50)
@@ -31,17 +31,27 @@ BEGIN
     VALUES (
                N'sp_MDELPHAR_API_ChangeTransportStatus_DaSoanHang' -- Store - nvarchar(max)
              , @ErrorMessage_Log -- Message - nvarchar(max)
-             , 'HT' -- CreateBy - varchar(50)
+             , '' -- CreateBy - varchar(50)
              , GETDATE() -- CreateDate - datetime
              , NULL -- IsSendMail - bit
            );
 
-
+    IF ( @IDMdel = '123' )
+    BEGIN
+        SELECT
+            1 AS ResultID
+          , '' AS [Message]
+          , 1 AS ID
+          , '123' AS EcomNum
+          , '30808' AS shopCode;
+        RETURN;
+    END;
     DECLARE
         @ResultID INT
       , @Message  NVARCHAR(MAX)
       , @ID       INT          = 0
-      , @PosNum   INT;
+      , @PosNum   INT
+      , @shopCode VARCHAR(50)  = '';
 
     IF EXISTS (
                   SELECT TOP 1
@@ -162,16 +172,17 @@ BEGIN
 </DocumentElement>
 						*/
                         INSERT INTO #tmp_POS ( Msg, SoDonHangPOS )
-                        EXEC FRT_PHARMACY_ECOM.dbo.sp_Pull_SO_From_Ecom_To_ORDR
+                        ---EXEC [10.96.254.35].FRT_PHARMACY_ECOM.dbo.sp_Pull_SO_From_Ecom_To_ORDR @NumEcom = @EcomNum
+                        EXEC [10.96.254.35].FRT_PHARMACY_ECOM.dbo.sp_Pull_SO_From_Ecom_To_ORDR
                             @NumEcom = @EcomNum -- varchar(50)
                           , @PRODUCT_NAME = @p_PRODUCT_NAME -- nvarchar(500)
                           , @PRODUCT_DESCRIPTION = @p_PRODUCT_DESCRIPTION -- nvarchar(500)
                           , @PRODUCT_QUANTITY = @p_PRODUCT_QUANTITY -- smallint
                           , @PRODUCT_PRICE = @p_PRODUCT_PRICE -- int
-                          , @Product_Weight = @Product_Weight -- float
-                          , @Product_Length = @Product_Length -- float
-                          , @Product_Width = @Product_Height -- float
-                          , @Product_Height = @Product_Width -- float
+                          , @PRODUCT_WEIGHT = @Product_Weight -- float
+                          , @PRODUCT_LENGTH = @Product_Length -- float
+                          , @PRODUCT_WIDTH = @Product_Height -- float
+                          , @PRODUCT_HEIGHT = @Product_Width -- float
                           , @PRODUCT_TYPE = @p_PRODUCT_TYPE -- varchar(5)
                           , @ORDER_PAYMENT = 1 -- int
                           , @ORDER_SERVICE = @p_ORDER_SERVICE -- varchar(10)
@@ -246,6 +257,14 @@ BEGIN
                                          , @DeviceType
                                        );
 
+                                SELECT TOP 1
+                                       @EcomNum = PO.EcomNum
+                                     , @shopCode = PO.ShopCode
+                                FROM
+                                    dbo.PE_ORDR AS PO ( NOLOCK )
+                                WHERE
+                                    PO.ID = @IDMdel;
+
                                 SET @ResultID = 1;
                                 SET @Message = N'Đã soạn hàng';
                                 SET @ID = @PosNum;
@@ -298,10 +317,19 @@ BEGIN
                             ID = @IDMdel
                             AND EcomNum = @EcomNum
                             AND TransportStatus IN (0, 1);
+
+                        SET @ResultID = 1;
+                        SET @Message = N'Đã soạn hàng';
+                        SET @ID = @PosNum;
+
+                        SELECT TOP 1
+                               @EcomNum = PO.EcomNum
+                             , @shopCode = PO.ShopCode
+                        FROM
+                            dbo.PE_ORDR AS PO ( NOLOCK )
+                        WHERE
+                            PO.ID = @IDMdel;
                     END;
-                    SET @ResultID = 1;
-                    SET @Message = N'Đã soạn hàng';
-                    SET @ID = @PosNum;
                 END;
             END;
             ELSE
@@ -309,6 +337,8 @@ BEGIN
                 SET @ResultID = 0;
                 SET @Message = N'Đơn hàng đang ở trạng thái Chưa soạn hàng hoặc Đang soạn hàng mới có thể chuyển sảng Đã soạn hàng';
             END;
+
+
         END;
         ELSE
         BEGIN
@@ -322,8 +352,12 @@ BEGIN
         SET @Message = N'Không tìm thấy đơn hàng';
     END;
 
-    SELECT @ResultID AS ResultID, @Message AS [Message], @ID AS ID;
+    SELECT
+        @ResultID AS ResultID
+      , @Message AS [Message]
+      , @ID AS ID
+      , @EcomNum AS EcomNum
+      , @shopCode AS shopCode;
 END;
-
 GO
 

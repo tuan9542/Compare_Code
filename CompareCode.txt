@@ -1,841 +1,329 @@
 ﻿SET QUOTED_IDENTIFIER ON;
 SET ANSI_NULLS ON;
 GO
-ALTER PROC [dbo].[sp_MDELPHAR_POS_ORDR_Shipping_Notify]
+ALTER PROCEDURE dbo.sp_MDELPHAR_API_ChangeTransportStatus_DaSoanHang
 (
-    @ShopCode VARCHAR(10)
-  , @SOPos BIGINT
-  , @CustomerName NVARCHAR(100)
-  , @Type TINYINT
-  , @UpdateBy VARCHAR(40)
-  , @OriginFrom TINYINT = 0 --0 Ecom , 1 : POS
-  , @Deposit NUMERIC(19, 6) = 0 -- tien dat coc
-  , @Result INT OUTPUT
-  , @Msg NVARCHAR(1000) OUTPUT
+    @IDMdel INT
+  , @EcomNum VARCHAR(50)
+  , @UserID VARCHAR(40)
+  , @DeviceType INT = NULL -- 1: android; 2: ios
+  , @Pricing_vtp NUMERIC(19, 6) = 0
+  , @Product_Weight INT = 0
+  , @Product_Length INT = 0
+  , @Product_Height INT = 0
+  , @Product_Width INT = 0
 )
 AS
 BEGIN
-    --ANHTVH - 20180521 - POS hoan tat DH -> MDel ke0 lai detail tu pos + cap nhat trang thai 2->3 (tai nha ) , 2->10 (tai shop) + push notify + send sms
-    --ANTVHH - 20180710 - add Nguon DH tu POS
-    --//////////////////////////////////////////////////////
-    --ANHTVH - add 20180711 -- Them Chuc Danh phan quyen
-    --00619	NV Thủ Quỹ
-    --00653	Thủ Quỹ_BK
-
-    DECLARE @step NVARCHAR(100) = N'Begin';
-    DECLARE @store NVARCHAR(MAX) = N'sp_MDELPHAR_POS_ORDR_Shipping_Notify @ShopCode=' + ISNULL(@ShopCode, '') + N',@SOPos=' + ISNULL(CONVERT(VARCHAR(20), @SOPos), '') + N',@CustomerName=' + ISNULL(@CustomerName, '') + N',@Type=' + ISNULL(CONVERT(VARCHAR(20), @Type), '') + N',@UpdateBy=' + ISNULL(@UpdateBy, '') + N',@OriginFrom=' + ISNULL(CONVERT(VARCHAR(20), @OriginFrom), '') + N'' + N',@Deposit=' + ISNULL(CONVERT(VARCHAR(20), @Deposit), '') + N'';
-
+    DECLARE @ErrorMessage_Log NVARCHAR(MAX) = N'';
+    SET @ErrorMessage_Log = N'Log: [sp_MDELPHAR_API_ChangeTransportStatus_DaSoanHang]';
+    SET @ErrorMessage_Log += N'@IDMdel=''' + ISNULL(CONVERT(NVARCHAR(50), @IDMdel), 'NULL') + N'''';
+    SET @ErrorMessage_Log += N',@EcomNum=''' + ISNULL(CONVERT(NVARCHAR(50), @EcomNum), 'NULL') + N'''';
+    SET @ErrorMessage_Log += N', @UserID=''' + ISNULL(CONVERT(NVARCHAR(50), @UserID), 'NULL') + N'''';
+    SET @ErrorMessage_Log += N', @DeviceType=''' + ISNULL(CONVERT(NVARCHAR(50), @DeviceType), 'NULL') + N'''';
+    SET @ErrorMessage_Log += N', @Pricing_vtp=''' + ISNULL(CONVERT(NVARCHAR(50), @Pricing_vtp), 'NULL') + N'''';
+    SET @ErrorMessage_Log += N', @Product_Weight=''' + ISNULL(CONVERT(NVARCHAR(50), @Product_Weight), 'NULL') + N'''';
+    SET @ErrorMessage_Log += N', @Product_Length=''' + ISNULL(CONVERT(NVARCHAR(50), @Product_Length), 'NULL') + N'''';
+    SET @ErrorMessage_Log += N', @Product_Height=''' + ISNULL(CONVERT(NVARCHAR(50), @Product_Height), 'NULL') + N'''';
+    SET @ErrorMessage_Log += N', @Product_Width=''' + ISNULL(CONVERT(NVARCHAR(500), @Product_Width), 'NULL') + N'''';
+    SET @ErrorMessage_Log += N' ! ';
     INSERT INTO dbo.Logs ( Store, Message, CreateBy, CreateDate, IsSendMail )
     VALUES (
-               @store -- Store - nvarchar(max)
-             , N'Log' -- Message - nvarchar(max)
-             , '13689' -- CreateBy - varchar(50)
+               N'sp_MDELPHAR_API_ChangeTransportStatus_DaSoanHang' -- Store - nvarchar(max)
+             , @ErrorMessage_Log -- Message - nvarchar(max)
+             , 'HT' -- CreateBy - varchar(50)
              , GETDATE() -- CreateDate - datetime
              , NULL -- IsSendMail - bit
            );
 
-    SET @Result = 0;
-    SET @Msg = '';
-    BEGIN TRY
-        DECLARE
-            @IDORDR        INT
-          , @EcomNum       VARCHAR(50)
-          , @TransportType VARCHAR(1)
-          , @CustPhone     VARCHAR(20);
 
-        IF ISNULL(@OriginFrom, 0) = 0
+    DECLARE
+        @ResultID INT
+      , @Message  NVARCHAR(MAX)
+      , @ID       INT          = 0
+      , @PosNum   INT;
+
+    IF EXISTS (
+                  SELECT TOP 1
+                         1
+                  FROM
+                      dbo.PE_ORDR a ( NOLOCK )
+                  WHERE
+                      a.ID = @IDMdel
+                      AND a.EcomNum = @EcomNum
+              )
+    BEGIN
+        IF EXISTS (
+                      SELECT TOP 1
+                             1
+                      FROM
+                          dbo.Assign_ORDR a ( NOLOCK )
+                      WHERE
+                          a.IDORDR = @IDMdel
+                          AND a.EcomNum = @EcomNum
+                          AND EmployeeCode = @UserID
+                          AND IsDelete = 0
+                          AND EmployeeType IN (1, 2, 4, 5, 6)
+                  ) -- 1 : tp THUOC | 2 pp Thuoc | 4 Ban chinh | 5 T.Quy | 6 T.Quy BK
         BEGIN
-            SELECT TOP 1
-                   @IDORDR = ID
-                 , @EcomNum = EcomNum
-                 , @TransportType = TransportType
-                 , @CustPhone = CustPhone
-            FROM
-                dbo.PE_ORDR a ( NOLOCK )
-            WHERE
-                a.PosNum = @SOPos
-                AND TransportStatus = 2;
-        END;
-        ELSE IF ISNULL(@OriginFrom, 0) = 1
-        BEGIN
-            SELECT TOP 1
-                   @IDORDR = ID
-                 , @EcomNum = EcomNum
-                 , @TransportType = TransportType
-                 , @CustPhone = CustPhone
-            FROM
-                dbo.PE_ORDR a ( NOLOCK )
-            WHERE
-                a.PosNum = @SOPos;
-        END;
-        PRINT CONCAT('ID =', @IDORDR, '-', @SOPos);
-        IF ( ISNULL(@OriginFrom, 0) = 0 AND ISNULL(@IDORDR, 0) <> 0 ) --TU ECOM 
-           OR ( ISNULL(@OriginFrom, 0) = 1 AND ISNULL(@IDORDR, 0) = 0 ) --TU POS 20180704
-        BEGIN
-            SELECT TOP 0
-                   CONVERT(INT, NULL) AS SoDonHangPOS
-                 , CONVERT(DECIMAL(19, 6), NULL) AS TongTien
-                 , CONVERT(INT, NULL) AS LineNum
-                 , CONVERT(VARCHAR(30), NULL) AS ItemCode
-                 , CONVERT(NVARCHAR(250), NULL) AS ItemName
-                 , CONVERT(INT, NULL) AS SoLuong
-                 , CONVERT(INT, NULL) AS MaDonViTinh
-                 , CONVERT(NVARCHAR(250), NULL) AS TenDonViTinh
-                 , CONVERT(VARCHAR(30), NULL) AS Kho
-                 , CONVERT(DECIMAL(19, 6), NULL) AS GiamGia
-                 , CONVERT(DECIMAL(19, 6), NULL) AS KhuyenMai
-                 , CONVERT(DECIMAL(19, 6), NULL) AS DonGia
-                 , CONVERT(DECIMAL(19, 6), NULL) AS ThanhTien
-                 , CONVERT(VARCHAR(1), NULL) AS LoaiSanPham
-                 , CONVERT(NVARCHAR(100), NULL) AS TenKhachHang
-                 , CONVERT(VARCHAR(11), NULL) AS SoDienThoaiKH
-                 , CONVERT(NVARCHAR(200), NULL) AS DiaChiKhachHang
-                 , CONVERT(VARCHAR(40), NULL) AS NhanVienBanHang
-                 , CONVERT(VARCHAR(20), NULL) AS MaShop
-                 , CONVERT(DATETIME, NULL) AS NgayTaoDH
-                 , CONVERT(NVARCHAR(500), NULL) AS GhiChu
-                 , CONVERT(DATETIME, NULL) AS ThoiGianGiaoHang
-                 , CONVERT(VARCHAR(20), NULL) AS NguoiGiaoHang
-                 , CONVERT(VARCHAR(100), NULL) AS HoaDonGiaoHang
-            INTO
-                #tmp_POSRDR1;
-
-            IF ISNULL(@OriginFrom, 0) = 0
-               AND ISNULL(@IDORDR, 0) <> 0 --TU ECOM
+            IF EXISTS (
+                          SELECT TOP 1
+                                 1
+                          FROM
+                              dbo.PE_ORDR a ( NOLOCK )
+                          WHERE
+                              a.ID = @IDMdel
+                              AND a.EcomNum = @EcomNum
+                              AND TransportStatus IN (0, 1)
+                      ) --0 Chua soan hang || 1 Dang soan hang
             BEGIN
-                INSERT INTO #tmp_POSRDR1
-                EXEC FRT_PHARMACY_ECOM.dbo.sp_Get_Info_Finished_SO
-                    @NumEcom = @EcomNum -- varchar(20)      
-                  , @SOPos = ''; -- varchar(50)				    
-            END;
-            ELSE IF ISNULL(@OriginFrom, 0) = 1
-                    AND ISNULL(@IDORDR, 0) = 0 --TU POS
-            BEGIN
-                INSERT INTO #tmp_POSRDR1
-                EXEC FRT_PHARMACY_ECOM.dbo.sp_Get_Info_Finished_SO
-                    @NumEcom = '' -- varchar(20)
-                  , @SOPos = @SOPos; -- varchar(50)
-            END;
+                SET @PosNum = ISNULL((
+                                         SELECT TOP 1
+                                                PosNum
+                                         FROM
+                                             dbo.PE_ORDR a ( NOLOCK )
+                                         WHERE
+                                             a.ID = @IDMdel
+                                             AND a.EcomNum = @EcomNum
+                                     )
+                                   , 0
+                                    );
 
-            IF EXISTS ( SELECT TOP 1 1 FROM #tmp_POSRDR1 a WHERE a.SoDonHangPOS = @SOPos )
-            BEGIN
-                SET @step = N'Check Exist';
-                DECLARE @OrderAmount DECIMAL(19, 6) = ( SELECT TOP 1 a.TongTien FROM #tmp_POSRDR1 a ); --- POS day ve phi giao hang theo dang line sp -- tong tien da co phi giao hang  
-                DECLARE @PromotAmount DECIMAL(19, 6) = (
-                                                           SELECT TOP 1
-                                                                  SUM(ISNULL(a.GiamGia, 0) + ISNULL(a.KhuyenMai, 0)) AS PromotAmount
-                                                           FROM
-                                                               #tmp_POSRDR1 a
-                                                       );
-                DECLARE @TransportFee DECIMAL(19, 6) = (
-                                                           SELECT TOP 1
-                                                                  SUM(ISNULL(a.DonGia, 0) * ISNULL(a.SoLuong, 0)) AS TransportFee
-                                                           FROM
-                                                               #tmp_POSRDR1 a
-                                                           WHERE
-                                                               a.ItemCode = '00015952'
-                                                       );
-
-                --Tu Ecom
-                IF ISNULL(@OriginFrom, 0) = 0
-                   AND ISNULL(@IDORDR, 0) <> 0
+                IF @PosNum = 0
                 BEGIN
-                    ---TranportType : 1-Tại nhà 2-Tại shop
-                    UPDATE
-                        dbo.PE_ORDR
-                    SET
-                        TransportStatus = CASE
-                                              WHEN TransportType = '1' THEN 3
-                                              WHEN TransportType = '2' THEN 10
-                                              ELSE TransportStatus
-                                          END
-                      , UpdateBy = @UpdateBy
-                      , UpdateDate = GETDATE()
-                      , CompleteDate = CASE WHEN TransportType = '2' THEN GETDATE()ELSE CompleteDate END
-                      , PosCompleteDate = GETDATE()
-                      , PosCompleteBy = @UpdateBy
-                      , OrderAmount = @OrderAmount + @PromotAmount - ISNULL(@TransportFee, 0)
-                      , PromotAmount = @PromotAmount
-                      , TotalAmount = @OrderAmount
-                      , TransportFee = ISNULL(@TransportFee, 0)
-                    WHERE
-                        ID = @IDORDR
-                        AND TransportStatus = 2;
-                    --- update tu pos
-                    UPDATE
-                        dbo.PE_ORDR
-                    SET
-                        PaymentByGraber_POS = S.PaymentByGraber
-                    FROM
-                        dbo.PE_ORDR AS R
-                        INNER JOIN FRT_PHARMACY.dbo.Transporters_SO AS S ON R.EcomNum = S.DocEntry_Ecom
-                    WHERE
-                        R.ID = @IDORDR;
-                    PRINT 1;
-                    UPDATE
-                        dbo.PE_ORDR
-                    SET
-                        U_StatusPOS = O.U_Status
-                      , DocType_POS = O.DocType
-                    FROM
-                        dbo.PE_ORDR AS R
-                        INNER JOIN FRT_PHARMACY.dbo.ORDR AS O ON O.NumEcom = TRY_CAST(R.EcomNum AS BIGINT)
-                    WHERE
-                        R.ID = @IDORDR;
-
-
-                    IF @ShopCode = '80039'
-                       AND EXISTS (
-                                      SELECT
-                                          1
-                                      FROM
-                                          dbo.PE_ORDR ( NOLOCK )
-                                      WHERE
-                                          ID = @IDORDR
-                                          AND TransportType = '1'
-                                  )
-                    BEGIN
-
-
-                        INSERT INTO dbo.Assign_ORDR
-                        (
-                            IDORDR
-                          , PosNum
-                          , EcomNum
-                          , EmployeeCode
-                          , EmployeeName
-                          , EmployeeType
-                          , IsDelete
-                          , Note
-                          , CreateDate
-                          , CreateBy
-                        )
-                        SELECT DISTINCT
-                               @IDORDR
-                             , @SOPos
-                             , @EcomNum
-                             , c.EmployeeCode
-                             , b.EmployeeName
-                             , 1
-                             , 0
-                             , 'add sm/psm lc3,lc4 xu ly dh lc39'
-                             , GETDATE()
-                             , '-1'
-                        FROM
-                            dbo.F03_Employees b ( NOLOCK )
-                            INNER JOIN dbo.F03_EmployeeJobTitles c ( NOLOCK ) ON c.EmployeeCode = b.EmployeeCode
-                                                                                 AND c.Status = 'A'
-                                                                                 AND c.JobTitleCode IN ('00620', '00621', '00737', '00790', '00791')
-                        WHERE
-                            b.WarehouseCode IN ('80303', '80304')
-                            AND b.Status = 'A';
-
-                    END;
-
-                    SET @step = N'Update ORDR';
-
-                    DELETE FROM dbo.PE_RDR1 WHERE IDHeader = @IDORDR;
-                    SET @step = N'Delete RDR1';
-
-                    INSERT INTO dbo.PE_RDR1
-                    (
-                        IDHeader
-                      , PosNum
-                      , EcomNum
-                      , ItemCode
-                      , ItemName
-                      , Quantity
-                      , Unit
-                      , UnitName
-                      , Price
-                      , WhsCode
-                      , LineNum
-                      , Discount
-                      , Discount_Promotion
-                      , IsPromot
-                      , CreateDate
-                      , IsPos
-                    )
-                    SELECT
-                        @IDORDR AS IDHeader
-                      , a.SoDonHangPOS AS PosNum
-                      , @EcomNum AS EcomNum
-                      , a.ItemCode
-                      , a.ItemName
-                      , a.SoLuong
-                      , a.MaDonViTinh
-                      , a.TenDonViTinh
-                      , a.DonGia
-                      , a.Kho
-                      , a.LineNum
-                      , a.GiamGia
-                      , a.KhuyenMai
-                      , a.LoaiSanPham
-                      , GETDATE()
-                      , 1 AS IsPos
-                    FROM
-                        #tmp_POSRDR1 a;
-
-                    SET @step = N'Insert RDR1';
-
-                    INSERT INTO dbo.TransportStatus_Log ( IDORDR, PosNum, EcomNum, TransportStatus, CreateBy, CreateDate )
-                    VALUES (
-                               @IDORDR -- IDORDR - int
-                             , @SOPos -- PosNum - int
-                             , @EcomNum -- EcomNum - varchar(50)
-                             , 3 -- TransportStatus - int
-                             , @UpdateBy -- CreateBy - varchar(40)
-                             , GETDATE() -- CreateDate - datetime
-                           );
-
-                    IF @TransportType = '2'
-                    BEGIN
-                        INSERT INTO dbo.TransportStatus_Log ( IDORDR, PosNum, EcomNum, TransportStatus, CreateBy, CreateDate )
-                        VALUES (
-                                   @IDORDR -- IDORDR - int
-                                 , @SOPos -- PosNum - int
-                                 , @EcomNum -- EcomNum - varchar(50)
-                                 , 10 -- TransportStatus - int
-                                 , @UpdateBy -- CreateBy - varchar(40)
-                                 , GETDATE() -- CreateDate - datetime
-                               );
-                    END;
-
-                    SET @step = N'Insert TranportStatus';
-                END;
-                ELSE IF ISNULL(@OriginFrom, 0) = 1
-                        AND ISNULL(@IDORDR, 0) = 0 --Tu POS
-                BEGIN
-                    DECLARE @TenKhachHang NVARCHAR(100);
-                    DECLARE @SoDienThoaiKH VARCHAR(11);
-                    DECLARE @DiaChiKhachHang NVARCHAR(200);
-                    DECLARE @NhanVienBanHang VARCHAR(40);
-                    DECLARE @MaShop VARCHAR(20);
-                    DECLARE @NgayTaoDH DATETIME;
-                    DECLARE @GhiChu NVARCHAR(500);
-                    DECLARE @ThoiGianGiaoHang DATETIME;
-                    DECLARE @NguoiGiaoHang VARCHAR(20);
-                    DECLARE @HoaDonGiaoHang VARCHAR(100);
-                    DECLARE @ShopManager NVARCHAR(300);
-                    DECLARE @SaleMan NVARCHAR(300);
-                    DECLARE @TransportByName NVARCHAR(300);
-
-                    SELECT TOP 1
-                           @TenKhachHang = a.TenKhachHang
-                         , @SoDienThoaiKH = a.SoDienThoaiKH
-                         , @DiaChiKhachHang = a.DiaChiKhachHang
-                         , @NhanVienBanHang = a.NhanVienBanHang
-                         , @MaShop = a.MaShop
-                         , @NgayTaoDH = a.NgayTaoDH
-                         , @GhiChu = a.GhiChu
-                         , @ThoiGianGiaoHang = a.ThoiGianGiaoHang
-                         , @NguoiGiaoHang = a.NguoiGiaoHang
-                         , @HoaDonGiaoHang = a.HoaDonGiaoHang
-                    FROM
-                        #tmp_POSRDR1 a;
-
-                    IF EXISTS ( SELECT TOP 1 1 FROM #tmp_POSRDR1 WHERE ISNULL(DiaChiKhachHang, '') = '' )
-                    BEGIN
-                        INSERT INTO dbo.Logs ( Store, Message, CreateBy, CreateDate, IsSendMail )
-                        VALUES (
-                                   N'FRT_PHARMACY_ECOM.dbo.sp_Get_Info_Finished_SO @NumEcom = '''', @SOPOS = ' + CONVERT(VARCHAR(20), @SOPos) -- Store - nvarchar(max)
-                                 , N'K co dia chi' -- Message - nvarchar(max)
-                                 , 'ANHTVH-10616' -- CreateBy - varchar(50)
-                                 , GETDATE() -- CreateDate - datetime
-                                 , 0 -- IsSendMail - bit
-                               );
-                    END;
-
-                    SELECT
-                        b.EmployeeCode
-                      , b.EmployeeName
-                      , b.JobTitle
-                      , @SOPos AS SoPOs
-                    INTO
-                        #tmp_Assign
-                    FROM
-                        dbo.F03_Employees b ( NOLOCK )
-                        INNER JOIN dbo.F03_JobTitles c ( NOLOCK ) ON b.JobTitle = c.JobTitleCode
-                                                                     AND c.JobTitleCode IN ('00620', '00621', '00612', '00653', '00619', '00615', '00667', '00613', '00736', '00737', '00723', '00740', '00640', '00614', '00764', '00769', '00772', '00790', '00791', '00773')
-                                                                     AND b.Status = 'A'
-                    WHERE
-                        b.WarehouseCode = @MaShop;
-
-
-
-
-                    --Lay Ma - Ten QL
-                    SET @ShopManager = (
-                                           SELECT TOP 1
-                                                  ISNULL(a.EmployeeCode, '') + ' - ' + ISNULL(a.EmployeeName, '') AS ShopManager
-                                           FROM
-                                               #tmp_Assign a
-                                           WHERE
-                                               a.JobTitle = '00621'
-                                       );
-
-                    --Lay Ma - Ten NVBH
-                    IF ISNULL(@NhanVienBanHang, '') <> ''
-                    BEGIN
-                        SET @SaleMan = (
-                                           SELECT TOP 1
-                                                  ISNULL(a.EmployeeCode, '') + ' - ' + ISNULL(a.EmployeeName, '') AS SaleMan
-                                           FROM
-                                               dbo.Inside_F03_Employees a ( NOLOCK )
-                                           WHERE
-                                               a.EmployeeCode = @NhanVienBanHang
-                                       );
-                    END;
-
-                    --Lay Ten NVGH
-                    IF ISNULL(@NguoiGiaoHang, '') <> ''
-                    BEGIN
-                        SET @TransportByName = (
-                                                   SELECT TOP 1
-                                                          ISNULL(a.EmployeeName, '') AS TransportByName
-                                                   FROM
-                                                       dbo.F03_Employees a ( NOLOCK )
-                                                   WHERE
-                                                       a.EmployeeCode = @NguoiGiaoHang
-                                               );
-                    END;
-
                     SELECT TOP 0
-                           CONVERT(INT, NULL) AS IDHeader
-                         , CONVERT(NVARCHAR(50), NULL) AS EcomNum
-                         , CONVERT(INT, NULL) AS PosNum
+                           CONVERT(NVARCHAR(250), NULL) AS Msg
+                         , CONVERT(INT, NULL) AS SoDonHangPOS
                     INTO
-                        #tmp_ID;
-
-                    --insert ordr
-                    INSERT INTO dbo.PE_ORDR
-                    (
-                        PosNum
-                      , EcomNum
-                      , CustName
-                      , CustPhone
-                      , SaleMan
-                      , ShopCode
-                      , OrderDate
-                      , TransportFee
-                      , CustAddress
-                      , TransportType
-                      , Note
-                      , PromotCode
-                      , PromotAmount
-                      , OrderStatus
-                      , CreateDate
-                      , ShopManager
-                      , TransportBy
-                      , TransportDate
-                      , TransportStatus
-                      , TransportImage1
-                      , TransportImage2
-                      , TransportImage3
-                      , RejectType
-                      , RejectReason
-                      , CompleteTransport
-                      , UpdateBy
-                      , UpdateDate
-                      , CancelReason
-                      , OrderAmount
-                      , TotalAmount
-                      , DownPayment
-                      , ModifyType
-                      , EcomTrsprtDate
-                      , OriginFrom
-                      , TransportBill
-                      , PosCompleteBy
-                      , PosCompleteDate
-                      , UpdateBy1
-                      , UpdateDate1
-                      , Deposit
-                    )
-                    OUTPUT
-                        INSERTED.ID
-                      , INSERTED.EcomNum
-                      , INSERTED.PosNum
-                    INTO #tmp_ID ( IDHeader, EcomNum, PosNum )
-                    SELECT
-                        @SOPos AS PosNum
-                      , 'POS1_' + CONVERT(VARCHAR(20), @SOPos) AS EcomNum
-                      , @TenKhachHang AS CustName
-                      , @SoDienThoaiKH AS CustPhone
-                      , @SaleMan AS SaleMan
-                      , @MaShop AS ShopCode
-                      , @NgayTaoDH AS Order_CreateDate
-                      , ISNULL(@TransportFee, 0) AS TransportFee
-                      , @DiaChiKhachHang AS CustAddress
-                      , '1' AS TransportType --Giao tai nha
-                      , @GhiChu AS Note
-                      , '' AS PromotCode
-                      , @PromotAmount AS PromotAmount
-                      , N'POS Hoàn tất' AS OrderStatus
-                      , GETDATE() AS CreateDate
-                      , @ShopManager AS ShopManager
-                      , ISNULL(@NguoiGiaoHang, '') + ' - ' + @TransportByName AS TransportBy
-                      , @ThoiGianGiaoHang AS TransportDate
-                      , CASE
-                            WHEN @NguoiGiaoHang IN ('00590', '00617', '01588', '04879') THEN 13 --GNH or ViettelPOST or VNCPOST
-                            WHEN ISNULL(@NguoiGiaoHang, '') <> ''
-                                 AND @NguoiGiaoHang NOT IN ('00590', '00617', '01588', '04879') THEN 4
-                            ELSE 3
-                        END AS TransportStatus
-                      , '' AS TransportImage1
-                      , '' AS TransportImage2
-                      , '' AS TransportImage3
-                      , 0 AS RejectType
-                      , '' AS RejectReason
-                      , NULL AS CompleteTransport
-                      , @UpdateBy AS UpdateBy
-                      , GETDATE() AS UpdateDate
-                      , '' AS CancelReason
-                      , @OrderAmount + ISNULL(@PromotAmount, 0) - ISNULL(@TransportFee, 0) + ISNULL(@Deposit, 0) AS OrderAmount
-                      , @OrderAmount AS TotalAmount
-                      , 0 AS DownPayment
-                      , 0 AS ModifyType
-                      , @ThoiGianGiaoHang AS EcomTrsprtDate
-                      , 1 AS OriginFrom --Ecom : 0 , POS : 1
-                      , @HoaDonGiaoHang AS TransportBill
-                      , @UpdateBy AS PosCompleteBy
-                      , GETDATE() AS PosCompleteDate
-                      , @UpdateBy AS UpdateBy1
-                      , GETDATE() AS UpdateDate1
-                      , @Deposit AS Deposit;
-
-                    SET @IDORDR = ( SELECT TOP 1 IDHeader FROM #tmp_ID );
-                    SET @EcomNum = ( SELECT TOP 1 EcomNum FROM #tmp_ID );
-                    SET @step = N'Insert ORDR';
-
-                    --insert rdr1
-                    INSERT INTO dbo.PE_RDR1
-                    (
-                        IDHeader
-                      , PosNum
-                      , EcomNum
-                      , ItemCode
-                      , ItemName
-                      , Quantity
-                      , Unit
-                      , UnitName
-                      , Price
-                      , WhsCode
-                      , LineNum
-                      , Discount
-                      , Discount_Promotion
-                      , IsPromot
-                      , CreateDate
-                      , IsPos
-                    )
-                    SELECT
-                        @IDORDR AS IDHeader
-                      , a.SoDonHangPOS AS PosNum
-                      , @EcomNum AS EcomNum
-                      , a.ItemCode
-                      , a.ItemName
-                      , a.SoLuong
-                      , a.MaDonViTinh
-                      , a.TenDonViTinh
-                      , a.DonGia
-                      , a.Kho
-                      , a.LineNum
-                      , a.GiamGia
-                      , a.KhuyenMai
-                      , a.LoaiSanPham
-                      , GETDATE()
-                      , 1 AS IsPos
-                    FROM
-                        #tmp_POSRDR1 a;
-                    SET @step = N'Insert RDR1';
-
-                    --insert assign
-                    INSERT INTO dbo.Assign_ORDR
-                    (
-                        IDORDR
-                      , PosNum
-                      , EcomNum
-                      , EmployeeCode
-                      , EmployeeName
-                      , EmployeeType
-                      , IsDelete
-                      , Note
-                      , CreateDate
-                      , CreateBy
-                      , UpdateBy
-                      , UpdateDate
-                    )
-                    SELECT DISTINCT
-                           b.IDHeader
-                         , b.PosNum AS PosNum
-                         , b.EcomNum
-                         , a.EmployeeCode
-                         , a.EmployeeName
-                         , CASE
-                               WHEN a.JobTitle IN ('00621', '00615', '00667', '00613', '00736', '00737', '00640', '00790', '00791') THEN 1
-                               WHEN a.JobTitle = '00620' THEN 2
-                               WHEN a.JobTitle IN ('00612', '00723', '00764', '00769', '00772', '00773') THEN 4
-                               WHEN a.JobTitle = '00619' THEN 5
-                               WHEN a.JobTitle IN ('00653', '00740', '00614') THEN 6
-                               ELSE 0
-                           END AS EmployeeType -- 1 Truong quan ly p.thuoc | 2 Pho quan ly phong thuoc | 4 Nhan Vien Ban chinh | 5	NV Thủ Quỹ | 6	Thủ Quỹ_BK
-                         , 0 AS IsDelete
-                         , '' AS Note
-                         , GETDATE() AS CreateDate
-                         , '' AS CreateBy
-                         , '' AS UpdateBy
-                         , NULL AS UpdateDate
-                    FROM
-                        #tmp_Assign a
-                        INNER JOIN #tmp_ID b ( NOLOCK ) ON a.SoPOs = b.PosNum
-                    UNION ALL
-                    SELECT DISTINCT
-                           @IDORDR AS IDHeader
-                         , @SOPos AS PosNum
-                         , @EcomNum
-                         , ISNULL(@NguoiGiaoHang, '') AS EmployeeCode
-                         , @TransportByName AS EmployeeName
-                         , 3 AS EmployeeType -- 3 Nhan vien GH
-                         , 0 AS IsDelete
-                         , '' AS Note
-                         , GETDATE() AS CreateDate
-                         , '' AS CreateBy
-                         , '' AS UpdateBy
-                         , NULL AS UpdateDate
-                    WHERE
-                        ISNULL(@NguoiGiaoHang, '') <> '';
-
-                    IF @MaShop = '80039'
-                    BEGIN
-                        INSERT INTO dbo.Assign_ORDR
-                        (
-                            IDORDR
-                          , PosNum
-                          , EcomNum
-                          , EmployeeCode
-                          , EmployeeName
-                          , EmployeeType
-                          , IsDelete
-                          , Note
-                          , CreateDate
-                          , CreateBy
-                        )
-                        SELECT DISTINCT
-                               @IDORDR
-                             , @SOPos
-                             , @EcomNum
-                             , c.EmployeeCode
-                             , b.EmployeeName
-                             , 1
-                             , 0
-                             , 'add sm/psm lc3,lc4 xu ly dh lc39'
-                             , GETDATE()
-                             , '-1'
+                        #tmp_POS;
+                    BEGIN TRY
+                        DECLARE @p_PRODUCT_NAME NVARCHAR(200);
+                        DECLARE @p_PRODUCT_DESCRIPTION NVARCHAR(500);
+                        DECLARE @p_PRODUCT_QUANTITY INT;
+                        DECLARE @p_PRODUCT_PRICE INT;
+                        DECLARE @p_PRODUCT_TYPE NVARCHAR(20);
+                        DECLARE @p_ORDER_SERVICE NVARCHAR(20);
+                        DECLARE @p_count INT;
+                        DECLARE @p_KL_TB INT;
+                        DECLARE @p_RECEIVER_ADDRESS NVARCHAR(500);
+                        DECLARE @p_RECEIVER_PROVINCE NVARCHAR(50);
+                        DECLARE @p_RECEIVER_DISTRICT NVARCHAR(50);
+                        DECLARE @p_RECEIVER_WARD NVARCHAR(50);
+                        DECLARE @p_detail NVARCHAR(MAX);
+                        SELECT
+                            *
+                        INTO
+                            #TMPrdr1
                         FROM
-                            dbo.F03_Employees b ( NOLOCK )
-                            INNER JOIN dbo.F03_EmployeeJobTitles c ( NOLOCK ) ON c.EmployeeCode = b.EmployeeCode
-                                                                                 AND c.Status = 'A'
-                                                                                 AND c.JobTitleCode IN ('00620', '00621', '00737')
+                            dbo.PE_RDR1 a ( NOLOCK )
                         WHERE
-                            b.WarehouseCode IN ('80303', '80304')
-                            AND b.Status = 'A';
+                            a.IDHeader = @IDMdel
+                        ORDER BY
+                            a.Price DESC;
+                        SELECT TOP 1
+                               @p_PRODUCT_NAME = ItemName
+                             , @p_PRODUCT_QUANTITY = Quantity
+                        FROM
+                            #TMPrdr1;
+                        SET @p_KL_TB = @Product_Weight / @p_count;
+                        SET @p_count = ( SELECT COUNT(1)FROM #TMPrdr1 );
+                        SELECT TOP 1
+                               @p_PRODUCT_DESCRIPTION = a.Note
+                             , @p_PRODUCT_PRICE = a.OrderAmount
+                             , @p_PRODUCT_TYPE = N'HH'
+                             , @p_ORDER_SERVICE = a.Delivery_Type
+                             , @p_RECEIVER_ADDRESS = ISNULL(a.CustAddress, '')
+                             , @p_RECEIVER_PROVINCE = ISNULL(a.ReceiverProvince, '')
+                             , @p_RECEIVER_DISTRICT = ISNULL(a.ReceiverDistrict, '')
+                             , @p_RECEIVER_WARD = a.CustWardID
+                        FROM
+                            dbo.PE_ORDR a ( NOLOCK )
+                        WHERE
+                            a.ID = @IDMdel;
+                        SET @p_detail = (
+                                            SELECT
+                                                ItemName AS PRODUCT_NAME
+                                              , Price AS PRODUCT_PRICE
+                                              , ISNULL(@p_KL_TB, 0) AS PRODUCT_WEIGHT
+                                              , Quantity AS PRODUCT_QUANTITY
+                                            FROM
+                                                #TMPrdr1
+                                            FOR XML RAW('DATA'), ROOT('DocumentElement')
+                                        );
+                        --HH là loại hàng hóa
+                        /*
+						<DocumentElement>
+	<DATA>
+		<PRODUCT_NAME>NANO CURCUMIN PLUS TAM THẤT XẠ ĐEN HVQY 3X10</PRODUCT_NAME>
+		<PRODUCT_PRICE>20000</PRODUCT_PRICE>
+		<PRODUCT_WEIGHT>10</PRODUCT_WEIGHT>
+		<PRODUCT_QUANTITY>1</PRODUCT_QUANTITY>
+	</DATA>
+</DocumentElement>
+						*/
+                        INSERT INTO #tmp_POS ( Msg, SoDonHangPOS )
+                        EXEC FRT_PHARMACY_ECOM.dbo.sp_Pull_SO_From_Ecom_To_ORDR
+                            @NumEcom = @EcomNum -- varchar(50)
+                          , @PRODUCT_NAME = @p_PRODUCT_NAME -- nvarchar(500)
+                          , @PRODUCT_DESCRIPTION = @p_PRODUCT_DESCRIPTION -- nvarchar(500)
+                          , @PRODUCT_QUANTITY = @p_PRODUCT_QUANTITY -- smallint
+                          , @PRODUCT_PRICE = @p_PRODUCT_PRICE -- int
+                          , @Product_Weight = @Product_Weight -- float
+                          , @Product_Length = @Product_Length -- float
+                          , @Product_Width = @Product_Height -- float
+                          , @Product_Height = @Product_Width -- float
+                          , @PRODUCT_TYPE = @p_PRODUCT_TYPE -- varchar(5)
+                          , @ORDER_PAYMENT = 1 -- int
+                          , @ORDER_SERVICE = @p_ORDER_SERVICE -- varchar(10)
+                          , @ORDER_SERVICE_ADD = '' -- varchar(10)
+                          , @ORDER_VOUCHER = '' -- varchar(50)
+                          , @ORDER_NOTE = @p_PRODUCT_DESCRIPTION -- nvarchar(150)
+                          , @MONEY_COLLECTION = @p_PRODUCT_PRICE -- int
+                          , @DETAIL_ITEMS = @p_detail -- nvarchar(max)
+                          , @RECEIVER_ADDRESS = @p_RECEIVER_ADDRESS -- nvarchar(500)
+                          , @RECEIVER_PROVINCE = @p_RECEIVER_PROVINCE -- int
+                          , @RECEIVER_DISTRICT = @p_RECEIVER_DISTRICT -- int
+                          , @RECEIVER_WARD = @p_RECEIVER_WARD; -- int
 
-                    END;
+                        IF EXISTS ( SELECT TOP 1 1 FROM #tmp_POS )
+                        BEGIN
+                            SET @PosNum = ISNULL(( SELECT TOP 1 SoDonHangPOS FROM #tmp_POS ), 0);
+                            IF @PosNum <> 0
+                            BEGIN
+                                DECLARE @now DATETIME = GETDATE();
+                                --TransportStatus DangSoanHang = 1,DaSoanHang = 2                  
+                                UPDATE
+                                    dbo.PE_ORDR
+                                SET
+                                    PosNum = @PosNum
+                                  , TransportStatus = 2
+                                  , Pricing_vtp = @Pricing_vtp
+                                  , Product_Weight = @Product_Weight
+                                  , Product_Length = @Product_Length
+                                  , Product_Width = @Product_Width
+                                  , Product_Height = @Product_Height -- lamhv4 add @Pricing_vtp
+                                  , UpdateDate = @now
+                                  , UpdateBy = @UserID
+                                  , UpdateBy1 = @UserID
+                                  , UpdateDate1 = @now
+                                  , PosPushDate = @now
+                                WHERE
+                                    ID = @IDMdel
+                                    AND EcomNum = @EcomNum;
 
-                    SET @step = N'Insert assign';
+                                UPDATE
+                                    dbo.PE_RDR1
+                                SET
+                                    PosNum = @PosNum
+                                WHERE
+                                    IDHeader = @IDMdel
+                                    AND EcomNum = @EcomNum;
 
-                    --insert log
-                    INSERT INTO dbo.TransportStatus_Log ( IDORDR, PosNum, EcomNum, TransportStatus, CreateBy, CreateDate )
-                    VALUES (
-                               @IDORDR -- IDORDR - int
-                             , @SOPos -- PosNum - int
-                             , @EcomNum -- EcomNum - varchar(50)
-                             , 3 -- TransportStatus - int
-                             , @UpdateBy -- CreateBy - varchar(40)
-                             , GETDATE() -- CreateDate - datetime
-                           );
+                                UPDATE
+                                    dbo.Assign_ORDR
+                                SET
+                                    PosNum = @PosNum
+                                WHERE
+                                    IDORDR = @IDMdel
+                                    AND EcomNum = @EcomNum;
 
-                    IF ISNULL(@NguoiGiaoHang, '') <> ''
-                    BEGIN
-                        INSERT INTO dbo.TransportStatus_Log ( IDORDR, PosNum, EcomNum, TransportStatus, CreateBy, CreateDate )
+                                UPDATE
+                                    dbo.TransportStatus_Log
+                                SET
+                                    PosNum = @PosNum
+                                WHERE
+                                    IDORDR = @IDMdel
+                                    AND EcomNum = @EcomNum;
+
+                                INSERT INTO dbo.TransportStatus_Log ( IDORDR, PosNum, EcomNum, TransportStatus, CreateBy, CreateDate, DeviceType )
+                                VALUES (
+                                           @IDMdel -- IDORDR - int
+                                         , @PosNum -- PosNum - int
+                                         , @EcomNum -- EcomNum - varchar(50)
+                                         , 2 -- TransportStatus - int
+                                         , @UserID -- UpdateBy - varchar(40)
+                                         , @now -- CreateDate - datetime
+                                         , @DeviceType
+                                       );
+
+                                SET @ResultID = 1;
+                                SET @Message = N'Đã soạn hàng';
+                                SET @ID = @PosNum;
+                            END;
+                            ELSE
+                            BEGIN
+                                SET @ResultID = 0;
+                                SET @Message = N'Số đơn hàng POS bằng 0';
+                            END;
+                        END;
+                        ELSE
+                        BEGIN
+                            SET @ResultID = 0;
+                            SET @Message = N'POS không trả về số đơn hàng';
+                        END;
+
+                    END TRY
+                    BEGIN CATCH
+                        INSERT INTO dbo.Logs ( Store, Message, CreateBy, CreateDate )
                         VALUES (
-                                   @IDORDR -- IDORDR - int
-                                 , @SOPos -- PosNum - int
-                                 , @EcomNum -- EcomNum - varchar(50)
-                                 , 4 -- TransportStatus - int
-                                 , @UpdateBy -- CreateBy - varchar(40)
+                                   N'FRT_PHARMACY_ECOM.dbo.sp_Pull_SO_From_Ecom_To_ORDR @NumEcom =' + @EcomNum -- Store - nvarchar(max)
+                                 , ERROR_MESSAGE() -- Message - nvarchar(max)
+                                 , '10616-ANHTVH' -- CreateBy - varchar(50)
                                  , GETDATE() -- CreateDate - datetime
                                );
-                    END;
+                        SET @ResultID = 0;
+                        SET @Message = N'Tạo đơn hàng POS lỗi';
+                    END CATCH;
 
-                    IF @NguoiGiaoHang IN ('00590', '00617', '01588', '04879')
-                    BEGIN
-                        INSERT INTO dbo.TransportStatus_Log ( IDORDR, PosNum, EcomNum, TransportStatus, CreateBy, CreateDate )
-                        VALUES (
-                                   @IDORDR -- IDORDR - int
-                                 , @SOPos -- PosNum - int
-                                 , @EcomNum -- EcomNum - varchar(50)
-                                 , 13 -- TransportStatus - int
-                                 , @UpdateBy -- CreateBy - varchar(40)
-                                 , GETDATE() -- CreateDate - datetime
-                               );
-                    END;
-
-                    SET @step = N'Insert TranportStatus';
-
-                    DROP TABLE
-                        #tmp_Assign
-                      , #tmp_ID;
-
+                    DROP TABLE #tmp_POS;
                 END;
-
-                ---Notification
-                DECLARE @ShipType NVARCHAR(100) = CASE
-                                                      WHEN @Type = 1 THEN N' giao tại nhà'
-                                                      WHEN @Type = 2 THEN N' giao tại shop'
-                                                      ELSE N' không rõ hình thức giao'
-                                                  END;
-                DECLARE @Mess NVARCHAR(MAX) = N'POS hoàn tất đơn hàng ' + ISNULL(CONVERT(VARCHAR(20), @SOPos), '') + @ShipType + N' khách hàng ' + N'' + ISNULL(@CustomerName, '');
-
-                SELECT
-                    s.EmployeeCode AS UserID
-                  , a.Token
-                  , a.DeviceType
-                  , @SOPos AS PosNum
-                  , @Mess AS Mess
-                  , CASE WHEN a.UserID IS NULL THEN 'E' ELSE 'N' END AS NotifyStatus
-                INTO
-                    #tmp_Notify
-                FROM
-                    dbo.Assign_ORDR s ( NOLOCK )
-                    LEFT JOIN dbo.UserToken a ( NOLOCK ) ON s.EmployeeCode = a.UserID
-                WHERE
-                    s.IDORDR = @IDORDR
-                    AND ISNULL(s.IsDelete, 0) = 0;
-
-                INSERT INTO dbo.MDELPHAR_PUSHNOTIFY
-                (
-                    PosNum
-                  , EcomNum
-                  , UserCode
-                  , Title
-                  , Messages
-                  , Updatetdate
-                  , createdate
-                  , Status
-                  , Token
-                  , Dervicetype
-                  , comment
-                  , TThai
-                  , Typeapp
-                )
-                SELECT DISTINCT
-                       a.PosNum
-                     , @EcomNum AS EcomNum
-                     , a.UserID AS UserCode
-                     , N'MDel Thuốc' AS Title
-                     , a.Mess AS Messages
-                     , NULL AS UpdateDate
-                     , GETDATE() AS CreateDate
-                     , a.NotifyStatus AS STATUS
-                     , a.Token
-                     , a.DeviceType
-                     , NULL AS Commend
-                     , NULL AS TThai
-                     , 1 AS Typeapp
-                FROM
-                    #tmp_Notify a;
-
-                DROP TABLE #tmp_Notify;
-
-                SET @step = N'Insert Notify';
-
-                DECLARE @ItemName NVARCHAR(MAX) = (
-                                                      SELECT TOP 1
-                                                             a.ItemName
-                                                      FROM
-                                                          #tmp_POSRDR1 a
-                                                      WHERE
-                                                          ISNULL(a.LoaiSanPham, 'N') = 'N'
-                                                      ORDER BY
-                                                          a.DonGia DESC
-                                                  );
-                DECLARE @MessSMS NVARCHAR(MAX) = N'Cam on Quy khach da mua thanh cong san pham ' + ISNULL(@ItemName, '') + N' tai FPTShop. Neu Quy khach co gop y hoac can tro giup vui long lien he hotline mien phi 18006616.Xin cam on.';
-
-                INSERT INTO dbo.MDELPHAR_SMS
-                (
-                    IDORDR
-                  , PosNum
-                  , EcomNum
-                  , CustPhone
-                  , Mess
-                  , SendStatus
-                  , CreateDate
-                  , UpdateDate
-                )
-                VALUES (
-                           @IDORDR -- IDORDR - int
-                         , @SOPos -- PosNum - int
-                         , @EcomNum -- EcomNum - varchar(50)
-                         , @CustPhone -- CustPhone - varchar(50)
-                         , @MessSMS -- Mess - nvarchar(500)
-                         , 1 -- SendStatus - int 1 : Insert | 2 : GetData | 3 : Complete
-                         , GETDATE() -- CreateDate - datetime
-                         , NULL -- UpdateDate - datetime
-                       );
-                SET @Result = 1;
-                SET @Msg = N'Success';
-            --SELECT 1 AS resultCode, N'Success' AS [message]
+                ELSE
+                BEGIN
+                    IF EXISTS (
+                                  SELECT TOP 1
+                                         1
+                                  FROM
+                                      dbo.PE_ORDR a ( NOLOCK )
+                                  WHERE
+                                      a.ID = @IDMdel
+                                      AND a.EcomNum = @EcomNum
+                                      AND TransportStatus IN (0, 1)
+                              ) -- Chua soan hang
+                    BEGIN
+                        UPDATE
+                            dbo.PE_ORDR
+                        SET
+                            TransportStatus = 2
+                        WHERE
+                            ID = @IDMdel
+                            AND EcomNum = @EcomNum
+                            AND TransportStatus IN (0, 1);
+                    END;
+                    SET @ResultID = 1;
+                    SET @Message = N'Đã soạn hàng';
+                    SET @ID = @PosNum;
+                END;
             END;
             ELSE
             BEGIN
-                INSERT INTO dbo.Logs ( Store, Message, CreateBy, CreateDate, IsSendMail )
-                VALUES (
-                           @store -- Store - nvarchar(max)
-                         , N'Không lấy được thông tin detail RDR1 từ POS Hoàn tất' -- Message - nvarchar(max)
-                         , '10616-ANHTVH' -- CreateBy - varchar(50)
-                         , GETDATE() -- CreateDate - datetime
-                         , 1
-                       );
-                SET @Result = 0;
-                SET @Msg = N'Không lấy được thông tin detail RDR1 từ POS Hoàn tất';
-            --SELECT 0 AS resultCode, N'Không lấy được thông tin detail RDR1 từ POS Hoàn tất' AS [message]
+                SET @ResultID = 0;
+                SET @Message = N'Đơn hàng đang ở trạng thái Chưa soạn hàng hoặc Đang soạn hàng mới có thể chuyển sảng Đã soạn hàng';
             END;
-
-            DROP TABLE #tmp_POSRDR1;
         END;
         ELSE
         BEGIN
-            INSERT INTO dbo.Logs ( Store, Message, CreateBy, CreateDate, IsSendMail )
-            VALUES (
-                       @store -- Store - nvarchar(max)
-                     , N'Không tìm thấy đơn hàng MdelPhar khi POS hoàn tất' -- Message - nvarchar(max)
-                     , '10616-ANHTVH' -- CreateBy - varchar(50)
-                     , GETDATE() -- CreateDate - datetime
-                     , 1
-                   );
-            SET @Result = 0;
-            SET @Msg = N'Không tìm thấy đơn hàng MdelPhar khi POS hoàn tất';
-        --SELECT 0 AS resultCode, N'Không tìm thấy đơn hàng MdelPhar khi POS hoàn tất' AS [message]
+            SET @ResultID = 0;
+            SET @Message = N'Bạn không có quyền soạn đơn hàng này';
         END;
+    END;
+    ELSE
+    BEGIN
+        SET @ResultID = 0;
+        SET @Message = N'Không tìm thấy đơn hàng';
+    END;
 
-
-    END TRY
-    BEGIN CATCH
-        INSERT INTO dbo.Logs ( Store, Message, CreateBy, CreateDate, IsSendMail )
-        VALUES (
-                   @store -- Store - nvarchar(max)
-                 , @step + ' - ' + ERROR_MESSAGE() -- Message - nvarchar(max)
-                 , '10616-ANHTVH' -- CreateBy - varchar(50)
-                 , GETDATE() -- CreateDate - datetime
-                 , 1
-               );
-        SET @Result = 0;
-        SET @Msg = N'Loi: ' + ERROR_MESSAGE();
-    --SELECT 0 AS resultCode, N'Loi: ' + ERROR_MESSAGE() AS [message]
-    END CATCH;
+    SELECT @ResultID AS ResultID, @Message AS [Message], @ID AS ID;
 END;
-
-
 
 GO
 

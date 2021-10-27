@@ -1,363 +1,142 @@
-﻿SET QUOTED_IDENTIFIER ON;
-SET ANSI_NULLS ON;
-GO
-ALTER PROC [dbo].[sp_MDELPHAR_API_ChangeTransportStatus_DaSoanHang]
-(
-    @IDMdel INT
-  , @EcomNum VARCHAR(50)
-  , @UserID VARCHAR(40)
-  , @DeviceType INT = NULL -- 1: android; 2: ios
-  , @Pricing_vtp NUMERIC(19, 6) = 0
-  , @Product_Weight INT = 0
-  , @Product_Length INT = 0
-  , @Product_Height INT = 0
-  , @Product_Width INT = 0
-)
-AS
-BEGIN
-    DECLARE @ErrorMessage_Log NVARCHAR(MAX) = N'';
-    SET @ErrorMessage_Log = N'Log: [sp_MDELPHAR_API_ChangeTransportStatus_DaSoanHang]';
-    SET @ErrorMessage_Log += N'@IDMdel=''' + ISNULL(CONVERT(NVARCHAR(50), @IDMdel), 'NULL') + N'''';
-    SET @ErrorMessage_Log += N',@EcomNum=''' + ISNULL(CONVERT(NVARCHAR(50), @EcomNum), 'NULL') + N'''';
-    SET @ErrorMessage_Log += N', @UserID=''' + ISNULL(CONVERT(NVARCHAR(50), @UserID), 'NULL') + N'''';
-    SET @ErrorMessage_Log += N', @DeviceType=''' + ISNULL(CONVERT(NVARCHAR(50), @DeviceType), 'NULL') + N'''';
-    SET @ErrorMessage_Log += N', @Pricing_vtp=''' + ISNULL(CONVERT(NVARCHAR(50), @Pricing_vtp), 'NULL') + N'''';
-    SET @ErrorMessage_Log += N', @Product_Weight=''' + ISNULL(CONVERT(NVARCHAR(50), @Product_Weight), 'NULL') + N'''';
-    SET @ErrorMessage_Log += N', @Product_Length=''' + ISNULL(CONVERT(NVARCHAR(50), @Product_Length), 'NULL') + N'''';
-    SET @ErrorMessage_Log += N', @Product_Height=''' + ISNULL(CONVERT(NVARCHAR(50), @Product_Height), 'NULL') + N'''';
-    SET @ErrorMessage_Log += N', @Product_Width=''' + ISNULL(CONVERT(NVARCHAR(500), @Product_Width), 'NULL') + N'''';
-    SET @ErrorMessage_Log += N' ! ';
-    INSERT INTO dbo.Logs ( Store, Message, CreateBy, CreateDate, IsSendMail )
-    VALUES (
-               N'sp_MDELPHAR_API_ChangeTransportStatus_DaSoanHang' -- Store - nvarchar(max)
-             , @ErrorMessage_Log -- Message - nvarchar(max)
-             , '' -- CreateBy - varchar(50)
-             , GETDATE() -- CreateDate - datetime
-             , NULL -- IsSendMail - bit
-           );
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+  For more information on how to configure your ASP.NET application, please visit
+  https://go.microsoft.com/fwlink/?LinkId=301880
+  -->
+<configuration>
+  <configSections>
+    <!-- For more information on Entity Framework configuration, visit http://go.microsoft.com/fwlink/?LinkID=237468 -->
+    <section name="entityFramework" type="System.Data.Entity.Internal.ConfigFile.EntityFrameworkSection, EntityFramework, Version=6.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" requirePermission="false" />
+    <sectionGroup name="applicationSettings" type="System.Configuration.ApplicationSettingsGroup, System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" >
+      <section name="CalllogPhar.Properties.Settings" type="System.Configuration.ClientSettingsSection, System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" requirePermission="false" />
+    </sectionGroup>
+  </configSections>
+  <connectionStrings>
+    <add name="frt_db" connectionString="Data Source=10.96.254.34;Initial Catalog=FRTCallLogPharmacy;Integrated Security=False;user id=mpos_beta;password=123456a@;MultipleActiveResultSets=True;" providerName="System.Data.SqlClient" />
+    <add name="frt_mdb" connectionString="Data Source=10.96.254.34;Initial Catalog=MCallLogPhar;Integrated Security=False;user id=mpos_beta;password=123456a@;MultipleActiveResultSets=True;" providerName="System.Data.SqlClient" />
+  </connectionStrings>
+  <appSettings>
+    <add key="fileExtension" value="*" />
+    <add key="webpages:Version" value="3.0.0.0" />
+    <add key="webpages:Enabled" value="false" />
+    <add key="ClientValidationEnabled" value="true" />
 
-    IF ( @IDMdel = '123' )
-    BEGIN
-        SELECT
-            1 AS ResultID
-          , '' AS [Message]
-          , 1 AS ID
-          , '123' AS EcomNum
-          , '30808' AS shopCode;
-        RETURN;
-    END;
-    DECLARE
-        @ResultID INT
-      , @Message  NVARCHAR(MAX)
-      , @ID       INT          = 0
-      , @PosNum   INT
-      , @shopCode VARCHAR(50)  = '';
+    <!--JSDATA-->
+    <add key="JsCategory" value="1" />
+    <add key="JsGroups" value="1" />
+    <add key="JsPerGroup" value="1" />
 
-    IF EXISTS (
-                  SELECT TOP 1
-                         1
-                  FROM
-                      dbo.PE_ORDR a ( NOLOCK )
-                  WHERE
-                      a.ID = @IDMdel
-                      AND a.EcomNum = @EcomNum
-              )
-    BEGIN
-        IF EXISTS (
-                      SELECT TOP 1
-                             1
-                      FROM
-                          dbo.Assign_ORDR a ( NOLOCK )
-                      WHERE
-                          a.IDORDR = @IDMdel
-                          AND a.EcomNum = @EcomNum
-                          AND EmployeeCode = @UserID
-                          AND IsDelete = 0
-                          AND EmployeeType IN (1, 2, 4, 5, 6)
-                  ) -- 1 : tp THUOC | 2 pp Thuoc | 4 Ban chinh | 5 T.Quy | 6 T.Quy BK
-        BEGIN
-            IF EXISTS (
-                          SELECT TOP 1
-                                 1
-                          FROM
-                              dbo.PE_ORDR a ( NOLOCK )
-                          WHERE
-                              a.ID = @IDMdel
-                              AND a.EcomNum = @EcomNum
-                              AND TransportStatus IN (0, 1)
-                      ) --0 Chua soan hang || 1 Dang soan hang
-            BEGIN
-                SET @PosNum = ISNULL((
-                                         SELECT TOP 1
-                                                PosNum
-                                         FROM
-                                             dbo.PE_ORDR a ( NOLOCK )
-                                         WHERE
-                                             a.ID = @IDMdel
-                                             AND a.EcomNum = @EcomNum
-                                     )
-                                   , 0
-                                    );
-
-                IF @PosNum = 0
-                BEGIN
-                    SELECT TOP 0
-                           CONVERT(NVARCHAR(250), NULL) AS Msg
-                         , CONVERT(INT, NULL) AS SoDonHangPOS
-                    INTO
-                        #tmp_POS;
-                    BEGIN TRY
-                        DECLARE @p_PRODUCT_NAME NVARCHAR(200);
-                        DECLARE @p_PRODUCT_DESCRIPTION NVARCHAR(500);
-                        DECLARE @p_PRODUCT_QUANTITY INT;
-                        DECLARE @p_PRODUCT_PRICE INT;
-                        DECLARE @p_PRODUCT_TYPE NVARCHAR(20);
-                        DECLARE @p_ORDER_SERVICE NVARCHAR(20);
-                        DECLARE @p_count INT;
-                        DECLARE @p_KL_TB INT;
-                        DECLARE @p_RECEIVER_ADDRESS NVARCHAR(500);
-                        DECLARE @p_RECEIVER_PROVINCE NVARCHAR(50);
-                        DECLARE @p_RECEIVER_DISTRICT NVARCHAR(50);
-                        DECLARE @p_RECEIVER_WARD NVARCHAR(50);
-                        DECLARE @p_detail NVARCHAR(MAX);
-                        SELECT
-                            *
-                        INTO
-                            #TMPrdr1
-                        FROM
-                            dbo.PE_RDR1 a ( NOLOCK )
-                        WHERE
-                            a.IDHeader = @IDMdel
-                        ORDER BY
-                            a.Price DESC;
-                        SELECT TOP 1
-                               @p_PRODUCT_NAME = ItemName
-                             , @p_PRODUCT_QUANTITY = Quantity
-                        FROM
-                            #TMPrdr1;
-                        SET @p_KL_TB = @Product_Weight / @p_count;
-                        SET @p_count = ( SELECT COUNT(1)FROM #TMPrdr1 );
-                        SELECT TOP 1
-                               @p_PRODUCT_DESCRIPTION = a.Note
-                             , @p_PRODUCT_PRICE = a.OrderAmount
-                             , @p_PRODUCT_TYPE = N'HH'
-                             , @p_ORDER_SERVICE = a.Delivery_Type
-                             , @p_RECEIVER_ADDRESS = ISNULL(a.CustAddress, '')
-                             , @p_RECEIVER_PROVINCE = ISNULL(a.ReceiverProvince, '')
-                             , @p_RECEIVER_DISTRICT = ISNULL(a.ReceiverDistrict, '')
-                             , @p_RECEIVER_WARD = a.CustWardID
-                        FROM
-                            dbo.PE_ORDR a ( NOLOCK )
-                        WHERE
-                            a.ID = @IDMdel;
-                        SET @p_detail = (
-                                            SELECT
-                                                ItemName AS PRODUCT_NAME
-                                              , Price AS PRODUCT_PRICE
-                                              , ISNULL(@p_KL_TB, 0) AS PRODUCT_WEIGHT
-                                              , Quantity AS PRODUCT_QUANTITY
-                                            FROM
-                                                #TMPrdr1
-                                            FOR XML RAW('DATA'), ROOT('DocumentElement')
-                                        );
-                        --HH là loại hàng hóa
-                        /*
-						<DocumentElement>
-	<DATA>
-		<PRODUCT_NAME>NANO CURCUMIN PLUS TAM THẤT XẠ ĐEN HVQY 3X10</PRODUCT_NAME>
-		<PRODUCT_PRICE>20000</PRODUCT_PRICE>
-		<PRODUCT_WEIGHT>10</PRODUCT_WEIGHT>
-		<PRODUCT_QUANTITY>1</PRODUCT_QUANTITY>
-	</DATA>
-</DocumentElement>
-						*/
-                        INSERT INTO #tmp_POS ( Msg, SoDonHangPOS )
-                        ---EXEC [10.96.254.35].FRT_PHARMACY_ECOM.dbo.sp_Pull_SO_From_Ecom_To_ORDR @NumEcom = @EcomNum
-                        EXEC [10.96.254.35].FRT_PHARMACY_ECOM.dbo.sp_Pull_SO_From_Ecom_To_ORDR
-                            @NumEcom = @EcomNum -- varchar(50)
-                          , @PRODUCT_NAME = @p_PRODUCT_NAME -- nvarchar(500)
-                          , @PRODUCT_DESCRIPTION = @p_PRODUCT_DESCRIPTION -- nvarchar(500)
-                          , @PRODUCT_QUANTITY = @p_PRODUCT_QUANTITY -- smallint
-                          , @PRODUCT_PRICE = @p_PRODUCT_PRICE -- int
-                          , @PRODUCT_WEIGHT = @Product_Weight -- float
-                          , @PRODUCT_LENGTH = @Product_Length -- float
-                          , @PRODUCT_WIDTH = @Product_Height -- float
-                          , @PRODUCT_HEIGHT = @Product_Width -- float
-                          , @PRODUCT_TYPE = @p_PRODUCT_TYPE -- varchar(5)
-                          , @ORDER_PAYMENT = 1 -- int
-                          , @ORDER_SERVICE = @p_ORDER_SERVICE -- varchar(10)
-                          , @ORDER_SERVICE_ADD = '' -- varchar(10)
-                          , @ORDER_VOUCHER = '' -- varchar(50)
-                          , @ORDER_NOTE = @p_PRODUCT_DESCRIPTION -- nvarchar(150)
-                          , @MONEY_COLLECTION = @p_PRODUCT_PRICE -- int
-                          , @DETAIL_ITEMS = @p_detail -- nvarchar(max)
-                          , @RECEIVER_ADDRESS = @p_RECEIVER_ADDRESS -- nvarchar(500)
-                          , @RECEIVER_PROVINCE = @p_RECEIVER_PROVINCE -- int
-                          , @RECEIVER_DISTRICT = @p_RECEIVER_DISTRICT -- int
-                          , @RECEIVER_WARD = @p_RECEIVER_WARD; -- int
-
-                        IF EXISTS ( SELECT TOP 1 1 FROM #tmp_POS )
-                        BEGIN
-                            SET @PosNum = ISNULL(( SELECT TOP 1 SoDonHangPOS FROM #tmp_POS ), 0);
-                            IF @PosNum <> 0
-                            BEGIN
-                                DECLARE @now DATETIME = GETDATE();
-                                --TransportStatus DangSoanHang = 1,DaSoanHang = 2                  
-                                UPDATE
-                                    dbo.PE_ORDR
-                                SET
-                                    PosNum = @PosNum
-                                  , TransportStatus = 2
-                                  , Pricing_vtp = @Pricing_vtp
-                                  , Product_Weight = @Product_Weight
-                                  , Product_Length = @Product_Length
-                                  , Product_Width = @Product_Width
-                                  , Product_Height = @Product_Height -- lamhv4 add @Pricing_vtp
-                                  , UpdateDate = @now
-                                  , UpdateBy = @UserID
-                                  , UpdateBy1 = @UserID
-                                  , UpdateDate1 = @now
-                                  , PosPushDate = @now
-                                WHERE
-                                    ID = @IDMdel
-                                    AND EcomNum = @EcomNum;
-
-                                UPDATE
-                                    dbo.PE_RDR1
-                                SET
-                                    PosNum = @PosNum
-                                WHERE
-                                    IDHeader = @IDMdel
-                                    AND EcomNum = @EcomNum;
-
-                                UPDATE
-                                    dbo.Assign_ORDR
-                                SET
-                                    PosNum = @PosNum
-                                WHERE
-                                    IDORDR = @IDMdel
-                                    AND EcomNum = @EcomNum;
-
-                                UPDATE
-                                    dbo.TransportStatus_Log
-                                SET
-                                    PosNum = @PosNum
-                                WHERE
-                                    IDORDR = @IDMdel
-                                    AND EcomNum = @EcomNum;
-
-                                INSERT INTO dbo.TransportStatus_Log ( IDORDR, PosNum, EcomNum, TransportStatus, CreateBy, CreateDate, DeviceType )
-                                VALUES (
-                                           @IDMdel -- IDORDR - int
-                                         , @PosNum -- PosNum - int
-                                         , @EcomNum -- EcomNum - varchar(50)
-                                         , 2 -- TransportStatus - int
-                                         , @UserID -- UpdateBy - varchar(40)
-                                         , @now -- CreateDate - datetime
-                                         , @DeviceType
-                                       );
-
-                                SELECT TOP 1
-                                       @EcomNum = PO.EcomNum
-                                     , @shopCode = PO.ShopCode
-                                FROM
-                                    dbo.PE_ORDR AS PO ( NOLOCK )
-                                WHERE
-                                    PO.ID = @IDMdel;
-
-                                SET @ResultID = 1;
-                                SET @Message = N'Đã soạn hàng';
-                                SET @ID = @PosNum;
-                            END;
-                            ELSE
-                            BEGIN
-                                SET @ResultID = 0;
-                                SET @Message = N'Số đơn hàng POS bằng 0';
-                            END;
-                        END;
-                        ELSE
-                        BEGIN
-                            SET @ResultID = 0;
-                            SET @Message = N'POS không trả về số đơn hàng';
-                        END;
-
-                    END TRY
-                    BEGIN CATCH
-                        INSERT INTO dbo.Logs ( Store, Message, CreateBy, CreateDate )
-                        VALUES (
-                                   N'FRT_PHARMACY_ECOM.dbo.sp_Pull_SO_From_Ecom_To_ORDR @NumEcom =' + @EcomNum -- Store - nvarchar(max)
-                                 , ERROR_MESSAGE() -- Message - nvarchar(max)
-                                 , '10616-ANHTVH' -- CreateBy - varchar(50)
-                                 , GETDATE() -- CreateDate - datetime
-                               );
-                        SET @ResultID = 0;
-                        SET @Message = N'Tạo đơn hàng POS lỗi';
-                    END CATCH;
-
-                    DROP TABLE #tmp_POS;
-                END;
-                ELSE
-                BEGIN
-                    IF EXISTS (
-                                  SELECT TOP 1
-                                         1
-                                  FROM
-                                      dbo.PE_ORDR a ( NOLOCK )
-                                  WHERE
-                                      a.ID = @IDMdel
-                                      AND a.EcomNum = @EcomNum
-                                      AND TransportStatus IN (0, 1)
-                              ) -- Chua soan hang
-                    BEGIN
-                        UPDATE
-                            dbo.PE_ORDR
-                        SET
-                            TransportStatus = 2
-                        WHERE
-                            ID = @IDMdel
-                            AND EcomNum = @EcomNum
-                            AND TransportStatus IN (0, 1);
-
-                        SET @ResultID = 1;
-                        SET @Message = N'Đã soạn hàng';
-                        SET @ID = @PosNum;
-
-                        SELECT TOP 1
-                               @EcomNum = PO.EcomNum
-                             , @shopCode = PO.ShopCode
-                        FROM
-                            dbo.PE_ORDR AS PO ( NOLOCK )
-                        WHERE
-                            PO.ID = @IDMdel;
-                    END;
-                END;
-            END;
-            ELSE
-            BEGIN
-                SET @ResultID = 0;
-                SET @Message = N'Đơn hàng đang ở trạng thái Chưa soạn hàng hoặc Đang soạn hàng mới có thể chuyển sảng Đã soạn hàng';
-            END;
-
-
-        END;
-        ELSE
-        BEGIN
-            SET @ResultID = 0;
-            SET @Message = N'Bạn không có quyền soạn đơn hàng này';
-        END;
-    END;
-    ELSE
-    BEGIN
-        SET @ResultID = 0;
-        SET @Message = N'Không tìm thấy đơn hàng';
-    END;
-
-    SELECT
-        @ResultID AS ResultID
-      , @Message AS [Message]
-      , @ID AS ID
-      , @EcomNum AS EcomNum
-      , @shopCode AS shopCode;
-END;
-GO
-
+    <add key="UnobtrusiveJavaScriptEnabled" value="true" />
+    <add key="Billvanchuyen_province" value="http://calllogpharapibeta.fptshop.com.vn:9119/api/ViettelPost/getListProvince" />
+    <add key="Billvanchuyen_District" value="http://calllogpharapibeta.fptshop.com.vn:9119/api/ViettelPost/getListDistrict" />
+    <add key="Billvanchuyen_Wards" value="http://calllogpharapibeta.fptshop.com.vn:9119/api/ViettelPost/getListWards" />
+    <add key="Billvanchuyen_getPriceViettelPost" value="http://calllogpharapibeta.fptshop.com.vn:9119/api/ViettelPost/getPrice" />
+    <add key="Billvanchuyen_getCreateBillViettelPost" value="http://calllogpharapibeta.fptshop.com.vn:9119/api/ViettelPost/createOrder" />
+    <add key="Billvanchuyen_getPrintBillViettelPost" value="http://calllogpharapibeta.fptshop.com.vn:9119/api/ViettelPost/getLinkPrint" />
+    <add key="Billvanchuyen_UpdateOrderBillViettelPost" value="http://calllogpharapibeta.fptshop.com.vn:9119/api/ViettelPost/UpdateOrder" />
+    <add key="Billvanchuyen_UserAuthor" value="frt_pharapi" />
+    <add key="Billvanchuyen_PassAuthor" value="FRT_pharapi@2019" />
+    <add key="KerryWebService_Token" value="q3SurpRZQjGSRfXdYDSfNA==" />
+    <add key="domain_notification_sms" value="http://10.96.254.179:5083/"/>
+  </appSettings>
+  <system.web>    
+    <caching>
+      <outputCacheSettings>
+        <outputCacheProfiles>
+          <add name="Account_GetMenu" duration="1800" varyByParam="userName" location="Client" />
+          <add name="Account_GetCategoryForCreate" duration="1800" varyByParam="userName" location="Client" />
+          <add name="Report_GetOrganization" duration="1800" varyByParam="none" location="Server" />
+          <add name="Report_GetRegion" duration="1800" varyByParam="none" location="Server" />
+          <add name="Assignments_GetOrganization" duration="1800" varyByParam="none" location="Server" />
+          <add name="Assignments_GetRegion" duration="1800" varyByParam="none" location="Server" />
+          <add name="Permission_GetOrganization" duration="1800" varyByParam="none" location="Server" />
+          <add name="Search_GetEmployee" duration="1800" varyByParam="none" location="Server" />
+        </outputCacheProfiles>
+      </outputCacheSettings>
+    </caching>
+    <authentication mode="Forms">
+      <forms loginUrl="~/Account/Login" />
+    </authentication>
+    <compilation debug="true" targetFramework="4.5" />
+    <httpRuntime targetFramework="4.5" executionTimeout="9999" maxRequestLength="2097152" requestLengthDiskThreshold="2097152" maxUrlLength="10999" maxQueryStringLength="2097151"/>
+   
+    <httpModules>
+      <add name="ApplicationInsightsWebTracking" type="Microsoft.ApplicationInsights.Web.ApplicationInsightsHttpModule, Microsoft.AI.Web" />
+    </httpModules>
+  </system.web>
+  <runtime>
+    <assemblyBinding xmlns="urn:schemas-microsoft-com:asm.v1">
+      <dependentAssembly>
+        <assemblyIdentity name="Newtonsoft.Json" culture="neutral" publicKeyToken="30ad4fe6b2a6aeed" />
+        <bindingRedirect oldVersion="0.0.0.0-6.0.0.0" newVersion="6.0.0.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="System.Web.Optimization" publicKeyToken="31bf3856ad364e35" />
+        <bindingRedirect oldVersion="1.0.0.0-1.1.0.0" newVersion="1.1.0.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="WebGrease" publicKeyToken="31bf3856ad364e35" />
+        <bindingRedirect oldVersion="0.0.0.0-1.5.2.14234" newVersion="1.5.2.14234" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="System.Web.Helpers" publicKeyToken="31bf3856ad364e35" />
+        <bindingRedirect oldVersion="1.0.0.0-3.0.0.0" newVersion="3.0.0.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="System.Web.WebPages" publicKeyToken="31bf3856ad364e35" />
+        <bindingRedirect oldVersion="1.0.0.0-3.0.0.0" newVersion="3.0.0.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="System.Web.Mvc" publicKeyToken="31bf3856ad364e35" />
+        <bindingRedirect oldVersion="1.0.0.0-5.2.3.0" newVersion="5.2.3.0" />
+      </dependentAssembly>
+    </assemblyBinding>
+  </runtime>
+  <system.webServer>
+    <validation validateIntegratedModeConfiguration="false" />
+    <modules>
+      <remove name="ApplicationInsightsWebTracking" />
+      <add name="ApplicationInsightsWebTracking" type="Microsoft.ApplicationInsights.Web.ApplicationInsightsHttpModule, Microsoft.AI.Web" preCondition="managedHandler" />
+    </modules>
+    <httpErrors existingResponse="PassThrough">
+    </httpErrors>
+    <security>
+      <requestFiltering>
+          <requestLimits maxAllowedContentLength="2147483648" maxUrl="10999" maxQueryString="2097151" />
+        <hiddenSegments>
+          <add segment="Log" />
+          <add segment="MailException" />   
+        </hiddenSegments>
+      </requestFiltering>
+    </security>
+    <staticContent>
+      <clientCache cacheControlMode="UseMaxAge" cacheControlCustom="public" cacheControlMaxAge="365.00:00:00" />
+    </staticContent>
+  </system.webServer>
+  <system.codedom>
+    <compilers>
+      <compiler language="c#;cs;csharp" extension=".cs" type="Microsoft.CodeDom.Providers.DotNetCompilerPlatform.CSharpCodeProvider, Microsoft.CodeDom.Providers.DotNetCompilerPlatform, Version=1.0.8.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35" warningLevel="4" compilerOptions="/langversion:6 /nowarn:1659;1699;1701" />
+      <compiler language="vb;vbs;visualbasic;vbscript" extension=".vb" type="Microsoft.CodeDom.Providers.DotNetCompilerPlatform.VBCodeProvider, Microsoft.CodeDom.Providers.DotNetCompilerPlatform, Version=1.0.8.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35" warningLevel="4" compilerOptions="/langversion:14 /nowarn:41008 /define:_MYTYPE=\&quot;Web\&quot; /optionInfer+" />
+    </compilers>
+  </system.codedom>
+  <entityFramework>
+    <defaultConnectionFactory type="System.Data.Entity.Infrastructure.LocalDbConnectionFactory, EntityFramework">
+      <parameters>
+        <parameter value="mssqllocaldb" />
+      </parameters>
+    </defaultConnectionFactory>
+    <providers>
+      <provider invariantName="System.Data.SqlClient" type="System.Data.Entity.SqlServer.SqlProviderServices, EntityFramework.SqlServer" />
+    </providers>
+  </entityFramework>
+  <applicationSettings>
+    <CalllogPhar.Properties.Settings>
+      <setting name="CalllogPhar_NhatTinWebService_NTWebService" serializeAs="String">
+        <value>http://ws.ntlogistics.vn:5656/WebServiceNT/NTWebService</value>
+      </setting>
+      <setting name="CalllogPhar_KerryWebService_Service1" serializeAs="String">
+        <value>http://soap.gw.kerryexpress.com.vn:8089/Service1.svc</value>
+      </setting>
+    </CalllogPhar.Properties.Settings>
+  </applicationSettings>
+</configuration>
